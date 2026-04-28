@@ -1,295 +1,252 @@
-
-# Plan Técnico Canónico
+# Plan Tecnico Canonico
 ## Plataforma de Inversiones con IA
 
-Identificador: 001-PLAN  
-Proyecto: DIANA Inversions  
-Iniciativa: 001-inversions  
+Identificador: 001-INV-PLAN
+Proyecto: DIANA Inversions
+Iniciativa: 001-inversions
+Version de regeneracion: 2026-04-28
+Accion: /diana.plan action="regenerate" scope="project" project="diana-inversions"
 
-Especificación implementada:
+Especificacion implementada:
 - 001-DIANA-INVERSIONS-SPEC
+- specs/001-plataforma-inversiones-ia/spec.md (operativa)
 
 Autoridad:
-Este plan técnico está estrictamente subordinado a la Especificación Canónica
-(**001-DIANA-INVERSIONS-SPEC**) y a la Constitución del Proyecto
-(**inv-constitution.md**).
-Ante cualquier conflicto, prevalece la Especificación.
+Este plan tecnico esta subordinado a:
+1. inv-constitution.md
+2. 001-inv-spec.md
+3. spec.md (operativa derivada)
 
-Propósito del plan:
-Definir **cómo** se implementa la especificación canónica,
-sin redefinir alcance funcional ni introducir nuevos requisitos.
+Ante conflicto, prevalece la constitucion y la especificacion canonica.
 
-## Alcance del Plan
+## 0. Entradas Oficiales Consumidas
 
-Este plan:
-- Implementa exclusivamente lo definido en la especificación canónica
-- Define arquitectura, fases y responsabilidades técnicas
-- Puede evolucionar técnicamente sin cambiar la especificación
+Fuentes de negocio y canon:
+- .drfic/diana-sdk/projects/knowledge/indexes/projects-knowledge-radar.yaml
+- .drfic/diana-sdk/projects/diana-inversions/inv-constitution.md
+- .drfic/diana-sdk/projects/diana-inversions/initiatives/001-inversions/001-inv-spec.md
+- specs/001-plataforma-inversiones-ia/spec.md
+- .drfic/diana-sdk/projects/diana-inversions/governance/change-requests/001-inv-ucc.md
+- .drfic/diana-sdk/projects/diana-inversions/governance/tickets/001-inv-tkt.md
+- .drfic/diana-sdk/projects/diana-inversions/initiatives/001-inversions/meta.md
 
-Este plan NO:
-- Agrega funcionalidades nuevas
-- Modifica requisitos de negocio
-- Interpreta tickets o controles de cambio
-- Cambia decisiones establecidas en la especificación
+Skills y knowledge first:
+- .drfic/diana-sdk/projects/diana-inversions/knowledge/indexes/skills-manifest.yaml
+- .drfic/diana-sdk/projects/diana-inversions/knowledge/indexes/agent-skill-matrix.yaml
+- .drfic/diana-sdk/projects/diana-inversions/knowledge/indexes/sdd-engine-matrix.yaml
+- .drfic/diana-sdk/projects/knowledge/indexes/master-index.md
+- .drfic/diana-sdk/projects/diana-inversions/knowledge/indexes/master-index.md
+- .drfic/diana-sdk/sdk/diana/knowledge/indexes/master-index.md
 
-## Idioma del Plan y Artefactos Derivados
+## 1. Objetivo del Plan
 
-Este plan técnico se redacta en **español**.
+Definir el como tecnico para implementar una plataforma de inversion asistida por IA, con control humano obligatorio, trazabilidad completa y ejecucion asistida en IBKR y Alpaca, sin introducir nuevos requisitos fuera de FR-001..FR-019 y SC-001..SC-008.
 
-Todos los artefactos técnicos derivados de este plan,
-incluyendo tareas, contratos, modelos, reportes y documentación
-generados por herramientas automáticas como Speckit,
-DEBEN producirse en español.
-
-El uso de inglés se limita a términos técnicos inevitables.
-
----
-
-## 1. Objetivo
-
-Definir el plan técnico de implementación de la Plataforma de Inversiones con IA descrita en la SPEC-001, estableciendo arquitectura, fases, componentes y entregables técnicos necesarios para que Speckit genere el plan oficial ejecutable.
-
-Este documento describe únicamente el “cómo” técnico y no redefine ni amplía el alcance funcional definido en la especificación canónica.
-
----
-
-## 2. Alcance
+## 2. Alcance y Exclusiones
 
 Incluye:
-- Arquitectura técnica de alto nivel
-- Componentes del sistema y sus responsabilidades
-- Fases de implementación técnica
-- Integración de capacidades de inteligencia artificial
-- Entregables técnicos verificables
-- Identificación de riesgos técnicos y mitigaciones
+- Arquitectura modular PWA + REST API.
+- Orquestacion de cores analiticos y motor de confluencia.
+- Flujo operativo de propuesta, aprobacion y ejecucion asistida.
+- Seguridad, observabilidad, resiliencia y cumplimiento.
+- Base de trazabilidad para /speckit.plan.
 
 Excluye:
-- Historias de usuario
-- Escenarios funcionales detallados
-- Criterios de aceptación de negocio
-- Diseño UX/UI final
+- Auto-trading.
+- IA como unica fuente de decision.
+- Nuevos mercados fuera de acciones/opciones US.
+- Redefinicion funcional de la especificacion.
 
----
+## 3. Skills Requeridas para Etapa Plan
 
-## 3. Supuestos Técnicos
+Required skills (speckit.plan):
+- 001-inv-technical-analysis-structure
+- 002-inv-indicator-signal-logic
+- 004-inv-options-strategy-engine
+- 005-inv-institutional-options-flow
+- 006-inv-realtime-news-impact
+- 007-inv-ai-confluence-orchestration
+- 008-inv-market-data-and-realtime
+- 010-inv-broker-integration-ibkr-alpaca
+- 011-inv-portfolio-and-performance-analytics
 
-- La SPEC-001 es la única fuente canónica y no se modifica.
-- Se adopta una arquitectura modular orientada a servicios.
-- La IA actúa como asistente y motor analítico, no como decisor autónomo.
-- El sistema debe poder evolucionar sin reescrituras mayores.
-- Se prioriza trazabilidad, observabilidad y control de costos de IA.
+Cobertura actual: completa en skills-manifest.yaml.
+Politica de fallback: si un skill/knowledge faltara en futuras ejecuciones, continuar con metodologia estandar y reportar gap.
 
----
+## 4. Arquitectura Tecnica Objetivo
 
-## 4. Arquitectura Técnica (Alto Nivel)
+### 4.1 Vista de capas
 
-### 4.1 Diagrama Lógico
+1. Capa Frontend (PWA):
+- Dashboard, watchlists, detalle de senales, historial.
+- Flujo de aprobacion humana explicita.
+- Visualizacion de evidencia y disclaimers.
 
-```mermaid
-flowchart LR
-    UI[Frontend Web]
-    API[Backend API]
-    DB[(Base de Datos)]
-    IA[Servicios de IA]
-    RAG[RAG / Vector DB]
-    EXT[APIs Externas]
+2. Capa API (Node.js/Express):
+- AuthN JWT Bearer.
+- AuthZ RBAC (viewer, trader, admin).
+- Politicas MFA para aprobacion/ejecucion sensible.
+- Orquestacion de analisis, propuestas y ejecucion asistida.
 
-    UI --> API
-    API --> DB
-    API --> IA
-    IA --> RAG
-    API --> EXT
-```
+3. Capa Dominio:
+- Entidades: Usuario, Fuente Analitica, Senal, Propuesta Operativa, Decision Humana, Intento de Ejecucion, Registro de Auditoria.
+- Maquina de estados de orden y control de concurrencia por version.
 
-### 4.2 Componentes y Responsabilidades
+4. Capa Integraciones:
+- Brokers: IBKR y Alpaca por adaptadores desacoplados.
+- Market data en tiempo real con objetivo p95 <= 1s.
+- Servicio IA para confluencia/explicabilidad (sin autonomia de ejecucion).
 
-Frontend Web:
-- Interfaz de usuario
-- Visualización de inversiones y métricas
-- Dashboards y reportes
-- Interacción con el asistente de IA
+5. Capa Datos:
+- Supabase como store operacional primario.
+- MongoDB opcional para historicos y contexto IA.
+- Retencion minima de evidencia: 365 dias.
 
-Backend API:
-- Lógica de negocio
-- Orquestación de servicios
-- Autenticación y autorización
-- Exposición de endpoints seguros
+### 4.2 Controles tecnicos obligatorios
 
-Base de Datos:
-- Persistencia de usuarios
-- Información de inversiones
-- Métricas históricas
-- Trazabilidad y auditoría
+- Fail-fast en fallas de broker: estado FALLIDA y nueva aprobacion humana para reintento.
+- Optimistic locking por version de orden para concurrencia.
+- Rate limiting por usuario y endpoint sensible con 429 y cooldown.
+- RTO <= 30 min y RPO <= 5 min para servicios criticos.
+- Trazabilidad de aprobacion/ejecucion con MFA para trader/admin.
 
-Servicios de IA:
-- Análisis de datos financieros
-- Generación de recomendaciones
-- Resúmenes y reportes automáticos
-- Asistencia conversacional
+## 5. Fases Tecnicas de Implementacion
 
-RAG / Vector Database:
-- Almacenamiento de contexto documental
-- Datos históricos relevantes
-- Reducción de costos de inferencia
-- Mejora de precisión de respuestas IA
-
-APIs Externas:
-- Datos financieros
-- Indicadores de mercado
-- Información complementaria externa
-
-
-## 5. Fases de Implementación
-
-Fase 1 – Fundaciones Técnicas
+### Fase 1: Fundacion de Plataforma
 
 Objetivo:
-Establecer la base estructural del sistema.
+Establecer bases de arquitectura, seguridad y observabilidad.
+
 Entregables:
+- Estructura backend/frontend y contratos base.
+- Middleware JWT, RBAC y hooks de MFA.
+- Health checks, logging estructurado y metricas base.
 
-- Estructura de repositorio
-- Backend y frontend inicializados
-- Conexión a base de datos
-- Autenticación básica
+Trazabilidad:
+- FR-012, FR-017, FR-019, SC-005
 
-Tareas:
-- Setup del proyecto
-- Configuración de entornos
-- Definición inicial de esquemas
-- Endpoints base y health checks
-
-
-Fase 2 – Núcleo de Inversiones
+### Fase 2: Core de Analisis y Confluencia
 
 Objetivo:
-Gestionar información central de inversiones.
+Construir pipeline analitico multi-core y salida explicable.
 
 Entregables:
-- Operaciones CRUD de inversiones
-- Modelos de datos validados
-- Servicios de cálculo base
+- Evaluacion de fuentes activas.
+- Motor de confluencia con evidencia trazable.
+- Definicion de propuesta operativa asociada a senal.
 
-Tareas:
-- Modelado de entidades
-- Validaciones de datos
-- Persistencia optimizada
-- Logging y trazabilidad
+Trazabilidad:
+- FR-001, FR-002, FR-003, FR-010, SC-001, SC-004
 
-
-Fase 3 – Integración de Inteligencia Artificial
+### Fase 3: Flujo Operativo Human-in-the-loop
 
 Objetivo:
-Incorporar capacidades inteligentes al sistema.
+Implementar ciclo de vida operativo con aprobacion humana estricta.
 
 Entregables:
-- Agente de análisis de inversiones
-- Motor de recomendaciones
-- Chat IA contextual
+- Estados de propuesta/orden e historial.
+- Bloqueo de ejecucion sin aprobacion valida.
+- Fail-fast y reintento controlado post-falla.
+- Optimistic locking en acciones concurrentes.
 
-Tareas:
-- Integración con proveedor LLM
-- Implementación de RAG
-- Versionado de prompts
-- Control de costos de inferencia
+Trazabilidad:
+- FR-004, FR-005, FR-006, FR-009, FR-016, SC-002
 
-
-Fase 4 – Visualización y Reportes
+### Fase 4: Integracion Broker y Market Data
 
 Objetivo:
-Explotar los datos y resultados del sistema.
+Habilitar ejecucion asistida y datos de mercado en tiempo real.
 
 Entregables:
-- Dashboards financieros
-- Reportes automáticos
-- Visualizaciones clave
+- Adaptadores IBKR y Alpaca para Market/Limit.
+- Normalizacion de estados broker -> dominio.
+- Telemetria de latencia y frescura de market data.
 
-Tareas:
-- Gráficas y métricas
-- Exportación de reportes
-- Optimización de performance
+Trazabilidad:
+- FR-008, FR-014, SC-006
 
-
-Fase 5 – Seguridad y Escalabilidad
+### Fase 5: Auditoria, Cumplimiento y Resiliencia
 
 Objetivo:
-Preparar el sistema para uso real y crecimiento.
+Completar requisitos de cumplimiento, evidencia y recuperacion.
 
 Entregables:
-- Roles y permisos
-- Auditoría básica
-- Observabilidad
+- Registro de auditoria inmutable.
+- Politicas de retencion 365 dias y evidencia operativa.
+- Disclaimer explicito en puntos de decision/ejecucion.
+- Estrategia operativa para RTO/RPO objetivos.
 
-Tareas:
-- Autorización por roles
-- Protección de endpoints
-- Métricas y alertas
-- Pruebas técnicas
+Trazabilidad:
+- FR-007, FR-011, FR-013, FR-018, SC-003, SC-007, SC-008
 
+### Fase 6: Endurecimiento y Readiness Speckit
 
-## 6. Agentes de IA
+Objetivo:
+Dejar artefactos listos para descomposicion en /speckit.plan y /speckit.tasks.
 
-Agent Analyzer:
-- Analiza datos financieros
-- Detecta patrones y tendencias
+Entregables:
+- Matriz final FR/SC -> componentes -> pruebas.
+- Lista de riesgos residuales y mitigaciones activas.
+- Criterios de salida por fase y checkpoints.
 
-Agent Recommender:
-- Sugiere acciones de inversión
-- Explica fundamentos de las recomendaciones
+## 6. Matriz de Trazabilidad Minima
 
-Agent Reporter:
-- Genera reportes y resúmenes
-- Produce vistas ejecutivas
+- Analisis y confluencia: FR-001/002/003/010 -> Fase 2.
+- Control humano y ciclo de orden: FR-004/005/006/009/016 -> Fase 3.
+- Integracion de brokers y tipos de orden: FR-008/014 -> Fase 4.
+- Seguridad y acceso: FR-012/017/019 -> Fase 1.
+- Cumplimiento y auditoria: FR-007/011/013/015/018 -> Fases 5 y 1.
+- Resultados medibles: SC-001..SC-008 -> Fases 2..5.
 
-Agent Guardian:
-- Valida consistencia
-- Identifica riesgos y anomalías
+## 7. Riesgos Tecnicos y Mitigaciones
 
+1. Deriva entre estados internos y broker.
+Mitigacion: reconciliacion periodica, idempotencia y mapeo canonico de estados.
 
-## 7. Consideraciones Técnicas
+2. Degradacion de market data en alta volatilidad.
+Mitigacion: buffering, fallback de feed y alertas de p95.
 
-Seguridad:
-- No se permiten decisiones automáticas sin supervisión
-- Registro completo de prompts y respuestas
-- Acceso controlado a datos sensibles
+3. Riesgo de bypass de controles de aprobacion.
+Mitigacion: enforce server-side de aprobacion, RBAC y MFA.
 
-Costos de IA:
-- Límites de tokens por operación
-- Cacheo de respuestas
-- Uso intensivo de RAG para reducir inferencia
+4. Falla de servicios criticos fuera de objetivos RTO/RPO.
+Mitigacion: runbooks, backups, restauracion probada y simulacros.
 
-Escalabilidad:
-- Arquitectura desacoplada
-- Servicios de IA intercambiables
-- Preparación para futuras plataformas
+5. Ambiguedad futura por cambios no trazados al canon.
+Mitigacion: gate de trazabilidad obligatorio previo a tareas/implementacion.
 
+## 8. Validacion de Consistencia Plan/Spec
 
-## 8. Riesgos y Mitigación
+Resumen de validacion actual:
+- OK: 9
+- GAPS: 0
 
-Dependencia excesiva de IA
-Mitigación: Fallbacks determinísticos
+Chequeos OK:
+1. El plan no contradice constitucion ni especificacion canonica.
+2. El plan mantiene modelo semi-automatico y control humano obligatorio.
+3. Cada fase mapea a FR/SC verificables.
+4. Se consideran skills requeridas para etapa plan.
+5. Se contempla seguridad minima (JWT, RBAC, MFA).
+6. Se contempla resiliencia minima (RTO/RPO).
+7. Se contempla observabilidad para operaciones criticas.
+8. Se contempla cumplimiento (disclaimer, auditoria, retencion).
+9. El resultado es apto como entrada de /speckit.plan.
 
-Costos elevados de inferencia
-Mitigación: Monitoreo y límites
+## 9. Cambios Significativos vs Version Previa
 
-Ambigüedad funcional
-Mitigación: Uso de specs derivadas
+1. Se alineo el plan a FR-016..FR-019 y SC-006..SC-008.
+2. Se reemplazo enfoque generico por trazabilidad explicita a canon operativo.
+3. Se incorporaron controles operativos obligatorios:
+- optimistic locking
+- fail-fast con nueva aprobacion
+- RBAC
+- MFA
+- RTO/RPO
+4. Se adiciono matriz de skills requeridas para etapa plan.
+5. Se formalizo resumen de consistencia OK/GAPS.
 
-Crecimiento desordenado
-Mitigación: Modularidad estricta
+## 10. Salida
 
-
-## 9. Estado de Preparación
-
-SPEC-001 registrada como baseline canónica
-Plan técnico alineado sin inferencias funcionales
-Compatible con checklist Speckit
-Listo para generación de plan oficial
-
-
-## 10. Acción
-Este documento se utiliza directamente como entrada para:
-/speckit.plan
-
-## 11. Nota Final
-Este plan técnico preserva completamente la fuente canónica y define únicamente la estrategia de implementación.
-Cualquier ampliación funcional deberá realizarse mediante specs derivadas, manteniendo la integridad del baseline.
+Este documento queda listo como plan tecnico canonico regenerado para consumo en:
+- /diana.plan action="validate"
+- /speckit.plan
