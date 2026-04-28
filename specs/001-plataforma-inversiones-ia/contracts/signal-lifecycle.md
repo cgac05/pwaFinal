@@ -1,23 +1,37 @@
 # Contract: Signal Lifecycle
 
-## Purpose
+## Proposito
 
-Define the shared lifecycle contract for signals, recommendations, approvals, and assisted execution.
+Definir ciclo de vida compartido entre evidencia analitica, senal, propuesta operativa, decision humana y ejecucion asistida.
 
 ## Lifecycle Stages
 
-1. Signal evidence is produced by active analytical cores.
-2. Confluence or aggregate evaluation is computed.
-3. AI optionally enriches the record with explanation and risk context.
-4. The user reviews the signal and recommendation.
-5. The user approves or rejects a specific execution intent.
-6. The backend submits only approved intents through a broker adapter.
-7. The resulting execution outcome is persisted and audited.
+1. Ingestion de market data y evaluacion de fuentes analiticas activas.
+2. Generacion de evidencia por core con rationale trazable.
+3. Confluencia y emision de senal (`BUY|SELL|HOLD`) con confianza.
+4. Enriquecimiento opcional IA (explicacion/riesgo) sin autoridad de ejecucion.
+5. Creacion de propuesta operativa en `PENDING_APPROVAL`.
+6. Decision humana (`APPROVE|REJECT`) con MFA cuando aplique.
+7. Submission a broker solo si estado `APPROVED` y version vigente.
+8. Registro de resultado (`FILLED|PARTIALLY_FILLED|CANCELLED|REJECTED|FAILED`).
+9. Si hay `FAILED`, transicion obligatoria a `PENDING_APPROVAL` para reintento.
 
 ## Invariants
 
-- A signal must remain explainable through its evidence records.
-- AI cannot be the sole basis for execution.
-- Every execution requires explicit human approval.
-- A failed execution attempt requires a new approval before retry.
-- Lifecycle evidence is retained for at least 365 days.
+- Toda senal debe ser explicable y auditable (`FR-002`,`FR-006`).
+- IA nunca es base unica de ejecucion (`FR-010`).
+- No existe ejecucion sin aprobacion valida (`FR-004`,`FR-005`).
+- Se aplica optimistic locking por version de propuesta (`FR-016`).
+- Evidencia y auditoria se retienen al menos 365 dias (`FR-007`).
+
+## Eventos Auditables Minimos
+
+- `SIGNAL_GENERATED`
+- `PROPOSAL_CREATED`
+- `HUMAN_APPROVED`
+- `HUMAN_REJECTED`
+- `EXECUTION_SUBMITTED`
+- `EXECUTION_FAILED`
+- `EXECUTION_FILLED`
+- `EXECUTION_CANCELLED`
+- `DISCLAIMER_ACKNOWLEDGED`

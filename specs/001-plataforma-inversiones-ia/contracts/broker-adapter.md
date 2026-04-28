@@ -1,27 +1,46 @@
 # Contract: Broker Adapter
 
-## Purpose
+## Proposito
 
-Define the stable internal adapter interface for supported brokers.
+Definir interfaz interna estable para integracion de brokers soportados en v1.
 
-## Supported Brokers
+## Brokers Soportados
 
 - `IBKR`
 - `ALPACA`
 
-## Required Capabilities
+## Capacidades Obligatorias
 
-1. Connectivity validation
-2. Market data retrieval
-3. Portfolio synchronization
-4. Assisted order preparation
-5. Approved order submission
-6. Execution status normalization
-7. Technical failure normalization
+1. Validar conectividad y estado de sesion.
+2. Consultar market data en formato normalizado.
+3. Sincronizar cuenta/posiciones.
+4. Preparar orden aprobada (`MARKET`/`LIMIT`).
+5. Enviar orden solo si existe aprobacion humana valida.
+6. Normalizar estados de ejecucion a contrato canonico.
+7. Normalizar errores tecnicos/negocio para auditoria.
+
+## Estado Canonico de Orden
+
+- `SUBMITTED`
+- `PARTIALLY_FILLED`
+- `FILLED`
+- `CANCELLED`
+- `REJECTED`
+- `FAILED`
 
 ## Invariants
 
-- Broker-specific SDK behavior is isolated inside the adapter layer.
-- No adapter may submit an order that lacks explicit manual approval.
-- Timeouts and technical rejections normalize to a failed execution attempt.
-- Any retry requires a fresh approval cycle.
+- El dominio nunca consume SDK/REST broker de forma directa.
+- Cualquier timeout/error transitorio se registra como `FAILED` con metadata de retry.
+- Un reintento requiere nueva aprobacion humana previa.
+- Debe existir idempotency key por intento para evitar duplicados.
+
+## Resultado Minimo de Submission
+
+- `proposal_id`
+- `broker`
+- `broker_order_id` (nullable en timeout)
+- `status` (canonico)
+- `error_code` (nullable)
+- `error_message` (nullable)
+- `occurred_at`

@@ -1,54 +1,59 @@
-# Quickstart: Plataforma de Inversiones con IA (DR.FIC)
+# Quickstart: Plataforma de Inversiones con IA
 
-## Purpose
+## Proposito
 
-Describe the recommended implementation starting sequence after plan approval.
+Secuencia minima para iniciar implementacion tecnica sobre la base del plan de esta feature.
 
-## 1. Create the application layout
+## 1. Preparar estructura base
 
-Set up:
+Estructura esperada:
 
 ```text
 frontend/
 backend/
+tests/
 specs/001-plataforma-inversiones-ia/
 ```
 
-## 2. Establish backend foundations first
+## 2. Levantar cimientos de backend primero
 
-Start with:
+1. Implementar middleware JWT + resolucion de usuario activo (`FR-012`).
+2. Implementar RBAC por roles (`viewer`,`trader`,`admin`) (`FR-017`).
+3. Implementar challenge MFA para aprobacion/ejecucion (`FR-019`).
+4. Definir entidades operativas en Supabase y politicas de retencion (`FR-007`).
+5. Definir auditoria estructurada para auth, aprobacion y ejecucion (`FR-006`,`FR-011`).
 
-1. JWT validation and active-user resolution
-2. Supabase operational persistence
-3. Optional MongoDB and retrieval-context support boundaries
-4. Broker adapter interfaces for IBKR and Alpaca
-5. Audit logging and observability baseline
+## 3. Implementar contratos de dominio y flujo operativo
 
-## 3. Add frontend review surfaces
+1. Ciclo `PENDING_APPROVAL -> APPROVED -> SUBMITTED -> ...` con optimistic locking (`FR-016`).
+2. Regla fail-fast: `FAILED -> PENDING_APPROVAL` con nueva aprobacion obligatoria (`FR-009`).
+3. Validacion de tipos de orden `MARKET` y `LIMIT` (`FR-014`).
+4. Rate limiting por usuario/endpoint con `429` y cooldown (`FR-015`).
 
-Continue with:
+## 4. Integrar brokers y market data
 
-1. Dashboard and ranked opportunities views
-2. Signal detail and explainability views
-3. Recommendation review surfaces
-4. Assisted execution approval flow
-5. Reporting and historical traceability views
+1. Implementar adaptadores internos IBKR y Alpaca (`FR-008`).
+2. Normalizar estados de orden broker a estado canonico interno.
+3. Implementar pipeline realtime con contrato normalizado de market data (`SC-006`).
+4. Instrumentar metricas p95 de frescura y alertas de degradacion.
 
-## 4. Implement by technical phases
+## 5. Completar frontend PWA
 
-Follow the DR.FIC technical plan sequence:
+1. Vista de evaluacion de senales y evidencia (`FR-001`,`FR-002`).
+2. Configuracion de fuentes analiticas (`FR-003`).
+3. Flujo de aprobacion/rechazo con MFA para roles sensibles (`FR-004`,`FR-005`,`FR-019`).
+4. Historial trazable de senales, decisiones e intentos (`FR-011`).
+5. Mostrar disclaimer de no asesoria en puntos de decision/ejecucion (`FR-013`).
 
-1. Foundations
-2. Investment core
-3. AI integration
-4. Visualization and reports
-5. Security and scalability hardening
+## 6. Verificaciones operativas y de resiliencia
 
-## 5. Validate critical constraints continuously
+1. Probar simulacros de recovery contra objetivos `RTO<=30m` y `RPO<=5m` (`FR-018`).
+2. Verificar cobertura de auditoria al 100% en acciones de aprobacion/ejecucion (`SC-008`).
+3. Validar disponibilidad mensual objetivo >=99.5% (`SC-005`).
 
-- No auto-trading in v1
-- AI remains advisory only
-- Every order requires explicit approval
-- Failed broker attempts require new approval
-- Audit evidence retention is at least 365 days
-- Availability target remains 99.5% monthly or better
+## 7. Comandos base de calidad
+
+```bash
+npm run lint
+npm test
+```

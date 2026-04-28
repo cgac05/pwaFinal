@@ -1,25 +1,35 @@
 # Contract: Auth Context
 
-## Purpose
+## Proposito
 
-Define the v1 authentication contract between the web frontend and the backend API.
+Definir contrato de autenticacion y autorizacion para endpoints protegidos de la API.
 
 ## Request Contract
 
-- Protected requests must include `Authorization: Bearer <JWT>`.
-- Identity is validated only by the backend.
-- Client-provided identity headers are not authoritative in v1.
+- Header obligatorio: `Authorization: Bearer <JWT>`.
+- El backend valida firma, expiracion, issuer y audience del token.
+- El rol efectivo se deriva de claims + contexto persistido del usuario.
+- Para aprobacion/ejecucion de roles `trader` y `admin` se exige evidencia MFA valida.
+
+## Authorization Contract (RBAC)
+
+- `viewer`: solo lectura de senales, evidencia e historial.
+- `trader`: puede aprobar/rechazar y disparar ejecucion asistida con MFA.
+- `admin`: capacidades de `trader` + gestion operativa/soporte.
 
 ## Validation Outcomes
 
-| Condition | Result |
-|-----------|--------|
-| Missing bearer token | `401 AUTH_CONTEXT_MISSING` |
-| Invalid or expired token | `401 AUTH_CONTEXT_INVALID_TOKEN` |
-| Unknown user | `404 AUTH_CONTEXT_USER_NOT_FOUND` |
-| Inactive user | `403 AUTH_CONTEXT_USER_INACTIVE` |
+| Condicion | Resultado |
+|-----------|-----------|
+| Falta bearer token | `401 AUTH_CONTEXT_MISSING` |
+| Token invalido o expirado | `401 AUTH_CONTEXT_INVALID_TOKEN` |
+| Usuario no encontrado | `404 AUTH_CONTEXT_USER_NOT_FOUND` |
+| Usuario inactivo | `403 AUTH_CONTEXT_USER_INACTIVE` |
+| Rol insuficiente | `403 AUTH_CONTEXT_FORBIDDEN_ROLE` |
+| MFA requerida no valida | `403 AUTH_CONTEXT_MFA_REQUIRED` |
 
 ## Invariants
 
-- Approval and execution actions require an authenticated active user.
-- Security-relevant auth events must be auditable.
+- Ninguna accion operativa sensible se ejecuta sin usuario autenticado activo.
+- Aprobacion/ejecucion quedan auditadas con `user_id`, `role`, `mfa_session_id`, `timestamp`.
+- No se aceptan headers de identidad del cliente como fuente autoritativa.

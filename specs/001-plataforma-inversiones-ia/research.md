@@ -1,57 +1,61 @@
-# Research: Plataforma de Inversiones con IA (DR.FIC)
+# Research: Plataforma de Inversiones con IA
 
-## Decision 1: Keep the architecture split into frontend, backend, storage, AI services, and external integrations
+## Decision 1
 
-- Decision: Implement the platform as a React-based web frontend, a Node.js + Express backend API, operational persistence, AI services, and external provider integrations.
-- Rationale: The DR.FIC technical plan already defines these as the core logical components, and the constitution requires strict separation between UI and REST responsibilities.
+- Decision: Mantener arquitectura separada en `frontend` (PWA) y `backend` (REST API) con dominio y adaptadores desacoplados.
+- Rationale: La constitucion exige separacion estricta UI/API y trazabilidad operativa; el acoplamiento directo compromete seguridad y auditabilidad.
 - Alternatives considered:
-  - Single-process application with mixed concerns: rejected because it weakens architectural isolation and observability.
-  - Frontend-only architecture with direct external calls: rejected because persistence, broker security, and auditability must remain server-side.
+  - Monolito con logica mezclada de UI y ejecucion: descartado por menor gobernanza y mantenibilidad.
+  - Frontend consumiendo brokers directo: descartado por exposicion de credenciales y falta de control server-side.
 
-## Decision 2: Treat Supabase as primary storage and keep MongoDB and vector retrieval optional supporting stores
+## Decision 2
 
-- Decision: Use Supabase for operational entities and relational integrity; reserve MongoDB and vector retrieval storage for optional historical analytics, reasoning archives, and AI context retrieval.
-- Rationale: The canonical specification names Supabase as primary and MongoDB as optional, while the DR.FIC plan introduces RAG/vector capabilities as a cost and precision optimization rather than a mandatory core dependency.
+- Decision: Usar Supabase como store operacional primario y mantener MongoDB/vector store como soporte opcional para historico y contexto IA.
+- Rationale: Alinea el stack activo del proyecto y evita dependencia obligatoria de componentes no esenciales para v1.
 - Alternatives considered:
-  - Use MongoDB as the only store: rejected because it conflicts with the canonical spec.
-  - Exclude optional historical/context stores entirely: rejected because the technical plan explicitly includes them as strategic support for AI efficiency.
+  - Solo MongoDB: descartado por conflicto con la base operativa definida.
+  - Sin store opcional para contexto IA: descartado porque limita evolucion de explicabilidad y eficiencia de IA.
 
-## Decision 3: Model AI as a bounded advisory subsystem with optional retrieval support
+## Decision 3
 
-- Decision: Place AI behind a dedicated backend integration layer that consumes platform data, optional retrieval context, and produces recommendations, summaries, and risk explanations without execution authority.
-- Rationale: This matches both the constitution and the DR.FIC plan, which positions AI as analytical assistance and not as an autonomous actor.
+- Decision: Enforzar ciclo de orden human-in-the-loop con estados canonicos y re-aprobacion obligatoria tras `FAILED`.
+- Rationale: `FR-004`,`FR-005`,`FR-009` y conocimiento `INV-D-001` exigen control humano previo y posterior a fallas.
 - Alternatives considered:
-  - AI directly embedded in the frontend: rejected because secrets, policy enforcement, and cost controls must remain server-side.
-  - AI as the main source of trading decisions: rejected because AI cannot be the unique source of truth.
+  - Reintento automatico de orden fallida: descartado por violar control humano.
+  - Estado fallido sin retroceso a aprobacion: descartado por riesgo operacional.
 
-## Decision 4: Standardize broker integrations behind internal adapters
+## Decision 4
 
-- Decision: Encapsulate IBKR and Alpaca behind stable adapter contracts for connectivity, market data, portfolio sync, order preparation, submission, and normalized execution outcomes.
-- Rationale: The constitution requires replaceable broker integrations and the specification explicitly includes both brokers in v1.
+- Decision: Definir contrato unico de market data normalizado y pipeline realtime con objetivo p95<=1s.
+- Rationale: `SC-006` y `INV-D-002` requieren frescura acotada, fallback y desacoplamiento de formatos nativos de broker.
 - Alternatives considered:
-  - Call broker SDKs directly from business services: rejected because it couples platform logic to provider-specific behavior.
-  - Implement only one broker in the architecture baseline: rejected because both are in scope for v1 planning.
+  - Payload broker nativo en frontend: descartado por alto acoplamiento y complejidad multi-broker.
+  - Polling como estrategia principal: descartado por no sostener objetivo de frescura.
 
-## Decision 5: Use explainable signal lifecycle records as the unit of traceability
+## Decision 5
 
-- Decision: Anchor the design on signal lifecycle records that connect analytical evidence, AI enrichment, human review, approval, execution attempts, and audit evidence.
-- Rationale: The canonical specification requires explainable signals, traceability by ticket, and evidence for each operational decision.
+- Decision: Integrar IBKR y Alpaca exclusivamente mediante adaptadores internos con mapeo de estados e idempotencia.
+- Rationale: `FR-008`,`FR-014` y knowledge de brokers (`INV-B-001`,`INV-B-002`,`INV-B-003`) demandan aislamiento de SDKs y trazabilidad robusta.
 - Alternatives considered:
-  - Persist only final recommendations: rejected because it erases explainability.
-  - Keep AI reasoning separate from signal lifecycle records: rejected because it weakens auditability.
+  - Un solo broker en v1: descartado por incumplir alcance.
+  - Uso directo de SDKs dentro de servicios de dominio: descartado por acoplamiento.
 
-## Decision 6: Normalize failure handling and operational observability from the start
+## Decision 6
 
-- Decision: Model broker failures, AI failures, and external data-provider failures as first-class observable events with normalized statuses, audit emission, and retry rules bounded by human approval.
-- Rationale: The technical plan emphasizes observability and the clarified specification requires failed broker attempts to force a fresh approval cycle.
+- Decision: Tratar IA como subsistema asesor de confluencia, nunca como ejecutor autonomo.
+- Rationale: Constitucion y `FR-010` obligan a mantener IA como apoyo explicable y no como autoridad de ejecucion.
 - Alternatives considered:
-  - Ad hoc logging without normalized lifecycle states: rejected because it weakens operational control.
-  - Automatic broker retries: rejected because it violates the explicit human-control rule.
+  - IA como fuente unica de senal: descartado por violar principio de confluencia.
+  - IA con auto-ejecucion condicionada: descartado por inconstitucional en v1.
 
-## Decision 7: Plan implementation in phased technical slices aligned to the DR.FIC technical plan
+## Decision 7
 
-- Decision: Use five planning slices: foundations, investment core, AI integration, visualization/reporting, and security/scalability.
-- Rationale: The input technical plan already defines these phases and they map well to a later tasks breakdown without redefining business scope.
+- Decision: Incorporar gobernanza de seguridad operativa con JWT, RBAC, MFA, rate limit, optimistic locking y auditoria.
+- Rationale: Cobertura directa de `FR-012`,`FR-015`,`FR-016`,`FR-017`,`FR-019`, ademas de compliance y resiliencia (`FR-007`,`FR-013`,`FR-018`).
 - Alternatives considered:
-  - Feature slices only by UI screen: rejected because the current input is a technical plan, not a UX plan.
-  - Infrastructure-first planning with no feature progression: rejected because it would obscure delivery sequencing.
+  - Seguridad minima solo por autenticacion: descartado por no cubrir autorizacion granular ni operaciones sensibles.
+  - Locks pesimistas globales para concurrencia: descartado por costo y baja escalabilidad frente a optimistic locking.
+
+## Cobertura de Clarificaciones
+
+No quedan elementos `NEEDS CLARIFICATION` para la fase de planificacion. Las dudas operativas criticas (brokers, market/limit, p95, fail-fast, MFA, RBAC, RTO/RPO, retention) quedaron resueltas en `spec.md`.

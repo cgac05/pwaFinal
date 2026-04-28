@@ -1,52 +1,51 @@
-# Implementation Plan: Plataforma de Inversiones con IA (DR.FIC)
+# Plan de Implementacion: Plataforma de Inversiones con IA
 
-**Branch**: `[001-plataforma-inversiones-ia]` | **Date**: 2026-04-23 | **Spec**: [spec.md](./spec.md)
-**Input**: Technical plan from `/.drfic/diana-sdk/specs/001-plan-drfic.md` plus canonical feature specification from `/specs/001-plataforma-inversiones-ia/spec.md`
+**Branch**: `003-run-git-feature` | **Date**: 2026-04-28 | **Spec**: `specs/001-plataforma-inversiones-ia/spec.md`  
+**Input**: `--input .drfic\diana-sdk\projects\diana-inversions\initiatives\001-inversions\001-inv-plan.md`
 
-**Note**: This plan captures Phase 0 research and Phase 1 design outputs only.
+## Resumen
 
-## Summary
+Implementar una plataforma web de inversiones asistida por IA con modelo semi-automatico estricto: la IA analiza y recomienda, pero toda ejecucion requiere aprobacion humana explicita. La arquitectura objetivo separa `frontend` (PWA React) y `backend` (REST API Express), con Supabase como store operacional primario, adaptadores desacoplados para IBKR/Alpaca, y trazabilidad completa de senales, decisiones, ejecuciones, auditoria y cumplimiento.
 
-Plan the implementation of a professional investment platform that keeps the canonical SPEC-001 scope intact while using the DR.FIC technical plan as direct planning input. The solution will use a constitution-aligned split architecture with a web frontend, a REST API backend, persistent operational storage, explainable AI-assisted analytics, optional retrieval context for AI efficiency, broker integrations, and full auditability around signals, recommendations, approvals, and assisted execution.
+## Contexto Tecnico
 
-## Technical Context
-
-**Language/Version**: TypeScript 5.x, React 18, Node.js 22 LTS  
-**Primary Dependencies**: Vite, React, Zustand, TailwindCSS, TradingView Lightweight Charts, Express, Supabase client, optional MongoDB driver, Claude API client, broker SDKs for IBKR and Alpaca  
-**Storage**: Supabase as primary operational store; optional MongoDB for historical analytics payloads and AI context archives; optional vector retrieval store for RAG-style contextual enrichment when AI cost or precision requires it  
-**Testing**: Vitest, React Testing Library, Supertest, contract tests for auth and broker adapters  
-**Target Platform**: Modern browser PWA plus Linux-hosted Node.js REST API  
-**Project Type**: Web application with strict frontend/backend separation  
-**Performance Goals**: Dashboard and review views load actionable data within 2 seconds under normal conditions; authenticated API p95 <= 300 ms excluding external provider latency; backend monthly availability >= 99.5%  
-**Constraints**: No autonomous execution; AI is advisory only; every order requires explicit manual approval; failed broker attempts require new approval before retry; server-side persistence only; credentials only in environment configuration; audit evidence retention >= 365 days  
-**Scale/Scope**: v1 covers US equities and options, explainable multi-core signal generation, professional internal users, IBKR and Alpaca integrations, ranked opportunities, reporting, and audit trails
+**Language/Version**: TypeScript 5.x en frontend y backend; Node.js 22 LTS en API  
+**Primary Dependencies**: React 18, Vite, Zustand, TailwindCSS, Express, Supabase JS client, TradingView Lightweight Charts, SDKs IBKR y Alpaca, cliente Claude API  
+**Storage**: Supabase primario; MongoDB opcional para historicos/archivos de contexto IA  
+**Testing**: `npm test`; lint con `npm run lint`; pruebas unitarias/integracion/contrato por capa  
+**Target Platform**: Web (PWA) + servidor Node.js  
+**Project Type**: Aplicacion web con frontend + backend separados  
+**Performance Goals**: `SC-006` p95 <= 1s para frescura de market data activa; `SC-003` >=98% de consultas historicas <3s; disponibilidad mensual >=99.5%  
+**Constraints**: Control humano obligatorio (`FR-004`,`FR-005`,`FR-009`), no auto-trading (`FR-010`), retencion >=365 dias (`FR-007`), rate limiting con `429` (`FR-015`), optimistic locking (`FR-016`), MFA para trader/admin (`FR-019`)  
+**Scale/Scope**: v1 enfocado en acciones y opciones US, brokers IBKR+Alpaca, señales BUY/SELL/HOLD explicables
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+*GATE: Debe pasar antes de Phase 0 research. Revalidar despues de Phase 1 design.*
 
-### Pre-Research Gate Review
+### Check Inicial (Pre-Phase 0)
 
-| Gate | Requirement | Status | Notes |
-|------|-------------|--------|-------|
-| G1 | Human approval is mandatory for execution | PASS | Plan preserves per-order manual approval and forbids auto-trading. |
-| G2 | AI acts only as confirmer and evaluator | PASS | AI remains advisory and cannot submit or authorize orders. |
-| G3 | Cores must stay decoupled and explainable | PASS | Design separates signal evidence, confluence, and AI reasoning. |
-| G4 | PWA and REST API must be separated | PASS | Source structure uses dedicated `frontend/` and `backend/` applications. |
-| G5 | Broker logic must be adapter-based | PASS | Contracts define a stable broker adapter boundary. |
-| G6 | Security and persistence remain server-side | PASS | JWT validation, audit persistence, and secret handling remain backend-only. |
-| G7 | Observability, evidence, and testing are mandatory | PASS | Research and contracts include audit events, failure tracking, and test layers. |
-| G8 | Planning remains within Picoro scope | PASS | Artifacts stay at research/design level with no implementation code. |
+- Idioma oficial en espanol: **PASS** (artefactos de plan en espanol).
+- Modelo semi-automatico y control humano obligatorio: **PASS** (`FR-004`,`FR-005`,`FR-009`,`FR-010`).
+- Separacion PWA y REST API: **PASS** (estructura `frontend/` + `backend/`).
+- Seguridad minima (JWT, RBAC, MFA): **PASS** (`FR-012`,`FR-017`,`FR-019`).
+- Auditoria, disclaimer y retencion: **PASS** (`FR-007`,`FR-013`).
+- Broker scope constitucional v1 (IBKR/Alpaca, Market/Limit): **PASS** (`FR-008`,`FR-014`).
+- Resiliencia y recuperacion operativa (RTO/RPO): **PASS** (`FR-018`).
 
-### Post-Design Gate Review
+Resultado del gate inicial: **PASS (sin violaciones)**.
 
-| Gate | Status | Notes |
-|------|--------|-------|
-| G1-G8 | PASS | `research.md`, `data-model.md`, `contracts/`, and `quickstart.md` are aligned with the constitution and the DR.FIC technical plan. |
+### Re-check Post-Phase 1
+
+- Data model y contratos mantienen aprobacion humana como condicion previa de ejecucion: **PASS**.
+- Contratos mantienen trazabilidad y auditoria de extremo a extremo: **PASS**.
+- Quickstart y diseno no introducen auto-trading ni bypass de gobernanza: **PASS**.
+
+Resultado del re-check: **PASS (sin excepciones constitucionales)**.
 
 ## Project Structure
 
-### Documentation (this feature)
+### Documentacion de la feature
 
 ```text
 specs/001-plataforma-inversiones-ia/
@@ -58,48 +57,50 @@ specs/001-plataforma-inversiones-ia/
 │   ├── auth-context.md
 │   ├── broker-adapter.md
 │   └── signal-lifecycle.md
-└── tasks.md
+└── tasks.md   # se genera en /speckit.tasks
 ```
 
-### Source Code (repository root)
+### Estructura de codigo (repo)
 
 ```text
 backend/
-├── src/
-│   ├── api/
-│   ├── auth/
-│   ├── domain/
-│   ├── integrations/
-│   │   ├── ai/
-│   │   ├── brokers/
-│   │   ├── market-data/
-│   │   └── persistence/
-│   ├── services/
-│   └── observability/
-└── tests/
-    ├── contract/
-    ├── integration/
-    └── unit/
-
 frontend/
-├── src/
-│   ├── app/
-│   ├── components/
-│   ├── features/
-│   │   ├── dashboard/
-│   │   ├── signals/
-│   │   ├── recommendations/
-│   │   ├── reports/
-│   │   └── portfolio/
-│   ├── services/
-│   └── stores/
-└── tests/
-    ├── integration/
-    └── unit/
+tests/
 ```
 
-**Structure Decision**: Use a two-application web structure because the constitution requires separation between the PWA and the REST API, and the DR.FIC technical plan explicitly models frontend, backend, storage, AI services, and external integrations as separate architectural components.
+**Structure Decision**: Se mantiene arquitectura web de dos capas (`frontend` + `backend`) con carpeta `tests` transversal, alineada al stack constitucional y a la separacion de responsabilidades del proyecto.
 
-## Complexity Tracking
+## Phase 0: Outline y Research
 
-No constitutional exceptions are required for this plan.
+### Unknowns y Resolucion
+
+No quedaron `NEEDS CLARIFICATION` abiertos en el contexto tecnico. Se consolidaron decisiones y mejores practicas en `research.md` para:
+- confluencia de cores y explicabilidad,
+- market data realtime p95<=1s,
+- integracion desacoplada de brokers,
+- gobernanza de ejecucion human-in-the-loop,
+- observabilidad y recuperacion operativa.
+
+## Phase 1: Design y Contracts
+
+### Artefactos de diseno generados
+
+- `data-model.md`: entidades, relaciones, validaciones y transiciones de estado.
+- `contracts/auth-context.md`: contrato de autenticacion/autorizacion (JWT+RBAC+MFA).
+- `contracts/broker-adapter.md`: contrato de adaptadores IBKR/Alpaca, estados e idempotencia.
+- `contracts/signal-lifecycle.md`: contrato de ciclo de vida de señal/aprobacion/ejecucion.
+- `quickstart.md`: secuencia de implementacion recomendada para iniciar desarrollo.
+
+### Actualizacion de contexto de agente
+
+Accion requerida por workflow: ejecutar `.specify/scripts/powershell/update-agent-context.ps1 -AgentType copilot`.
+
+## Complejidad y Excepciones
+
+No se registran violaciones constitucionales ni excepciones de complejidad que requieran justificacion.
+
+## Recomendaciones de Knowledge
+
+Los siguientes temas mejorarian el knowledge base con `/diana.knowledge`:
+- `/diana.knowledge topic="sdd-lifecycle-sdk" scope="sdk"` - Actualmente el indice SDK reporta metodologia SDD como esqueleto; enriquecerlo reduce ambiguedad operativa multi-proyecto.
+- `/diana.knowledge topic="diana-agent-roles-sdk" scope="sdk"` - Completar roles profundos de agentes en SDK fortaleceria trazabilidad de responsabilidades en flujos Speckit.
