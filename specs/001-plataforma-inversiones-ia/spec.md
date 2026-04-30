@@ -79,11 +79,11 @@ Excluye: auto-trading, IA como fuente unica, senales black-box y crypto.
 
 ### User Story 1 - Evaluar Oportunidades con Confluencia (Priority: P1)
 
-Como inversionista, quiero recibir señales de compra, venta o espera sustentadas por múltiples fuentes analíticas para decidir con mayor confianza y menor sesgo.
+Como inversionista, quiero recibir señales de compra, venta o espera sustentadas por la confluencia de múltiples fuentes (core/algoritmos) analíticas para decidir con mayor confianza y menor sesgo.
 
 **Why this priority**: Entrega el valor central de la plataforma al transformar datos dispersos en decisiones accionables y explicables.
 
-**Independent Test**: Un usuario puede seleccionar instrumentos, ejecutar evaluación y obtener señales con explicación verificable sin depender de la ejecución operativa.
+**Independent Test**: Un usuario puede seleccionar instrumentos, ejecutar evaluación y obtener señales de diferentes fuentes (core) con explicación verificable sin depender de la ejecución operativa.
 
 **Acceptance Scenarios**:
 
@@ -124,7 +124,7 @@ Como responsable operativo, quiero consultar el historial completo de señales, 
 
 ### Edge Cases
 
-- Fuentes analíticas activas producen conclusiones incompatibles para el mismo instrumento.
+- Fuentes (core) analíticas activas producen conclusiones incompatibles para el mismo instrumento.
 - Una propuesta aprobada falla durante la fase operativa y requiere nueva decisión humana.
 - No hay datos suficientes para sostener una señal con confianza mínima.
 - El usuario reintenta acciones por latencia y el sistema debe evitar duplicidades.
@@ -135,7 +135,7 @@ Como responsable operativo, quiero consultar el historial completo de señales, 
 
 ### Functional Requirements
 
-- **FR-001**: El sistema MUST generar señales de inversión basadas en confluencia de fuentes analíticas activas.
+- **FR-001**: El sistema MUST generar señales de inversión basadas en confluencia de fuentes (core) analíticas activas.
 - **FR-002**: El sistema MUST presentar explicación trazable del razonamiento detrás de cada señal.
 - **FR-003**: El sistema MUST permitir al usuario configurar, activar y desactivar fuentes analíticas.
 - **FR-004**: El sistema MUST requerir aprobación humana explícita previa a cualquier ejecución.
@@ -159,8 +159,8 @@ Como responsable operativo, quiero consultar el historial completo de señales, 
 
 - **Usuario**: Actor autenticado que configura análisis, revisa señales y decide aprobación operativa.
 - **Fuente Analítica**: Componente que emite evidencia especializada para la confluencia.
-- **Señal de Inversión**: Resultado evaluado con acción sugerida, confianza y explicación.
-- **Propuesta Operativa**: Acción candidata derivada de una señal, pendiente de decisión humana.
+- **Señal de Inversión**: Resultado evaluado con acción sugerida por confluencia de uno o varios cores activados por usuario, confianza y explicación.
+- **Propuesta Operativa**: Acción candidata derivada de una señal como resultado de una confluencia de señales, pendiente de decisión humana.
 - **Decisión Humana**: Registro de aprobación o rechazo con contexto y marca temporal.
 - **Intento de Ejecución**: Evento operativo con resultado final y detalle de incidencias.
 - **Registro de Auditoría**: Historial inmutable de eventos, decisiones y evidencias.

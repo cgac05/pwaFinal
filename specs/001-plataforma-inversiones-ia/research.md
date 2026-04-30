@@ -2,7 +2,7 @@
 
 ## Decision 1
 
-- Decision: Mantener arquitectura separada en `frontend` (PWA) y `backend` (REST API) con dominio y adaptadores desacoplados.
+- Decision: Mantener arquitectura separada en `frontend` (PWA) y `backend` (REST API) con dominio y adaptadores desacoplados. La arquitectura soporta multiproyectos, es decir varios proyectos `frontend` (PWA) y varios `backend` (REST API) dentro de la estructura.
 - Rationale: La constitucion exige separacion estricta UI/API y trazabilidad operativa; el acoplamiento directo compromete seguridad y auditabilidad.
 - Alternatives considered:
   - Monolito con logica mezclada de UI y ejecucion: descartado por menor gobernanza y mantenibilidad.

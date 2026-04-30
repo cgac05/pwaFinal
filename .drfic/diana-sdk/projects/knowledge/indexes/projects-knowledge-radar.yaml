@@ -11,6 +11,7 @@ policy:
 
 projects:
   - id: diana-inversions
+    alias: inv
     enabled: true
     knowledge_index: .drfic/diana-sdk/projects/diana-inversions/knowledge/indexes/master-index.md
     skills_manifest: .drfic/diana-sdk/projects/diana-inversions/knowledge/indexes/skills-manifest.yaml
@@ -18,8 +19,17 @@ projects:
     sdd_engine_matrix: .drfic/diana-sdk/projects/diana-inversions/knowledge/indexes/sdd-engine-matrix.yaml
 
   - id: diana-sdk-core
+    alias: dianacore
     enabled: true
     knowledge_index: .drfic/diana-sdk/projects/diana-sdk-core/knowledge/indexes/master-index.md
+    skills_manifest: null
+    agent_skill_matrix: null
+    sdd_engine_matrix: null
+
+  - id: diana-demoapp
+    alias: demo
+    enabled: true
+    knowledge_index: null
     skills_manifest: null
     agent_skill_matrix: null
     sdd_engine_matrix: null

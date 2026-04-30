@@ -1,6 +1,6 @@
 ---
 agent: diana.skills
-description: Genera o sincroniza skills canónicas del proyecto Diana a partir de control de cambios, ticket, constitución y especificaciones. Úsalo antes de /diana.knowlege para asegurar cobertura completa.
+description: Genera o sincroniza skills canónicas del proyecto Diana a partir de control de cambios, ticket, constitución y especificaciones. Úsalo antes de /diana.knowledge para asegurar cobertura completa.
 ---
 
 # /diana.skills — Generador de Skills Canónicas Diana
@@ -83,7 +83,7 @@ Luego leer fuentes del proyecto objetivo en este orden (ejemplo diana-inversions
    - speckit.implement
 4. Todo agente Diana debe declarar primary_skills y secondary_skills.
 5. Si una skill canónica no existe, crearla.
-6. Si una skill existe pero sin knowledge_doc completo, marcar gap y recomendar /diana.knowlege topic="...".
+6. Si una skill existe pero sin knowledge_doc completo, marcar gap y recomendar /diana.knowledge topic="...".
 7. Toda skill debe tener `skill_doc` en `knowledge/skills/<NNN>-inv-<skill-name-predictivo-en-minusculas>.md`.
 8. Registrar required_skills por engine/etapa para Speckit, OpenSpec y Generic-SDD.
 9. Convención obligatoria de IDs de skill: `<NNN>-inv-<skill-name-predictivo-en-minusculas>`.
@@ -141,12 +141,12 @@ Devolver resumen:
 - Reescribir skills-manifest.yaml, agent-skill-matrix.yaml y sdd-engine-matrix.yaml manteniendo compatibilidad con IDs existentes cuando sea posible.
 - Regenerar skill docs modulares en `knowledge/skills/`.
 
-## Integración con /diana.knowlege
+## Integración con /diana.knowledge
 
 Flujo recomendado:
 1. /diana.skills action="generate"
-2. /diana.knowlege topic="..." scope="project" type="local"
+2. /diana.knowledge topic="..." scope="project" type="local"
 3. /diana.plan action="generate" scope="project"
 4. /speckit.plan
 
-/diana.knowlege debe usar skills-manifest.yaml y agent-skill-matrix.yaml como entrada obligatoria de contexto antes de investigación profunda.
+/diana.knowledge debe usar skills-manifest.yaml y agent-skill-matrix.yaml como entrada obligatoria de contexto antes de investigación profunda.
