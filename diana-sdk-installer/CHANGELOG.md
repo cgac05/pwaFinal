@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.1.2 - 2026-04-30
+
+### Fixed
+- **Critical**: Fixed wheel asset packaging using hatchling `force-include` directive to ensure `assets/` directory is distributed in wheel.
+- Assets now correctly resolved in uvx cache at `site-packages/assets/drfic/diana-sdk/...`.
+- Added MANIFEST.in for explicit asset inclusion support across all build backends.
+- Version bumped from 0.1.1 to 0.1.2 (uvx will refresh wheel from new version tag).
+
+
 ## v0.1.1 - 2026-04-30
 
 ### Fixed
