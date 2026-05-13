@@ -174,19 +174,32 @@ specs/002-team-01-dashboard-brokers/
     └── rest-api/                       # Todos los proyectos REST API del portafolio
         └── rest_api_inversions_drfic/  # Persistencia real y exposición de endpoints
             ├── src/
-            │   ├── routes/
+            │   ├── config/
             │   ├── controllers/
-            │   ├── services/
-            │   ├── models/
+            │   ├── database/
+            │   │   ├── supabase/
+            │   │   │   ├── migrations/
+            │   │   │   └── scripts/
+            │   │   └── mongodb/
+            │   ├── domain/
+            │   ├── jobs/
+            │   ├── middleware/
             │   ├── migrations/
-            │   └── config/
+            │   ├── models/
+            │   ├── modules/
+            │   ├── observability/
+            │   ├── repositories/
+            │   ├── routes/
+            │   ├── services/
+            │   ├── types/
+            │   └── utils/
             ├── DATABASE_CONFIG.yaml
             ├── .env.example
             ├── package.json
             └── tsconfig.json
 ```
 
-**Decision de estructura**: no se crean nuevas raices de producto; el trabajo se concentra en las superficies ya existentes de `frontend/` y `backend/`, con la documentacion de la feature aislada en `specs/002-team-01-dashboard-brokers/`.
+**Decision de estructura**: no se crean nuevas raices de producto; el trabajo se concentra en las superficies existentes bajo `projects/pwa/inversions_app` y `projects/rest-api/rest_api_inversions_drfic`, con la documentacion de la feature aislada en `specs/002-team-01-dashboard-brokers/`.
 
 ## Enfoque de Implementacion
 

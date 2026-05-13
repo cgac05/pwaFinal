@@ -1,14 +1,1 @@
-{
-  "name": "inversions-app-pwa",
-  "private": true,
-  "version": "0.1.0",
-  "workspaces": [
-    "frontend",
-    "backend"
-  ],
-  "scripts": {
-    "lint:fic": "node scripts/validate-fic-comments.mjs",
-    "lint": "npm run lint:fic && npm run -w frontend lint && npm run -w backend lint",
-    "test": "npm run -w frontend test && npm run -w backend test"
-  }
-}
+{"name":"inversions-app-pwa","private":true,"version":"0.1.0","workspaces":["projects/pwa/inversions_app","projects/rest-api/rest_api_inversions_drfic","projects/packages/ui-library","projects/packages/utils","projects/packages/types"],"scripts":{"lint:fic":"node scripts/validate-fic-comments.mjs","lint":"npm run lint:fic && npm run -w @inversions/pwa lint && npm run -w @inversions/rest-api lint","test":"npm run -w @inversions/pwa test && npm run -w @inversions/rest-api test"}}
