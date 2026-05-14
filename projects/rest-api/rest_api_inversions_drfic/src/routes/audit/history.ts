@@ -30,9 +30,11 @@
 
 import { Router, Request, Response } from 'express';
 import { AuditHistoryService, AuditHistoryFilters, PaginationParams } from '../../modules/audit/historyService';
+import { HistoryMetricsService } from '../../observability/historyMetrics';
 
 export function createAuditHistoryRouter(historyService: AuditHistoryService): Router {
   const router = Router();
+  const metrics = new HistoryMetricsService();
 
   /**
    * GET /audit/history
@@ -138,6 +140,8 @@ export function createAuditHistoryRouter(historyService: AuditHistoryService): R
       // 🧠 FIC: Execute filtered and paginated history query (EN)
       // 🧠 FIC: Ejecutar consulta de historial con filtros y paginacion (ES)
       const result = await historyService.queryHistory(filters, pagination);
+      metrics.recordQueryLatency(result.queryLatencyMs);
+      metrics.recordTraceCompleteness(result.traceCompletenessPercent);
 
       // 🧠 FIC: Serialize timestamp fields to ISO in API response (EN)
       // 🧠 FIC: Serializar campos de tiempo a ISO en la respuesta API (ES)
@@ -163,6 +167,14 @@ export function createAuditHistoryRouter(historyService: AuditHistoryService): R
         details: { message: errorMsg },
       });
     }
+  });
+
+  router.get('/history/metrics', (_req: Request, res: Response) => {
+    const snapshot = metrics.getSnapshot();
+    res.status(200).json({
+      ...snapshot,
+      capturedAt: snapshot.capturedAt.toISOString()
+    });
   });
 
   /**

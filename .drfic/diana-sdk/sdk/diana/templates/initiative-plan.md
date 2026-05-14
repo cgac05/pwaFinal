@@ -67,6 +67,18 @@ Excluye:
 - estado de cobertura por skill
 - política de fallback si falta skill/knowledge
 
+### Gate de Enriquecimiento Pre-Speckit (obligatorio recomendado)
+
+Antes de ejecutar `speckit.specify`, `speckit.plan` y `speckit.tasks`:
+- Ejecutar actualización de knowledge del dominio (`/diana.knowledge ...`)
+- Ejecutar actualización/regeneración de skills (`/diana.skills ...`)
+- Confirmar evidencia de consumo en artefactos derivados (spec/plan/tasks)
+
+Evidencia mínima esperada:
+- Sección de cobertura de knowledge en spec
+- Matriz/estado de skills requeridas en plan
+- Tareas que reflejen explícitamente controles críticos definidos en spec/plan
+
 ---
 
 ## Arquitectura Técnica Objetivo
@@ -83,6 +95,35 @@ Excluye:
 - Resiliencia
 - Observabilidad
 - Cumplimiento
+
+### Arquitectura UX y contrato de controles (cuando aplique UI)
+- Control por atributo crítico (tipo + comportamiento)
+- Estrategia de layout/workspace operativo
+- Criterios de rendimiento visual (volumen de datos, virtualización)
+
+Ejemplo:
+- Instrumento -> watchlist tree
+- Señales -> tabla metadata-driven
+- Series de precio -> superchart OHLC + overlays
+
+### Routing de fuentes y modos operativos
+- Dominios de datos y prioridad por fuente
+- Reglas de fallback/caché
+- Modos (online/offline, demo/real) y efecto en credenciales/cuentas
+
+Ejemplo:
+- online+demo: brokers demo
+- online+real: brokers productivos
+- offline: cache local + modo degradado visible
+
+### Gobernanza de esquema dinámico
+- Registro/catálogo de columnas/campos/opciones
+- Presets por rol y usuario
+- Política de evolución sin cambios de código
+
+Ejemplo:
+- columnas configurables por catálogo
+- retiro de columna sin romper render
 
 ---
 

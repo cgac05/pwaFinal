@@ -100,6 +100,55 @@
 - **[Entity 1]**: [What it represents, key attributes without implementation]
 - **[Entity 2]**: [What it represents, relationships to other entities]
 
+## Experience & Component Contract *(required for UI-heavy features)*
+
+<!--
+  ACTION REQUIRED (UI-heavy features): Define explicit UI behavior so plan/tasks do not
+  default to simplistic controls.
+-->
+
+### Target UX
+
+- **Reference Experience**: [e.g., TradingView-like, admin dashboard, mobile-first wizard]
+- **Primary User Workspace**: [single-screen cockpit / multi-step flow / split view]
+
+### Control-by-Field Contract
+
+- **[Business Field / Attribute]**: [Control type, e.g., tree, combobox, data table, chart]
+- **Data Source**: [API/DB/catalog]
+- **Behavior**: [what happens on select/change/click]
+
+### Runtime Modes & Source Selection
+
+- **Mode A**: [e.g., Online] → [source routing behavior]
+- **Mode B**: [e.g., Offline] → [fallback behavior]
+- **Mode C**: [e.g., Demo vs Real] → [credential/account routing]
+
+#### Example (Trading Workspace)
+
+- **Mode Online**: instrumentos/OHLC/indicadores desde broker API priorizada; fallback a cache local
+- **Mode Offline**: lectura solo desde tablas locales (Supabase), sin llamadas externas
+- **Mode Demo**: credenciales de cuentas demo por broker
+- **Mode Real**: credenciales de cuentas reales con controles de riesgo/auditoria
+
+## Dynamic Schema & Configurability *(if catalogs/tables evolve)*
+
+<!--
+  ACTION REQUIRED: Use this section when fields/columns/options may change over time.
+-->
+
+- **Config Registry**: [table/config source for dynamic fields]
+- **Evolvability Rule**: [add/remove/reorder fields without code change]
+- **User Presets**: [role-level and user-level view presets]
+- **Backward Compatibility**: [how UI/API handles retired fields]
+
+#### Example (Dynamic Signal Table)
+
+- **Config Registry**: `confluence_column_configs`
+- **Evolvability Rule**: agregar/quitar/reordenar columnas sin cambios de codigo
+- **User Presets**: `intradia`, `swing`, `opciones`, `riesgo`
+- **Backward Compatibility**: si un campo desaparece, la vista lo omite sin romper render
+
 ## Success Criteria *(mandatory)*
 
 <!--

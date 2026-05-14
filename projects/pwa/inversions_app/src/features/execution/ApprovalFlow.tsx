@@ -30,6 +30,7 @@ export interface Proposal {
   orderType: 'BUY' | 'SELL';
   quantity: number;
   price?: number;
+  version: number;
   confidence?: number; // 0-100
   evidence?: Array<{ source: string; signal: string; confidence: number }>;
 }
@@ -49,6 +50,7 @@ export interface ApprovalState {
   mfaToken?: string;
   error?: string;
   approvalId?: string;
+  serverVersion?: number;
 }
 
 /**
@@ -117,6 +119,7 @@ Al hacer clic en "Aprobar", usted reconoce haber leído y aceptado este descargo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           proposalId: proposal.proposalId,
+          proposalVersion: proposal.version,
           disclaimerAcknowledged: state.disclaimerAcknowledged,
           disclaimerText: disclaimerText,
           mfaContext: state.mfaToken
@@ -130,12 +133,25 @@ Al hacer clic en "Aprobar", usted reconoce haber leído y aceptado este descargo
 
       if (!response.ok) {
         const error = await response.json();
+        const code = error.code as string | undefined;
+        const details = error.details as Record<string, unknown> | undefined;
+
+        let message = error.error || 'Approval failed';
+        if (code === 'OPERATIONAL_RESTRICTION') {
+          message = 'No tienes permisos para aprobar esta propuesta. Requiere rol trader/admin.';
+        } else if (code === 'DECISION_VERSION_CONFLICT') {
+          message = 'La propuesta cambió mientras decidías. Actualiza y vuelve a aprobar.';
+        } else if (code === 'MFA_REQUIRED') {
+          message = 'Se requiere MFA válido para continuar con la aprobación.';
+        }
+
         setState({
           ...state,
           step: 'error',
-          error: error.error || 'Approval failed',
+          error: message,
+          serverVersion: typeof details?.serverVersion === 'number' ? (details.serverVersion as number) : undefined,
         });
-        onError(error.error);
+        onError(message);
         return;
       }
 
@@ -162,6 +178,9 @@ Al hacer clic en "Aprobar", usted reconoce haber leído y aceptado este descargo
         return (
           <div className="bg-white rounded-lg shadow p-6 space-y-4">
             <h2 className="text-2xl font-bold">Propuesta de Ejecución</h2>
+            <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+              Aviso: esta recomendación no es asesoría financiera. La decisión final de ejecución es humana.
+            </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-gray-600">Instrumento:</span>
@@ -237,6 +256,9 @@ Al hacer clic en "Aprobar", usted reconoce haber leído y aceptado este descargo
         return (
           <div className="bg-white rounded-lg shadow p-6 space-y-4">
             <h2 className="text-xl font-bold">Verificación de Seguridad (MFA)</h2>
+            <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+              Confirma únicamente órdenes que entiendas y hayas validado; esta plataforma no sustituye asesoría financiera.
+            </div>
             <p className="text-sm text-gray-700">
               Como {userRole === 'admin' ? 'administrador' : 'trader'}, debe verificar su identidad.
             </p>
@@ -320,6 +342,9 @@ Al hacer clic en "Aprobar", usted reconoce haber leído y aceptado este descargo
           <div className="bg-red-50 rounded-lg shadow p-6 space-y-4 border border-red-200">
             <h2 className="text-xl font-bold text-red-800">✗ Error</h2>
             <p className="text-red-700">{state.error}</p>
+            {state.serverVersion ? (
+              <p className="text-xs text-gray-700">Versión actual del servidor: {state.serverVersion}</p>
+            ) : null}
             <button
               onClick={() => setState({ ...state, step: 'summary' })}
               className="w-full bg-red-600 text-white font-semibold py-2 rounded hover:bg-red-700"

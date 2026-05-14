@@ -38,7 +38,18 @@ export interface RecoveryResult {
   retryWindowMinutes: number;
 }
 
+export interface BrokerDegradedState {
+  broker: "IBKR" | "ALPACA";
+  active: boolean;
+  sinceUtc?: string;
+  reason?: string;
+  retriesScheduled: number;
+  alertRaised: boolean;
+}
+
 export class FailureRecoveryService {
+  private readonly degradedByBroker = new Map<"IBKR" | "ALPACA", BrokerDegradedState>();
+
   /**
    * Manejar fallo de ejecucion y transicionar propuesta de vuelta a PENDING_APPROVAL.
    * 
@@ -55,6 +66,7 @@ export class FailureRecoveryService {
     // 6. Registrar razon del fallo
 
     const recoveryEventId = `rcv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    this.markBrokerDegraded("IBKR", context.failureReason, 1);
 
     return {
       proposalId: context.proposalId,
@@ -64,6 +76,51 @@ export class FailureRecoveryService {
       allowsReapproval: true,
       retryWindowMinutes: 60, // Ventana para reintentar (usuario puede aprobar nuevamente en 60 min)
     };
+  }
+
+  markBrokerDegraded(
+    broker: "IBKR" | "ALPACA",
+    reason: string,
+    retriesScheduled: number = 1
+  ): BrokerDegradedState {
+    const next: BrokerDegradedState = {
+      broker,
+      active: true,
+      sinceUtc: new Date().toISOString(),
+      reason,
+      retriesScheduled: Math.max(1, retriesScheduled),
+      alertRaised: true
+    };
+
+    this.degradedByBroker.set(broker, next);
+    return next;
+  }
+
+  clearBrokerDegraded(broker: "IBKR" | "ALPACA"): BrokerDegradedState {
+    const next: BrokerDegradedState = {
+      broker,
+      active: false,
+      retriesScheduled: 0,
+      alertRaised: false
+    };
+    this.degradedByBroker.set(broker, next);
+    return next;
+  }
+
+  getBrokerDegradedState(broker: "IBKR" | "ALPACA"): BrokerDegradedState {
+    return (
+      this.degradedByBroker.get(broker) ?? {
+        broker,
+        active: false,
+        retriesScheduled: 0,
+        alertRaised: false
+      }
+    );
+  }
+
+  canAcceptNewDecision(broker: "IBKR" | "ALPACA"): boolean {
+    const state = this.getBrokerDegradedState(broker);
+    return !state.active;
   }
 
   /**

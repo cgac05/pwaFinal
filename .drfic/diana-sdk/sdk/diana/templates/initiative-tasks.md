@@ -66,6 +66,23 @@ Ante conflicto, prevalece la constitución.
 - Entregables:
 - Tareas:
 
+### Fase N (Configurabilidad y Modos Operativos, cuando aplique)
+- Objetivo:
+- Entregables:
+- Tareas:
+	- Registro de configuración dinámica (campos/columnas/opciones)
+	- Routing por dominio de datos y fallback
+	- Conmutadores de modo (online/offline, demo/real)
+	- Renderer metadata-driven en UI
+	- Pruebas de cambio de configuración sin redeploy
+
+Ejemplo de tareas mínimas:
+- Crear migración de catálogo de columnas dinámicas
+- Crear migración de presets por rol/usuario
+- Exponer endpoint de runtime mode
+- Integrar renderer de tabla por metadata
+- Probar add/remove/reorder sin cambios de código
+
 ---
 
 ## Dependencias

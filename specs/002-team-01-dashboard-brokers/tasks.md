@@ -248,28 +248,28 @@
 
 **Purpose**: Entregar dashboard estilo superchart profesional, con watchlist dinamico por categoria, conmutacion operativa y tabla de confluencia avanzada sincronizada con grafica.
 
-- [ ] T059 Implementar componente de watchlist en arbol por categorias de mercado en `projects/pwa/inversions_app/src/features/dashboard/WatchlistTree.tsx`
-- [ ] T060 Implementar CRUD de watchlist por usuario (agregar/quitar simbolos) en `projects/rest-api/rest_api_inversions_drfic/src/routes/watchlist/` y `projects/rest-api/rest_api_inversions_drfic/src/modules/watchlist/`
-- [ ] T061 Integrar superchart de velas OHLC con overlay de senales en `projects/pwa/inversions_app/src/features/dashboard/SuperChart.tsx`
-- [ ] T062 Integrar selector de periodo + temporalidad dinamica por capacidades de fuente en `projects/pwa/inversions_app/src/features/dashboard/TimeControls.tsx`
-- [ ] T063 Crear/actualizar catalogo multi-broker (IBKR, Alpaca, Capital.com, BlackBull Markets, Forex.com, Blueberry Markets, TradeStation) en `projects/rest-api/rest_api_inversions_drfic/src/database/supabase/migrations/004_broker_catalog.sql`
-- [ ] T064 Crear tabla de cuentas broker por modo demo/real en `projects/rest-api/rest_api_inversions_drfic/src/database/supabase/migrations/005_broker_accounts.sql`
-- [ ] T065 Implementar menu de indicadores tecnicos (3 accesos + overflow) y modal de busqueda dinamica en `projects/pwa/inversions_app/src/features/dashboard/IndicatorsMenu.tsx`
-- [ ] T066 Extender tabla de confluencia con columnas de griegas/checklist/riesgo y row highlight en `projects/pwa/inversions_app/src/features/dashboard/ConfluenceSignalsTable.tsx`
-- [ ] T067 Implementar routing por dominio de datos (instrumentos, OHLC, indicadores, streaming) en `projects/rest-api/rest_api_inversions_drfic/src/modules/brokers/brokerDataRouter.ts`
-- [ ] T068 Implementar switches ONLINE/OFFLINE y DEMO/OPERATIVA REAL en `projects/pwa/inversions_app/src/features/dashboard/RuntimeModeSwitches.tsx` y persistencia backend en `projects/rest-api/rest_api_inversions_drfic/src/routes/runtime/runtimeMode.ts`
-- [ ] T069 Integrar sincronizacion click fila tabla -> marcador resaltado en chart en `projects/pwa/inversions_app/src/features/dashboard/MainDashboard.tsx`
-- [ ] T070 Integrar carga dinamica de categorias de watchlist desde catalogo en `projects/rest-api/rest_api_inversions_drfic/src/routes/catalogs/instruments.ts`
-- [ ] T071 Integrar tooltip enriquecido en overlay de senales y render de indicadores en panel superior/inferior del chart en `projects/pwa/inversions_app/src/features/dashboard/SignalOverlay.tsx`
-- [ ] T072 [P] Crear tests de integracion para conmutacion ONLINE/OFFLINE + DEMO/REAL en `projects/rest-api/rest_api_inversions_drfic/tests/integration/runtime/runtimeMode.test.ts`
-- [ ] T073 [P] Crear tests de integracion para menu de indicadores dinamico y carga por fuente en `projects/pwa/inversions_app/tests/components/dashboard/indicatorsMenu.test.tsx`
-- [ ] T074 [P] Crear tests e2e watchlist->chart->tabla (real/cached) en `projects/pwa/inversions_app/tests/e2e/dashboard/superchart-confluence.e2e.ts`
-- [ ] T075 Definir y exponer contrato backend de metadata operativa de senales (timing_d/h, pre_senal, senal_real, stop, objetivo, divergencia, z_extrema, qty, vencimiento, strike, tipo_opcion, duracion, bid/ask, zonas, alerta, max/min refs, variantes, recolocacion stop, liquidez, riesgo, retorno/perdida max) en `projects/rest-api/rest_api_inversions_drfic/src/routes/dashboard/orchestrator.ts` y `projects/rest-api/rest_api_inversions_drfic/src/modules/signals/confluenceEngine.ts`
-- [ ] T076 Integrar mapeo de metadata operativa en tabla de confluencia y tooltip del chart en `projects/pwa/inversions_app/src/features/dashboard/ConfluenceSignalsTable.tsx` y `projects/pwa/inversions_app/src/features/dashboard/SignalOverlay.tsx`
-- [ ] T077 Crear migracion de catalogo dinamico de columnas de confluencia en `projects/rest-api/rest_api_inversions_drfic/src/database/supabase/migrations/006_confluence_column_configs.sql`
-- [ ] T078 Crear endpoints CRUD de presets de vista (rol/usuario) en `projects/rest-api/rest_api_inversions_drfic/src/routes/dashboard/confluenceViewPresets.ts`
-- [ ] T079 Implementar renderer metadata-driven para columnas, orden y visibilidad en `projects/pwa/inversions_app/src/features/dashboard/ConfluenceSignalsTable.tsx`
-- [ ] T080 [P] Crear tests de integracion de cambios de configuracion de columnas/presets sin redeploy en `projects/rest-api/rest_api_inversions_drfic/tests/integration/dashboard/confluenceDynamicColumns.test.ts`
+- [X] T059 Implementar componente de watchlist en arbol por categorias de mercado en `projects/pwa/inversions_app/src/features/dashboard/WatchlistTree.tsx`
+- [X] T060 Implementar CRUD de watchlist por usuario (agregar/quitar simbolos) en `projects/rest-api/rest_api_inversions_drfic/src/routes/watchlist/` y `projects/rest-api/rest_api_inversions_drfic/src/modules/watchlist/`
+- [X] T061 Integrar superchart de velas OHLC con overlay de senales en `projects/pwa/inversions_app/src/features/dashboard/SuperChart.tsx`
+- [X] T062 Integrar selector de periodo + temporalidad dinamica por capacidades de fuente en `projects/pwa/inversions_app/src/features/dashboard/TimeControls.tsx`
+- [X] T063 Crear/actualizar catalogo multi-broker (IBKR, Alpaca, Capital.com, BlackBull Markets, Forex.com, Blueberry Markets, TradeStation) en `projects/rest-api/rest_api_inversions_drfic/src/database/supabase/migrations/004_broker_catalog.sql`
+- [X] T064 Crear tabla de cuentas broker por modo demo/real en `projects/rest-api/rest_api_inversions_drfic/src/database/supabase/migrations/005_broker_accounts.sql`
+- [X] T065 Implementar menu de indicadores tecnicos (3 accesos + overflow) y modal de busqueda dinamica en `projects/pwa/inversions_app/src/features/dashboard/IndicatorsMenu.tsx`
+- [X] T066 Extender tabla de confluencia con columnas de griegas/checklist/riesgo y row highlight en `projects/pwa/inversions_app/src/features/dashboard/ConfluenceSignalsTable.tsx`
+- [X] T067 Implementar routing por dominio de datos (instrumentos, OHLC, indicadores, streaming) en `projects/rest-api/rest_api_inversions_drfic/src/modules/brokers/brokerDataRouter.ts`
+- [X] T068 Implementar switches ONLINE/OFFLINE y DEMO/OPERATIVA REAL en `projects/pwa/inversions_app/src/features/dashboard/RuntimeModeSwitches.tsx` y persistencia backend en `projects/rest-api/rest_api_inversions_drfic/src/routes/runtime/runtimeMode.ts`
+- [X] T069 Integrar sincronizacion click fila tabla -> marcador resaltado en chart en `projects/pwa/inversions_app/src/features/dashboard/MainDashboard.tsx`
+- [X] T070 Integrar carga dinamica de categorias de watchlist desde catalogo en `projects/rest-api/rest_api_inversions_drfic/src/routes/catalogs/instruments.ts`
+- [X] T071 Integrar tooltip enriquecido en overlay de senales y render de indicadores en panel superior/inferior del chart en `projects/pwa/inversions_app/src/features/dashboard/SignalOverlay.tsx`
+- [X] T072 [P] Crear tests de integracion para conmutacion ONLINE/OFFLINE + DEMO/REAL en `projects/rest-api/rest_api_inversions_drfic/tests/integration/runtime/runtimeMode.test.ts`
+- [X] T073 [P] Crear tests de integracion para menu de indicadores dinamico y carga por fuente en `projects/pwa/inversions_app/tests/components/dashboard/indicatorsMenu.test.tsx`
+- [X] T074 [P] Crear tests e2e watchlist->chart->tabla (real/cached) en `projects/pwa/inversions_app/tests/e2e/dashboard/superchart-confluence.e2e.ts`
+- [X] T075 Definir y exponer contrato backend de metadata operativa de senales (timing_d/h, pre_senal, senal_real, stop, objetivo, divergencia, z_extrema, qty, vencimiento, strike, tipo_opcion, duracion, bid/ask, zonas, alerta, max/min refs, variantes, recolocacion stop, liquidez, riesgo, retorno/perdida max) en `projects/rest-api/rest_api_inversions_drfic/src/routes/dashboard/orchestrator.ts` y `projects/rest-api/rest_api_inversions_drfic/src/modules/signals/confluenceEngine.ts`
+- [X] T076 Integrar mapeo de metadata operativa en tabla de confluencia y tooltip del chart en `projects/pwa/inversions_app/src/features/dashboard/ConfluenceSignalsTable.tsx` y `projects/pwa/inversions_app/src/features/dashboard/SignalOverlay.tsx`
+- [X] T077 Crear migracion de catalogo dinamico de columnas de confluencia en `projects/rest-api/rest_api_inversions_drfic/src/database/supabase/migrations/006_confluence_column_configs.sql`
+- [X] T078 Crear endpoints CRUD de presets de vista (rol/usuario) en `projects/rest-api/rest_api_inversions_drfic/src/routes/dashboard/confluenceViewPresets.ts`
+- [X] T079 Implementar renderer metadata-driven para columnas, orden y visibilidad en `projects/pwa/inversions_app/src/features/dashboard/ConfluenceSignalsTable.tsx`
+- [X] T080 [P] Crear tests de integracion de cambios de configuracion de columnas/presets sin redeploy en `projects/rest-api/rest_api_inversions_drfic/tests/integration/dashboard/confluenceDynamicColumns.test.ts`
 
 ---
 

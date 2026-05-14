@@ -14,24 +14,36 @@ interface ExplainabilityTableProps {
  */
 export function ExplainabilityTable({ cards }: ExplainabilityTableProps) {
   return (
-    <section>
-      <h2>Explicabilidad</h2>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <section className="card">
+      <h2 style={{ marginBottom: "0.75rem" }}>Explicabilidad</h2>
+      <table>
         <thead>
           <tr>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #d0d7de", padding: "0.5rem" }}>Instrumento</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #d0d7de", padding: "0.5rem" }}>Score</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #d0d7de", padding: "0.5rem" }}>Confianza</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #d0d7de", padding: "0.5rem" }}>Fuentes</th>
+            <th>Instrumento</th>
+            <th>Señal</th>
+            <th>Score</th>
+            <th>Confianza</th>
+            <th>Fuentes</th>
           </tr>
         </thead>
         <tbody>
           {cards.map((card) => (
             <tr key={card.signalId}>
-              <td style={{ borderBottom: "1px solid #f0f3f6", padding: "0.5rem" }}>{card.instrument}</td>
-              <td style={{ borderBottom: "1px solid #f0f3f6", padding: "0.5rem" }}>{card.confluenceScore}</td>
-              <td style={{ borderBottom: "1px solid #f0f3f6", padding: "0.5rem" }}>{Math.round(card.confidence * 100)}%</td>
-              <td style={{ borderBottom: "1px solid #f0f3f6", padding: "0.5rem" }}>{card.evidence.length}</td>
+              <td><strong>{card.instrument}</strong></td>
+              <td>
+                <span
+                  style={{
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    color: card.signal === "BUY" ? "var(--color-buy)" : card.signal === "SELL" ? "var(--color-sell)" : "var(--color-hold)"
+                  }}
+                >
+                  {card.signal}
+                </span>
+              </td>
+              <td>{card.confluenceScore}</td>
+              <td>{Math.round(card.confidence * 100)}%</td>
+              <td>{card.evidence.length}</td>
             </tr>
           ))}
         </tbody>

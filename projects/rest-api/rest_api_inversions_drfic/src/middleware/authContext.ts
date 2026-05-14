@@ -60,6 +60,7 @@ export function authContextMiddleware(req: Request, res: Response, next: NextFun
       email: process.env.AUTH_BYPASS_EMAIL ?? "dev@local",
       role: (process.env.AUTH_BYPASS_ROLE as UserRole) ?? "trader",
       mfaSessionId: req.header("x-mfa-session-id") ?? "dev-mfa-session",
+      token: process.env.AUTH_BYPASS_TOKEN ?? "dev-bypass-token"
     };
     next();
     return;

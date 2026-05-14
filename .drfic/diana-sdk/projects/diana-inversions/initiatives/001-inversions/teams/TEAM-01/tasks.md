@@ -7,7 +7,7 @@
 
 ## Tareas (literal del canon, con checkbox)
 
-- [ ] T000 Definir y documentar la estructura canónica del monorepo bajo `projects/packages`, `projects/pwa` y `projects/rest-api`, incluyendo criterios de reutilización y ownership por categoría
+- [x] T000 Definir y documentar la estructura canónica del monorepo bajo `projects/packages`, `projects/pwa` y `projects/rest-api`, incluyendo criterios de reutilización y ownership por categoría
 - [x] T001 Crear carpetas base y README inicial en frontend/README.md y backend/README.md
 - [x] T003 [P] Inicializar workspace backend y scripts en backend/package.json
 - [x] T005 [P] Crear plantilla compartida de entorno en backend/.env.example
@@ -40,12 +40,12 @@
 - [x] T056 Gate de no-regresión estructural en scripts/validate-structure.ps1
 - [x] T057 [P] Normalizar redacción a español técnico en specs/001-plataforma-inversiones-ia/tasks.md
 - [ ] T060 Configurar cliente de Supabase en backend/src/database/supabase/client.ts y crear base repositories pattern en backend/src/repositories/
-- [ ] T061 Crear migraciones versionadas de esquema baseline (Usuario, ActivoInversion, FuenteAnalitica, SenalInversion, etc.) en backend/src/database/supabase/migrations/ con changelog y rollback scripts
+- [x] T061 Crear migraciones versionadas de esquema baseline (Usuario, ActivoInversion, FuenteAnalitica, SenalInversion, etc.) en backend/src/database/supabase/migrations/ con changelog y rollback scripts
 - [ ] T062 Validador de .env en backend/src/config/envValidator.ts que asegure credenciales obligatorias (SUPABASE_URL, SUPABASE_KEY, IBKR_ACCOUNT, ALPACA_API_KEY) están presentes en startup
-- [ ] T063 Integrar dashboard frontend principal en frontend/src/features/dashboard/MainDashboard.tsx con selector de instrumentos, temporalidad y rango de fechas
-- [ ] T064 Panel de activación de cores en frontend/src/features/dashboard/CoreSelector.tsx (Technical, News, Fundamental, Institutional, AI Advisor, Strategies) con toggle por core
-- [ ] T065 Overlay de señales en gráfico en frontend/src/features/dashboard/SignalOverlay.tsx mostrando señales por core y confluencia con controles de visibilidad
-- [ ] T066 Tabla de explicabilidad en frontend/src/features/dashboard/ExplainabilityTable.tsx listando atributos de detonación, desglose de cálculo, score/confidence/source
+- [x] T063 Integrar dashboard frontend principal en frontend/src/features/dashboard/MainDashboard.tsx con selector de instrumentos, temporalidad y rango de fechas
+- [x] T064 Panel de activación de cores en frontend/src/features/dashboard/CoreSelector.tsx (Technical, News, Fundamental, Institutional, AI Advisor, Strategies) con toggle por core
+- [x] T065 Overlay de señales en gráfico en frontend/src/features/dashboard/SignalOverlay.tsx mostrando señales por core y confluencia con controles de visibilidad
+- [x] T066 Tabla de explicabilidad en frontend/src/features/dashboard/ExplainabilityTable.tsx listando atributos de detonación, desglose de cálculo, score/confidence/source
 - [ ] T067 API orchestrador en backend/src/routes/dashboard/orchestrator.ts que consume resultados de otros equipos y consolida en vista única
 - [ ] T068 Wiring de integración broker en backend/src/modules/brokers/brokerIntegration.ts cableando IBKR + Alpaca APIs y validación en sandbox
 - [ ] T170 Definir estándar transversal de contratos y outputs de estrategias en backend/src/modules/strategies/standards/strategyOutputStandard.ts (request envelope, payoff_data, scenario_table, risk_metrics, signals, audit)
@@ -70,6 +70,16 @@ Mapeo explícito TEAM-01:
 - Speckit T047 -> Diana T036
 - Speckit T048 -> Diana T061
 - Speckit T049 -> Diana T057
+- Speckit T053 -> Diana T067
+- Speckit T054 -> Diana T067
+- Speckit T055 -> Diana T062
+- Speckit T056 -> Diana T062, T068
+- Speckit T057 -> Diana T060
+- Speckit T058 -> Diana T067
+- Speckit T077 -> Diana T059
+- Speckit T078 -> Diana T060
+- Speckit T079 -> Diana T067
+- Speckit T080 -> Diana T067
 
 ### Mappings Inversos: Test Tasks Speckit → Diana
 
@@ -87,6 +97,16 @@ Mapeo explícito TEAM-01:
 | T047 (test SLA observabilidad) | T036 |
 | T048 (migración context_snapshot) | T061 |
 | T049 (validación FIC: comments) | T057 |
+| T053 (script start con modos silencioso/visible) | T067 |
+| T054 (script status operativo local) | T067 |
+| T055 (script sync JWT backend->frontend) | T062 |
+| T056 (wiring frontend/backend para auth local) | T062, T068 |
+| T057 (runbook auth/puertos y troubleshooting) | T060 |
+| T058 (tests integración auth bootstrap dashboard) | T067 |
+| T077 (catalogo columnas dinamicas confluence) | T059 |
+| T078 (presets de vista por rol/usuario) | T060 |
+| T079 (renderer frontend metadata-driven de tabla) | T067 |
+| T080 (tests integracion tabla dinamica/presets) | T067 |
 
 ## Ciclo Operativo de Sync (TEAM-01)
 

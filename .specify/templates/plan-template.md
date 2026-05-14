@@ -33,6 +33,67 @@
 
 [Gates determined based on constitution file]
 
+## UX Architecture & Control Strategy
+
+<!--
+  ACTION REQUIRED (UI-heavy features): Specify component strategy and interaction model.
+-->
+
+- **Target Experience**: [reference interaction model]
+- **Critical Controls**: [control type per key business attribute]
+- **State Strategy**: [client state vs server state boundaries]
+- **Performance Boundaries**: [rendering thresholds, virtualization, pagination/streaming]
+
+### Example (Trading Workspace)
+
+- **Target Experience**: superchart + watchlist tree + tabla de confluencia avanzada
+- **Critical Controls**:
+  - instrumento: watchlist tree por categorias (indices/stocks/futures/forex/cripto)
+  - visualizacion: chart de velas OHLC + overlays
+  - filtros: temporalidad y periodo dinamicos por capacidades de fuente
+  - analitica: tabla metadata-driven con columnas configurables
+- **Performance Boundaries**: virtualizacion de filas/columnas y render incremental en chart
+
+## Data Source Routing & Runtime Modes
+
+<!--
+  ACTION REQUIRED: Specify source routing before implementation tasks are generated.
+-->
+
+- **Source Domains**: [e.g., symbols, OHLC, indicators, alerts]
+- **Routing Rules**: [domain -> source priority/fallback]
+- **Runtime Modes**: [e.g., online/offline/demo/real]
+- **Credential/Account Strategy**: [how mode affects account/secret selection]
+
+### Example (Routing Matrix)
+
+- **symbols**: broker catalog -> fallback local catalog
+- **ohlc**: broker historical API -> fallback local ohlc cache
+- **indicators**: broker/engine -> fallback local compute cache
+- **runtime modes**:
+  - online+demo
+  - online+real
+  - offline+demo
+  - offline+real (solo si politicas lo permiten)
+
+## Dynamic Schema Governance
+
+<!--
+  ACTION REQUIRED: Use for features with evolving columns/catalogs/fields.
+-->
+
+- **Registry Model**: [config entities/tables]
+- **Runtime Adaptation**: [how UI/API adapts to added/removed fields]
+- **Preset Strategy**: [role defaults and user custom views]
+- **Validation Rules**: [required/optional fields, formatting, color rules]
+
+### Example (Confluence Columns)
+
+- registry: `confluence_column_configs`
+- presets: `confluence_view_presets` (por rol/usuario)
+- formatting: reglas por tipo (price, percent, risk, datetime)
+- color rules: compra=verde, venta=rojo, neutral=amarillo
+
 ## Project Structure
 
 ### Documentation (this feature)

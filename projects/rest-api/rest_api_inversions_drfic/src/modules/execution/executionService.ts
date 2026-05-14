@@ -13,6 +13,11 @@
  * Mapeo: FR-004, FR-005, FR-009, PL-001, PL-010
  */
 
+import { BrokerAdapterRegistry } from "../brokers/brokerAdapter";
+import { IBKRAdapter } from "../brokers/ibkrAdapter";
+import { AlpacaAdapter } from "../brokers/alpacaAdapter";
+import { BrokerIntegrationService } from "../brokers/brokerIntegration";
+
 export type ProposalState = 
   | 'PENDING_APPROVAL'
   | 'APPROVED'
@@ -32,6 +37,7 @@ export interface Proposal {
   orderType: 'BUY' | 'SELL';
   quantity: number;
   price?: number;
+  version: number;
   state: ProposalState;
   approvedBy?: string;
   approvedAt?: Date;
@@ -51,12 +57,21 @@ export interface ExecutionResult {
   orderId: string;
   state: ProposalState;
   timestamp: Date;
-  brokerResponse?: Record<string, unknown>;
+  brokerResponse?: unknown;
   errorCode?: string;
   errorMessage?: string;
 }
 
 export class ExecutionService {
+  private readonly brokerIntegration: BrokerIntegrationService;
+
+  constructor() {
+    const registry = new BrokerAdapterRegistry();
+    registry.register(new IBKRAdapter(process.env.IBKR_API_KEY || 'dev-ibkr-key', process.env.IBKR_ACCOUNT_ID || 'dev-account'));
+    registry.register(new AlpacaAdapter(process.env.ALPACA_API_KEY || 'dev-alpaca-key', process.env.ALPACA_API_SECRET || 'dev-alpaca-secret', true));
+    this.brokerIntegration = new BrokerIntegrationService(registry);
+  }
+
   /**
    * Validar que la propuesta tenga aprobacion humana valida.
    * 
@@ -71,6 +86,10 @@ export class ExecutionService {
 
     if (!proposal.approvedAt) {
       throw new Error('EXECUTION_BLOCKED: proposal has no approval timestamp');
+    }
+
+    if (!proposal.approvedBy) {
+      throw new Error('EXECUTION_BLOCKED: proposal has no approver reference');
     }
 
     // Validar que aprobacion no haya expirado (ventana de 24h)
@@ -102,15 +121,22 @@ export class ExecutionService {
     const executionId = `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      // FIC: Implementacion futura: cambiar estado a PENDING_EXECUTION en Supabase
-      // proposal.state = 'PENDING_EXECUTION';
+      const integration = await this.brokerIntegration.executeOrder({
+        broker: proposal.broker,
+        instrument: proposal.instrument,
+        orderType: proposal.orderType,
+        quantity: proposal.quantity,
+        price: proposal.price,
+        idempotencyKey: request.orderId ?? `${proposal.proposalId}:v${proposal.version}`
+      });
 
-      // FIC: Implementacion futura: seleccionar adaptador segun broker
-      // const adapter = this.getBrokerAdapter(proposal.broker);
-      // const brokerResponse = await adapter.submitOrder(proposal);
+      if (!integration.ok || !integration.order) {
+        throw new Error(
+          `BROKER_ERROR:${integration.errorCode ?? 'UNKNOWN'}:${integration.errorMessage ?? 'Unknown broker error'}`
+        );
+      }
 
-      // Por ahora, stub que retorna success
-      const orderId = request.orderId || `order_${Date.now()}`;
+      const orderId = integration.order.orderId;
 
       return {
         executionId,
@@ -118,10 +144,7 @@ export class ExecutionService {
         orderId,
         state: 'FILLED',
         timestamp: new Date(),
-        brokerResponse: {
-          status: 'success',
-          orderId,
-        },
+        brokerResponse: integration.order,
       };
     } catch (error) {
       // En caso de fallo, registrar y retornar a PENDING_APPROVAL
@@ -137,22 +160,12 @@ export class ExecutionService {
         executionId,
         proposalId: request.proposalId,
         orderId: '',
-        state: 'FAILED',
+        state: 'PENDING_APPROVAL',
         timestamp: new Date(),
-        errorCode: 'BROKER_ERROR',
+        errorCode: errorMessage.startsWith('BROKER_ERROR:') ? errorMessage.split(':')[1] ?? 'BROKER_ERROR' : 'BROKER_ERROR',
         errorMessage,
       };
     }
-  }
-
-  /**
-   * Obtener adaptador broker segun tipo.
-   * 
-   * FIC: Implementacion futura: inyectar adaptadores registrados
-   */
-  private getBrokerAdapter(broker: 'IBKR' | 'ALPACA') {
-    // placeholder
-    return null;
   }
 
   /**

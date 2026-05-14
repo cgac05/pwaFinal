@@ -17,12 +17,14 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import { ApprovalService, ApprovalRequest, MFAContext } from '../../modules/execution/approvalService';
+import { ExecutionAuditService } from '../../modules/execution/executionAudit';
 
 /**
  * Tipos para request/response del endpoint
  */
 export interface ApproveRequestPayload {
   proposalId: string;
+  proposalVersion?: number;
   disclaimerAcknowledged: boolean;
   disclaimerText: string;
   mfaContext?: {
@@ -53,6 +55,7 @@ export interface ApproveErrorResponse {
  */
 export function createApprovalRouter(approvalService: ApprovalService): Router {
   const router = Router();
+  const auditService = new ExecutionAuditService();
 
   /**
    * POST /execution/approve
@@ -167,6 +170,7 @@ export function createApprovalRouter(approvalService: ApprovalService): Router {
         userId,
         role: userRole as 'viewer' | 'trader' | 'admin',
         action: 'approve',
+        expectedVersion: payload.proposalVersion,
         rationale: `User approved via UI. Disclaimer acknowledged.`,
         mfaContext,
       };
@@ -187,6 +191,7 @@ export function createApprovalRouter(approvalService: ApprovalService): Router {
         transitionedTo: result.transitionedTo,
         timestamp: result.timestamp.toISOString(),
         mfaValidated: result.mfaValidated,
+        version: result.newVersion,
         disclaimerRecordId,
       } as ApproveResponse);
     } catch (error) {
@@ -221,6 +226,43 @@ export function createApprovalRouter(approvalService: ApprovalService): Router {
           details: {
             message: 'Proposal is not in PENDING_APPROVAL state',
           },
+        } as ApproveErrorResponse);
+      }
+
+      if (errorMsg.includes('FORBIDDEN_ROLE')) {
+        return res.status(403).json({
+          error: 'operational_restriction',
+          code: 'OPERATIONAL_RESTRICTION',
+          details: {
+            message: 'Only trader/admin roles can approve or reject operational decisions.'
+          }
+        } as ApproveErrorResponse);
+      }
+
+      if (errorMsg.includes('DECISION_VERSION_CONFLICT:')) {
+        const [, clientVersionRaw, serverVersionRaw] = errorMsg.split(':');
+        const clientVersion = Number(clientVersionRaw);
+        const serverVersion = Number(serverVersionRaw);
+
+        await auditService.emitDecisionConflict(
+          req.body.proposalId,
+          'signal-unknown',
+          (req as any).authContext?.userId || 'unknown',
+          'UNKNOWN',
+          'BUY',
+          0,
+          clientVersion,
+          serverVersion
+        );
+
+        return res.status(409).json({
+          error: 'decision_version_conflict',
+          code: 'DECISION_VERSION_CONFLICT',
+          details: {
+            clientVersion,
+            serverVersion,
+            message: 'Proposal changed while deciding. Refresh and retry approval.'
+          }
         } as ApproveErrorResponse);
       }
 

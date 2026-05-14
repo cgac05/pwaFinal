@@ -41,6 +41,35 @@ export interface DashboardSignalCard {
   activeCores: string[];
   updatedAt: string;
   evidence: SourceVerdict[];
+  metadata?: {
+    timing_d?: string;
+    timing_h?: string;
+    pre_senal?: string;
+    senal_real_activada?: boolean;
+    stop?: number;
+    objetivo?: number;
+    divergencia?: string;
+    z_extrema?: number;
+    cantidad_sugerida?: number;
+    vencimiento?: string;
+    precio_ejercicio?: number;
+    tipo_opcion?: "call" | "put";
+    duracion?: number;
+    bid?: number;
+    ask?: number;
+    zona_apertura?: string;
+    zona_cierre?: string;
+    stoploss_sugerido?: number;
+    alerta_configurada?: boolean;
+    referencia_maximos?: number;
+    referencia_minimos?: number;
+    variantes_ataque?: string;
+    recolocacion_stoploss?: string;
+    liquidez?: string;
+    riesgo?: string;
+    retorno_maximo?: number;
+    perdida_maxima?: number;
+  };
 }
 
 export interface DashboardOrchestratorResponse {
@@ -55,14 +84,18 @@ export interface DashboardQueryParams {
   timeframe: string;
 }
 
+interface ApiErrorPayload {
+  code?: string;
+}
+
 const API_BASE = "/api/signals";
 
 function buildAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
-  const envToken = import.meta.env.VITE_DEV_BEARER_TOKEN as string | undefined;
   const storageToken =
     typeof window !== "undefined" ? window.localStorage.getItem("inversions.dev.token") ?? undefined : undefined;
-  const token = envToken || storageToken;
+  const envToken = import.meta.env.VITE_DEV_BEARER_TOKEN as string | undefined;
+  const token = storageToken || envToken;
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
@@ -122,6 +155,29 @@ export async function getDashboardOrchestrator(
   });
 
   if (!response.ok) {
+    let apiCode: string | undefined;
+
+    try {
+      const payload = (await response.clone().json()) as ApiErrorPayload;
+      apiCode = payload.code;
+    } catch {
+      // Keep generic fallback when body is not JSON.
+    }
+
+    if (response.status === 401) {
+      if (apiCode === "AUTH_CONTEXT_MISSING") {
+        throw new Error(
+          "No hay token de autenticacion. Configura AUTH_BYPASS=true en backend para desarrollo o define inversions.dev.token/VITE_DEV_BEARER_TOKEN en frontend."
+        );
+      }
+
+      if (apiCode === "AUTH_CONTEXT_INVALID_TOKEN") {
+        throw new Error(
+          "Token de autenticacion invalido. Verifica JWT_SECRET en backend y actualiza inversions.dev.token o VITE_DEV_BEARER_TOKEN."
+        );
+      }
+    }
+
     throw new Error(`Error al consultar dashboard orquestador: ${response.status}`);
   }
 

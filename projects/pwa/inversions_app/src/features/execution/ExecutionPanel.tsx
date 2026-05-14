@@ -61,6 +61,9 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
     status: 'idle',
   });
 
+  const approvalAgeSeconds = Math.floor((Date.now() - new Date(proposal.approvedAt).getTime()) / 1000);
+  const isDecisionValid = approvalAgeSeconds <= 24 * 60 * 60;
+
   // Countdown para rate limit
   useEffect(() => {
     if (state.status === 'rate_limited' && state.rateLimitCooldown && state.rateLimitCooldown > 0) {
@@ -161,7 +164,13 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
               <div>
                 <span className="text-gray-600">Aprobado hace:</span>
                 <p className="font-semibold">
-                  {Math.floor((Date.now() - new Date(proposal.approvedAt).getTime()) / 1000)}s
+                  {approvalAgeSeconds}s
+                </p>
+              </div>
+              <div>
+                <span className="text-gray-600">Estado decisión:</span>
+                <p className={`font-semibold ${isDecisionValid ? 'text-green-700' : 'text-red-700'}`}>
+                  {isDecisionValid ? 'Válida para ejecución' : 'Expirada - requiere nueva aprobación'}
                 </p>
               </div>
               <div>
@@ -171,13 +180,20 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
             </div>
             <button
               onClick={handleExecute}
-              className="w-full bg-green-600 text-white font-semibold py-3 rounded hover:bg-green-700 transition"
+              disabled={!isDecisionValid}
+              className="w-full bg-green-600 text-white font-semibold py-3 rounded hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Ejecutar Ahora
             </button>
-            <p className="text-xs text-gray-600">
-              Al hacer clic, se enviará la orden al broker. Esto no puede deshacerse inmediatamente.
-            </p>
+            {isDecisionValid ? (
+              <p className="text-xs text-gray-600">
+                Al hacer clic, se enviará la orden al broker. Esto no puede deshacerse inmediatamente.
+              </p>
+            ) : (
+              <p className="text-xs text-red-700">
+                Ejecución bloqueada: la decisión humana ya no es válida y requiere re-aprobación.
+              </p>
+            )}
           </div>
         );
 

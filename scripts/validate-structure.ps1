@@ -9,11 +9,8 @@ $ErrorActionPreference = "Stop"
 
 $root = Resolve-Path -LiteralPath $RootPath
 
-$requiredDirectories = @(
-  "frontend",
-  "backend",
-  "specs"
-)
+$requiredLegacy = @("frontend", "backend", "specs")
+$requiredMonorepo = @("projects", "specs")
 
 $recommendedDirectories = @(
   "tests"
@@ -22,11 +19,25 @@ $recommendedDirectories = @(
 $missingRequired = @()
 $missingRecommended = @()
 
-foreach ($dir in $requiredDirectories) {
+$legacyMissing = @()
+foreach ($dir in $requiredLegacy) {
   $full = Join-Path $root.Path $dir
   if (-not (Test-Path -LiteralPath $full -PathType Container)) {
-    $missingRequired += $dir
+    $legacyMissing += $dir
   }
+}
+
+$monorepoMissing = @()
+foreach ($dir in $requiredMonorepo) {
+  $full = Join-Path $root.Path $dir
+  if (-not (Test-Path -LiteralPath $full -PathType Container)) {
+    $monorepoMissing += $dir
+  }
+}
+
+$requiredSatisfied = ($legacyMissing.Count -eq 0) -or ($monorepoMissing.Count -eq 0)
+if (-not $requiredSatisfied) {
+  $missingRequired = $legacyMissing
 }
 
 foreach ($dir in $recommendedDirectories) {
@@ -38,7 +49,7 @@ foreach ($dir in $recommendedDirectories) {
 
 Write-Host "Structural gate report"
 Write-Host "- Root: $($root.Path)"
-Write-Host "- Required dirs checked: $($requiredDirectories -join ', ')"
+Write-Host "- Required dir sets checked: legacy(frontend,backend,specs) OR monorepo(projects,specs)"
 Write-Host "- Recommended dirs checked: $($recommendedDirectories -join ', ')"
 
 if ($missingRequired.Count -gt 0) {

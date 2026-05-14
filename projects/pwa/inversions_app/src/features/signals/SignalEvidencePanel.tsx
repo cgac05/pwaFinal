@@ -6,24 +6,46 @@ interface SignalEvidencePanelProps {
 
 export function SignalEvidencePanel({ evidence }: SignalEvidencePanelProps) {
   if (evidence.length === 0) {
-    return <p>No hay evidencia para mostrar.</p>;
+    return (
+      <p style={{ color: "var(--color-text-muted)", fontStyle: "italic" }}>No hay evidencia disponible para este instrumento.</p>
+    );
   }
 
   return (
-    <section style={{ border: "1px solid #d0d7de", borderRadius: 10, padding: "0.75rem" }}>
-      <h2>Evidencia por fuente</h2>
-      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "0.5rem" }}>
-        {evidence.map((item) => (
-          <li key={item.sourceId} style={{ border: "1px solid #f0f3f6", borderRadius: 8, padding: "0.5rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <strong>{item.sourceId}</strong>
-              <span>{item.verdict}</span>
-            </div>
-            <p style={{ margin: "0.25rem 0", color: "#57606a" }}>{item.rationale}</p>
-            <small style={{ color: "#57606a" }}>Confianza: {Math.round(item.confidence * 100)}%</small>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "0.5rem" }}>
+      {evidence.map((item) => (
+        <li
+          key={item.sourceId}
+          style={{
+            background: "var(--color-surface-raised)",
+            border: "1px solid var(--color-border-subtle)",
+            borderRadius: "var(--radius-sm)",
+            padding: "0.65rem 0.75rem",
+            display: "grid",
+            gridTemplateColumns: "1fr auto",
+            gap: "0.25rem 1rem",
+            alignItems: "start"
+          }}
+        >
+          <div>
+            <strong style={{ fontSize: "0.875rem", textTransform: "capitalize" }}>{item.sourceId}</strong>
+            <p style={{ marginTop: "0.2rem", fontSize: "0.8rem" }}>{item.rationale}</p>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <span
+              style={{
+                display: "block",
+                fontWeight: 700,
+                fontSize: "0.75rem",
+                color: item.verdict === "BUY" ? "var(--color-buy)" : item.verdict === "SELL" ? "var(--color-sell)" : "var(--color-hold)"
+              }}
+            >
+              {item.verdict}
+            </span>
+            <small style={{ color: "var(--color-text-muted)" }}>{Math.round(item.confidence * 100)}%</small>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

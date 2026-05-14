@@ -50,6 +50,19 @@ export interface AvailabilityDashboard {
   };
 }
 
+export interface OperationalMetricsSample {
+  decision_latency_ms: number;
+  decision_conflict_count: number;
+  broker_sync_lag_ms: number;
+  capturedAtUtc: string;
+}
+
+export interface OperationalMetricsSnapshot {
+  latest: OperationalMetricsSample | null;
+  updatedWithinSla: boolean;
+  maxCycleSeconds: number;
+}
+
 const MONTHLY_TARGET_DEFAULT = 99.5;
 const MAX_SAMPLES = 30000;
 
@@ -205,6 +218,48 @@ export class AvailabilitySloService {
         p99Ms: percentile(latencyValues, 0.99)
       },
       topErrorCodes
+    };
+  }
+}
+
+/**
+ * FIC: Operational metrics service for SC-005 dashboard cadence checks.
+ * Tracks required metrics and verifies updates are refreshed within a target cycle (<= 60s).
+ *
+ * FIC: Servicio de métricas operativas para validaciones de cadencia SC-005.
+ * Registra métricas requeridas y verifica que se actualicen dentro del ciclo objetivo (<= 60s).
+ */
+export class OperationalMetricsService {
+  private latestSample: OperationalMetricsSample | null = null;
+
+  record(sample: Omit<OperationalMetricsSample, "capturedAtUtc"> & { capturedAtUtc?: string }): OperationalMetricsSample {
+    const normalized: OperationalMetricsSample = {
+      decision_latency_ms: Math.max(0, sample.decision_latency_ms),
+      decision_conflict_count: Math.max(0, sample.decision_conflict_count),
+      broker_sync_lag_ms: Math.max(0, sample.broker_sync_lag_ms),
+      capturedAtUtc: sample.capturedAtUtc ?? new Date().toISOString()
+    };
+
+    this.latestSample = normalized;
+    return normalized;
+  }
+
+  getSnapshot(maxCycleSeconds: number = 60, now: Date = new Date()): OperationalMetricsSnapshot {
+    if (!this.latestSample) {
+      return {
+        latest: null,
+        updatedWithinSla: false,
+        maxCycleSeconds
+      };
+    }
+
+    const lastTs = new Date(this.latestSample.capturedAtUtc).getTime();
+    const fresh = !Number.isNaN(lastTs) && now.getTime() - lastTs <= maxCycleSeconds * 1000;
+
+    return {
+      latest: this.latestSample,
+      updatedWithinSla: fresh,
+      maxCycleSeconds
     };
   }
 }

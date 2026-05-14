@@ -159,6 +159,28 @@ Examples of foundational tasks (adjust based on your project):
 
 ---
 
+## Phase N+1: Configurability & Runtime Modes (when applicable)
+
+**Purpose**: Ensure evolving fields/catalogs and mode switches do not require code rewrites.
+
+- [ ] TXXX Create/extend config registry schema (dynamic fields/catalogs/presets)
+- [ ] TXXX Implement backend routing by source-domain with fallback rules
+- [ ] TXXX Implement runtime mode switches (e.g., online/offline/demo/real)
+- [ ] TXXX Build metadata-driven UI renderer (columns/controls/options)
+- [ ] TXXX [P] Integration tests for config changes without redeploy
+- [ ] TXXX [P] E2E tests for mode-switch and source fallback behavior
+
+### Example Tasks (Trading Workspace)
+
+- [ ] TXXX Create `confluence_column_configs` migration
+- [ ] TXXX Create `confluence_view_presets` migration
+- [ ] TXXX Add runtime mode endpoint (`online/offline`, `demo/real`)
+- [ ] TXXX Implement metadata-driven table renderer in dashboard
+- [ ] TXXX Add integration test: add/remove/reorder columns without redeploy
+- [ ] TXXX Add e2e test: watchlist -> chart -> table sync under online/offline
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -169,6 +191,7 @@ Examples of foundational tasks (adjust based on your project):
   - User stories can then proceed in parallel (if staffed)
   - Or sequentially in priority order (P1 → P2 → P3)
 - **Polish (Final Phase)**: Depends on all desired user stories being complete
+- **Configurability/Runtime Modes (optional final phase)**: Depends on core stories and may block production readiness when feature requires evolving schema
 
 ### User Story Dependencies
 

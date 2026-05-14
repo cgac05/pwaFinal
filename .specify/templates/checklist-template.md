@@ -32,6 +32,40 @@
 - [ ] CHK005 Item with specific criteria
 - [ ] CHK006 Final item in this category
 
+## UX Contract Coverage (when UI-heavy)
+
+- [ ] CHK007 Key business attributes define explicit control types
+- [ ] CHK008 Interaction behavior is specified for select/change/click actions
+- [ ] CHK009 Visual workspace requirements are defined (layout/performance/readability)
+
+## Data Source Routing & Runtime Modes
+
+- [ ] CHK010 Source-domain routing and fallback rules are explicitly defined
+- [ ] CHK011 Runtime modes (e.g., online/offline/demo/real) are specified with expected behavior
+- [ ] CHK012 Credential/account switching behavior is documented where applicable
+
+## Dynamic Schema & Configurability
+
+- [ ] CHK013 Dynamic fields/columns are governed by a configuration registry
+- [ ] CHK014 Add/remove/reorder behavior is specified without requiring code changes
+- [ ] CHK015 Role/user presets and backward compatibility are documented
+
+## Example Validation (Trading Workspace)
+
+- [ ] CHK016 Watchlist tree categories are dynamic (not hardcoded)
+- [ ] CHK017 Superchart and table stay synchronized on row click/hover
+- [ ] CHK018 Online/Offline + Demo/Real switches have explicit expected behavior
+- [ ] CHK019 Confluence table columns are driven by registry metadata
+
+## Pre-Speckit Enrichment Gate (recommended)
+
+- [ ] CHK020 Se ejecutó enriquecimiento de knowledge para el dominio antes de especificar (ej.: `/diana.knowledge ...`).
+- [ ] CHK021 Se ejecutó generación/actualización de skills para la etapa activa (ej.: `/diana.skills ...`).
+- [ ] CHK022 `speckit.specify` evidencia consumo de knowledge/skills (sección de cobertura o notas explícitas).
+- [ ] CHK023 `speckit.plan` incluye trazabilidad de skills requeridas y cobertura/fallback.
+- [ ] CHK024 `speckit.tasks` refleja explícitamente controles críticos de UX/datos/modos definidos en spec/plan.
+- [ ] CHK025 Si faltó skill/knowledge, quedó documentado el gap y la recomendación de cierre.
+
 ## Notes
 
 - Check items off as completed: `[x]`

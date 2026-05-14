@@ -144,6 +144,7 @@ export function createExecutionRouter(executionService: ExecutionService): Route
               instrument: 'AAPL',
               orderType: 'BUY',
               quantity: 1,
+              version: 1,
               state: 'APPROVED',
               approvedBy: userId,
               approvedAt: new Date(),
@@ -162,22 +163,16 @@ export function createExecutionRouter(executionService: ExecutionService): Route
       }
 
       // ===== VALIDACION 3: Optimistic Locking =====
-      if (payload.proposalVersion !== proposal.state as any) {
-        // FIC: En produccion, proposal tendra campo version: number
-        // Por ahora comparar con algo arbitrario para demostrar
-        // Simulamos que version actual es 2
-        const serverVersion = 2;
-        if (payload.proposalVersion !== serverVersion) {
-          return res.status(409).json({
-            error: 'order_version_stale',
-            code: 'ORDER_VERSION_STALE',
-            details: {
-              clientVersion: payload.proposalVersion,
-              serverVersion,
-              message: 'Another request updated this proposal. Please refresh and re-approve.',
-            },
-          } as ExecuteErrorResponse);
-        }
+      if (payload.proposalVersion !== proposal.version) {
+        return res.status(409).json({
+          error: 'order_version_stale',
+          code: 'ORDER_VERSION_STALE',
+          details: {
+            clientVersion: payload.proposalVersion,
+            serverVersion: proposal.version,
+            message: 'Another request updated this proposal. Please refresh and re-approve.',
+          },
+        } as ExecuteErrorResponse);
       }
 
       // ===== EJECUTAR =====
@@ -189,7 +184,7 @@ export function createExecutionRouter(executionService: ExecutionService): Route
       const result = await executionService.execute(executionRequest, proposal);
 
       // ===== RESPUESTA EXITOSA =====
-      if (result.state !== 'FAILED') {
+      if (result.state === 'FILLED') {
         return res.status(200).json({
           success: true,
           executionId: result.executionId,
@@ -200,8 +195,19 @@ export function createExecutionRouter(executionService: ExecutionService): Route
         } as ExecuteResponse);
       }
 
+      if (result.state === 'PENDING_APPROVAL') {
+        return res.status(409).json({
+          error: 'execution_blocked',
+          code: 'EXECUTION_BLOCKED',
+          details: {
+            message: 'Execution blocked due to missing valid human decision or broker failure; re-approval required.',
+            brokerErrorCode: result.errorCode,
+          },
+        } as ExecuteErrorResponse);
+      }
+
       // ===== FALLO EN BROKER =====
-      res.status(500).json({
+      return res.status(500).json({
         error: 'broker_error',
         code: result.errorCode || 'BROKER_ERROR',
         details: {

@@ -26,6 +26,7 @@
  */
 export type AuditEventType =
   | 'HUMAN_APPROVED'
+  | 'DECISION_CONFLICT'
   | 'EXECUTION_SUBMITTED'
   | 'EXECUTION_FAILED'
   | 'EXECUTION_RETRIED';
@@ -74,6 +75,48 @@ export interface AuditEvent {
 }
 
 export class ExecutionAuditService {
+  async emitDecisionConflict(
+    proposalId: string,
+    signalId: string,
+    userId: string,
+    instrument: string,
+    orderType: 'BUY' | 'SELL',
+    quantity: number,
+    clientVersion: number,
+    serverVersion: number,
+    correlationId?: string
+  ): Promise<AuditEvent> {
+    const eventId = `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const corrId = correlationId || `corr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    const event: AuditEvent = {
+      eventId,
+      timestampUtc: new Date(),
+      correlationId: corrId,
+      signalId,
+      proposalId,
+      userId,
+      role: 'system',
+      actionType: 'DECISION_CONFLICT',
+      previousState: 'PENDING_APPROVAL',
+      newState: 'PENDING_APPROVAL',
+      instrument,
+      orderType,
+      quantity,
+      outcomeCode: 'CONFLICT',
+      errorCode: 'DECISION_VERSION_CONFLICT',
+      errorMessage: 'Decision rejected due to stale optimistic lock version',
+      metadata: {
+        clientVersion,
+        serverVersion
+      }
+    };
+
+    await this.storeAuditEvent(event);
+
+    return event;
+  }
+
   /**
    * Emitir evento HUMAN_APPROVED cuando usuario aprueba una propuesta.
    * 

@@ -26,6 +26,7 @@ export interface ApprovalRequest {
   userId: string;
   role: 'viewer' | 'trader' | 'admin';
   action: 'approve' | 'reject';
+  expectedVersion?: number;
   rationale?: string;
   mfaContext?: MFAContext;
 }
@@ -35,13 +36,36 @@ export interface ApprovalResult {
   proposalId: string;
   userId: string;
   action: 'approve' | 'reject';
+  previousVersion: number;
+  newVersion: number;
   timestamp: Date;
   mfaValidated: boolean;
   transitionedTo: 'APPROVED' | 'REJECTED' | null;
   eventId: string; // Reference a audit event
 }
 
+interface ProposalDecisionSnapshot {
+  version: number;
+  state: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+}
+
 export class ApprovalService {
+  private readonly proposals = new Map<string, ProposalDecisionSnapshot>();
+
+  private getOrCreateProposal(proposalId: string): ProposalDecisionSnapshot {
+    const current = this.proposals.get(proposalId);
+    if (current) {
+      return current;
+    }
+
+    const initial: ProposalDecisionSnapshot = {
+      version: 1,
+      state: 'PENDING_APPROVAL'
+    };
+    this.proposals.set(proposalId, initial);
+    return initial;
+  }
+
   /**
    * Validar que MFA sea valido para la accion requerida.
    * 
@@ -88,12 +112,23 @@ export class ApprovalService {
     // Validar MFA
     const mfaValid = await this.validateMFA(request);
 
-    // FIC: Implementacion futura: transaccional con Supabase
-    // - Leer propuesta actual en base
-    // - Validar estado es PENDING_APPROVAL
-    // - Registrar approval record
-    // - Transicionar a APPROVED
-    // - Emitir evento HUMAN_APPROVED a auditoria
+    if (request.role === 'viewer') {
+      throw new Error('FORBIDDEN_ROLE: viewer cannot approve proposals');
+    }
+
+    const proposal = this.getOrCreateProposal(request.proposalId);
+    if (proposal.state !== 'PENDING_APPROVAL') {
+      throw new Error(`INVALID_STATE: proposal is in ${proposal.state}`);
+    }
+
+    const expectedVersion = request.expectedVersion ?? proposal.version;
+    if (proposal.version !== expectedVersion) {
+      throw new Error(`DECISION_VERSION_CONFLICT:${expectedVersion}:${proposal.version}`);
+    }
+
+    const previousVersion = proposal.version;
+    proposal.version += 1;
+    proposal.state = 'APPROVED';
 
     const approvalId = `appr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const eventId = `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -103,6 +138,8 @@ export class ApprovalService {
       proposalId: request.proposalId,
       userId: request.userId,
       action: 'approve',
+      previousVersion,
+      newVersion: proposal.version,
       timestamp: new Date(),
       mfaValidated: mfaValid,
       transitionedTo: 'APPROVED',
@@ -124,12 +161,23 @@ export class ApprovalService {
     // Validar MFA si es requerido
     const mfaValid = await this.validateMFA(request);
 
-    // FIC: Implementacion futura: transaccional con Supabase
-    // - Leer propuesta actual en base
-    // - Validar estado es PENDING_APPROVAL
-    // - Registrar rejection record
-    // - Transicionar a REJECTED
-    // - Emitir evento HUMAN_REJECTED a auditoria
+    if (request.role === 'viewer') {
+      throw new Error('FORBIDDEN_ROLE: viewer cannot reject proposals');
+    }
+
+    const proposal = this.getOrCreateProposal(request.proposalId);
+    if (proposal.state !== 'PENDING_APPROVAL') {
+      throw new Error(`INVALID_STATE: proposal is in ${proposal.state}`);
+    }
+
+    const expectedVersion = request.expectedVersion ?? proposal.version;
+    if (proposal.version !== expectedVersion) {
+      throw new Error(`DECISION_VERSION_CONFLICT:${expectedVersion}:${proposal.version}`);
+    }
+
+    const previousVersion = proposal.version;
+    proposal.version += 1;
+    proposal.state = 'REJECTED';
 
     const approvalId = `appr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const eventId = `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -139,6 +187,8 @@ export class ApprovalService {
       proposalId: request.proposalId,
       userId: request.userId,
       action: 'reject',
+      previousVersion,
+      newVersion: proposal.version,
       timestamp: new Date(),
       mfaValidated: mfaValid,
       transitionedTo: 'REJECTED',

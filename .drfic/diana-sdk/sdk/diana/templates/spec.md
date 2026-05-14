@@ -46,7 +46,51 @@ Excluye:
 
 ---
 
-## 6. Restricciones
+## 6. Contrato de Experiencia y Controles (cuando aplique UI)
+
+Definir explícitamente por atributo funcional:
+- Tipo de control esperado (arbol, tabla, chart, combobox, etc.)
+- Comportamiento al interactuar (selección, cambio, clic)
+- Fuente de datos esperada por control
+- Criterios de usabilidad/legibilidad del workspace
+
+Ejemplo (workspace de trading):
+- Watchlist tree por categorías de mercado
+- Superchart de velas con overlay de señales
+- Tabla de confluencia con columnas dinámicas por configuración
+
+---
+
+## 7. Fuentes de Datos y Modos de Operación
+
+Definir:
+- Dominios de datos (ej. instrumentos, histórico OHLC, indicadores, alertas)
+- Reglas de enrutamiento por dominio a proveedor/fuente
+- Modos operativos (ej. online/offline, demo/real)
+- Estrategia de fallback/caché ante degradación
+
+Ejemplo:
+- symbols: API broker -> catálogo local
+- OHLC: API histórica -> cache local
+- modos: online/offline y demo/real
+
+---
+
+## 8. Configurabilidad Evolutiva
+
+Definir si el artefacto requiere:
+- Catálogos/config registries para campos/columnas/opciones
+- Evolución sin cambios de código (agregar/quitar/reordenar)
+- Presets por rol/usuario
+- Compatibilidad ante retiro de campos
+
+Ejemplo:
+- Registro de columnas (`confluence_column_configs`)
+- Presets por rol/usuario (`confluence_view_presets`)
+
+---
+
+## 9. Restricciones
 
 - Restricciones legales
 - Restricciones técnicas
@@ -54,20 +98,20 @@ Excluye:
 
 ---
 
-## 7. Supuestos
+## 10. Supuestos
 
 - Supuesto explícito 1
 - Supuesto explícito 2
 
 ---
 
-## 8. Fuera de Alcance
+## 11. Fuera de Alcance
 
 Listado explícito de lo que **no** hace esta iniciativa.
 
 ---
 
-## 9. Criterios de Aceptación
+## 12. Criterios de Aceptación
 
 - CA‑01:
 - CA‑02:
