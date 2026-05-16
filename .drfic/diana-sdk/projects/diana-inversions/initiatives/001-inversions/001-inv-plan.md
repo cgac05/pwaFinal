@@ -788,7 +788,7 @@ Salida canónica hacia descomposición:
     │   │   ├── tsconfig.json
     │   │   └── vite.config.ts
     └── rest-api/                       # Todos los proyectos REST API del portafolio
-        └── rest_api_inversions_drfic/  # Persistencia real y exposición de endpoints
+        └── inversions_api/  # Persistencia real y exposición de endpoints
             ├── src/
             │   ├── routes/
             │   ├── controllers/

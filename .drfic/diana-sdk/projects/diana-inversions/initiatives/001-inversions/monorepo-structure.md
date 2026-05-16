@@ -102,7 +102,7 @@ inversions_app_pwa/
     │       └── README.md
     │
     └── rest-api/                       # Todos los proyectos REST API del portafolio
-        └── rest_api_inversions_drfic/  # Persistencia real y exposición de endpoints (Express + Node.js 22)
+        └── inversions_api/  # Persistencia real y exposición de endpoints (Express + Node.js 22)
             ├── src/
             │   ├── routes/             # Endpoints REST por recurso
             │   │   ├── dashboard/      # /api/dashboard/*
@@ -164,7 +164,7 @@ inversions_app_pwa/
 
 **Capacidad de Escalado:**
 - ✅ Múltiples PWAs bajo `projects/pwa/` (ej: `inversions_app/`, `crypto_portfolio_app/`, etc)
-- ✅ Múltiples REST APIs bajo `projects/rest-api/` (ej: `rest_api_inversions_drfic/`, `rest_api_reports/`, etc)
+- ✅ Múltiples REST APIs bajo `projects/rest-api/` (ej: `inversions_api/`, `rest_api_reports/`, etc)
 - ✅ Código compartido centralizado en `projects/packages/` usado por todos
 │   │       ├── public/
 │   │       ├── data/                   # Contratos y modelos de referencia
@@ -220,7 +220,7 @@ inversions_app_pwa/
 │   │       ├── vitest.config.ts
 │   │       └── README.md
 │   └── rest-api/                       # Todos los proyectos REST API del portafolio
-│       └── rest_api_inversions_drfic/  # API REST: Persistencia y orquestación de backend
+│       └── inversions_api/  # API REST: Persistencia y orquestación de backend
 │           ├── src/
 │           │   ├── database/           # Capa de acceso a datos
 │           │   │   ├── supabase/
@@ -354,7 +354,7 @@ inversions_app_pwa/
 - `src/hooks/` reutiliza estado y efectos dentro de la app
 - `src/components/` (dentro de features) son específicos; si son reutilizables, suben a `packages/ui-library`
 
-### `projects/rest-api/rest_api_inversions_drfic/` → Backend REST API
+### `projects/rest-api/inversions_api/` → Backend REST API
 
 **Cuándo poner código aquí:**
 - Módulos de negocio: `signals`, `execution`, `brokers`, `audit`, `strategies`
@@ -460,7 +460,7 @@ Una vez T000 está completo y validado, todos los equipos (TEAM-01, TEAM-02, etc
 
 - **Monorepo Package**: [projects/packages/](../../packages/)
 - **PWA**: [projects/pwa/inversions_app/](../../pwa/inversions_app/)
-- **Backend REST API**: [projects/rest-api/rest_api_inversions_drfic/](../../rest-api/rest_api_inversions_drfic/)
+- **Backend REST API**: [projects/rest-api/inversions_api/](../../rest-api/inversions_api/)
 - **Specs Feature 001**: [specs/001-plataforma-inversiones-ia/](../../specs/001-plataforma-inversiones-ia/)
 - **Specs Feature 002**: [specs/002-team-01-dashboard-brokers/](../../specs/002-team-01-dashboard-brokers/)
 - **Validación**: [scripts/validate-structure.ps1](../../scripts/validate-structure.ps1)

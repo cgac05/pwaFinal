@@ -1,4 +1,4 @@
-# Plan de Implementacion: Dashboard de Brokers TEAM-01
+﻿# Plan de Implementacion: Dashboard de Brokers TEAM-01
 
 **Branch**: `002-team-01-dashboard-brokers` | **Fecha**: 2026-05-13 | **Spec**: [spec.md](spec.md)
 **Entrada**: Especificacion canonica en [spec.md](spec.md)
@@ -200,7 +200,7 @@ specs/002-team-01-dashboard-brokers/
     │   │   ├── tsconfig.json
     │   │   └── vite.config.ts
     └── rest-api/                       # Todos los proyectos REST API del portafolio
-        └── rest_api_inversions_drfic/  # Persistencia real y exposición de endpoints
+        └── inversions_api/  # Persistencia real y exposición de endpoints
             ├── src/
             │   ├── config/
             │   ├── controllers/
@@ -227,7 +227,7 @@ specs/002-team-01-dashboard-brokers/
             └── tsconfig.json
 ```
 
-**Decision de estructura**: no se crean nuevas raices de producto; el trabajo se concentra en las superficies existentes bajo `projects/pwa/inversions_app` y `projects/rest-api/rest_api_inversions_drfic`, con la documentacion de la feature aislada en `specs/002-team-01-dashboard-brokers/`.
+**Decision de estructura**: no se crean nuevas raices de producto; el trabajo se concentra en las superficies existentes bajo `projects/pwa/inversions_app` y `projects/rest-api/inversions_api`, con la documentacion de la feature aislada en `specs/002-team-01-dashboard-brokers/`.
 
 ## Enfoque de Implementacion
 

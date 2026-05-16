@@ -1,5 +1,5 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$backendDir = Join-Path $repoRoot "projects/rest-api/rest_api_inversions_drfic"
+﻿$repoRoot = Split-Path -Parent $PSScriptRoot
+$backendDir = Join-Path $repoRoot "projects/rest-api/inversions_api"
 $logPath = Join-Path $repoRoot ".tmp-ai-drfic\backend-dev.out.log"
 
 if (Test-Path $logPath) {

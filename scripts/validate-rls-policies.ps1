@@ -1,5 +1,5 @@
-param(
-  [string]$MigrationPath = "projects/rest-api/rest_api_inversions_drfic/src/database/supabase/migrations/003_canonical_schema.sql"
+﻿param(
+  [string]$MigrationPath = "projects/rest-api/inversions_api/src/database/supabase/migrations/003_canonical_schema.sql"
 )
 
 $ErrorActionPreference = "Stop"

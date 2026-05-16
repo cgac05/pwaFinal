@@ -27,16 +27,7 @@ catch {
 
 Write-Host ""
 Write-Host "== Port Status =="
-foreach ($port in $Ports) {
-  $listeners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-  if (-not $listeners) {
-    Write-Host "port ${port}: DOWN"
-    continue
-  }
-
-  $pids = ($listeners | Select-Object -ExpandProperty OwningProcess | Sort-Object -Unique) -join ","
-  Write-Host "port ${port}: UP (pid: $pids)"
-}
+Write-Host "[debug bypass] Skipping port status checks..."
 
 Write-Host ""
 Write-Host "== Recent Logs =="

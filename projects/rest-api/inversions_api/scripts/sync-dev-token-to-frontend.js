@@ -1,4 +1,4 @@
-const fs = require("node:fs");
+﻿const fs = require("node:fs");
 const path = require("node:path");
 const jwt = require("jsonwebtoken");
 
@@ -27,7 +27,7 @@ function main() {
   const envPath = path.resolve(backendRoot, ".env");
 
   if (!fs.existsSync(envPath)) {
-    throw new Error("No existe .env del backend. Crea projects/rest-api/rest_api_inversions_drfic/.env");
+    throw new Error("No existe .env del backend. Crea projects/rest-api/inversions_api/.env");
   }
 
   const secret = readJwtSecret(envPath);

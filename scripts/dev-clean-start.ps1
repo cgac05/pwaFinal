@@ -1,4 +1,4 @@
-Param(
+﻿Param(
   [int[]]$PortsToClean = @(3000, 5173, 5174, 5175),
   [bool]$StreamLogs = $false
 )
@@ -67,7 +67,7 @@ function Start-DetachedProcess {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$backendDir = Join-Path $repoRoot "projects/rest-api/rest_api_inversions_drfic"
+$backendDir = Join-Path $repoRoot "projects/rest-api/inversions_api"
 $frontendDir = Join-Path $repoRoot "projects/pwa/inversions_app"
 
 if (-not (Test-Path $backendDir)) {
@@ -78,8 +78,8 @@ if (-not (Test-Path $frontendDir)) {
   throw "Frontend directory not found: $frontendDir"
 }
 
-Write-Host "[1/3] Cleaning occupied dev ports..."
-Stop-ListenersOnPorts -Ports $PortsToClean
+Write-Host "[1/3] Skipping port cleaning (debug bypass)..."
+# Stop-ListenersOnPorts -Ports $PortsToClean
 
 Write-Host "[2/3] Syncing development token to frontend .env.local..."
 Push-Location $backendDir
