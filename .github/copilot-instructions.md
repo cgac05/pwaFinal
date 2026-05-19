@@ -34,3 +34,8 @@ TypeScript 5.x across frontend and backend; React 18 on the client; Node.js 22 L
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
