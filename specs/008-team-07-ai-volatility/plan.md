@@ -17,6 +17,8 @@ Implementar un **Sistema Inteligente de Análisis de Volatilidad** que:
 - 🎯 Ejecuta órdenes en brokers integrados (IBKR + Alpaca)
 - 🎯 Mantiene histórico auditable de todas las operaciones
 - 🎯 Proporciona dashboard visual con análisis histórico y rendimiento
+- 🎯 Utiliza el **Gemini SDK** para generar salida dual: JSON estructurado y opinión/análisis textual
+- 🎯 Incluye un gate explícito de aprobación humana antes de cualquier ejecución real en producción
 
 ### Timeline: 9 Semanas (3 Fases MVP)
 
@@ -71,12 +73,12 @@ T151: Setup Node.js 22 LTS + Vite en backend/rest-api
       Subtasks:
         - [ ] Actualizar package.json a Node 22
         - [ ] Configurar tsconfig.json (strict mode)
-        - [ ] Instalar dependencias core (express, supabase, @claude/sdk)
+        - [ ] Instalar dependencias core (express, supabase, Gemini SDK)
         - [ ] Crear .env.example con variables necesarias
         - [ ] Verificar build sin warnings
       DoD: `npm run build` exitoso, cero TS errors
 
-T152: Docker setup + dev containerization
+T151B: Docker setup + dev containerization
       Asignado: Dev Backend 1
       Subtasks:
         - [ ] Crear Dockerfile multistage (dev/prod)
@@ -91,6 +93,7 @@ T153: AI Orchestration Architecture (Analyzer → Strategist → Executor)
         - [ ] Diseñar pattern de comunicación entre agentes
         - [ ] Definir mensaje protocol (types/AIMessage.ts)
         - [ ] Error handling strategy (retry logic, fallbacks)
+        - [ ] Definir formato de salida de Gemini: JSON estructurado + análisis/opinión textual
         - [ ] Create ADR (Architecture Decision Record)
       DoD: Documento ADR + TypeScript types en repo
 
@@ -159,11 +162,12 @@ T157: Executor Agent + Order Management
       Subtasks:
         - [ ] Create ExecutorAgent orchestration
         - [ ] Order validation (margin check, size limits)
+        - [ ] Implement a human approval gate for live execution in production
         - [ ] Create OrderRepository.ts para persistencia
         - [ ] Implement order state machine (pending → submitted → filled → closed)
         - [ ] Error recovery: order cancellation logic
         - [ ] Mock broker responses para testing
-      DoD: Order flow documentado, state transitions testado
+      DoD: Order flow documentado, state transitions testado, gate de aprobación humana validado
 
 T158: Broker Adapters (IBKR + Alpaca Integration)
       Asignado: Dev Backend 2
@@ -528,6 +532,7 @@ T174: API & Architecture Documentation
 - [ ] AnalyzerAgent procesa 30+ símbolos en <2 segundos
 - [ ] StrategistAgent selecciona estrategia correcta (validado manual vs 100 históricos)
 - [ ] ExecutorAgent crea órdenes sin crashes
+- [ ] ExecutorAgent bloquea ejecución real hasta aprobación humana explícita
 - [ ] IBKR + Alpaca adapters responden a paper trading
 - [ ] Unit test coverage >80%
 
@@ -617,7 +622,7 @@ T174: API & Architecture Documentation
 | Tarea | Lead | Backend 1 | Backend 2 | Frontend 1 | Frontend 2 | Responsable |
 |-------|------|-----------|-----------|-----------|-----------|------------|
 | T151 Setup | C | R | C | C | - | Backend 1 |
-| T152 Docker | C | R | C | - | - | Backend 1 |
+| T151B Docker | C | R | C | - | - | Backend 1 |
 | T153 AI Architecture | R | A | A | C | C | Lead |
 | T154 Supabase | C | C | R | - | - | Backend 2 |
 | T155 Analyzer | C | R | C | - | - | Backend 1 |
@@ -879,7 +884,7 @@ DoD: RLS policies pass TEAM-03 security review
 ```
 SEMANA 1: Setup & Arquitectura
 ├─ T151 (Backend 1): Setup Node 22 ████
-├─ T152 (Backend 1): Docker setup ████
+├─ T151B (Backend 1): Docker setup ████
 ├─ T153 (Lead): AI Architecture ████
 └─ T154 (Backend 2): Supabase + Schema ████
 

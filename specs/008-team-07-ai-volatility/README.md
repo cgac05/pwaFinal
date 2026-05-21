@@ -99,7 +99,7 @@ npm run lint:fix      # Linting
 git add .
 git commit -m "feat(t151): Setup AI multi-agent core
 
-- Configure Claude API
+- Configure Gemini API
 - Implement AgentConfig interface
 - Create analyzer/strategist/executor agents
 
@@ -183,7 +183,7 @@ NODE_ENV=development
 PORT=3000
 SUPABASE_URL=<tu-url>
 SUPABASE_ANON_KEY=<tu-key>
-CLAUDE_API_KEY=<tu-key>
+GEMINI_API_KEY=<tu-key>
 ```
 
 ### Variables de Entorno Frontend (.env)

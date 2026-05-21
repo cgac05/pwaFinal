@@ -11,7 +11,7 @@ interface AgentConfig {
   id: string;
   name: string;
   role: 'analyzer' | 'strategist' | 'executor';
-  model: 'claude-opus' | 'claude-sonnet';
+  model: 'gemini-2.5-flash' | 'gemini-2.0-pro' | string;
   systemPrompt: string;
   tools: Tool[];
 }
