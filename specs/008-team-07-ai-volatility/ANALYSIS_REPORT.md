@@ -302,7 +302,7 @@ SPEC - Acceptance Criteria Analysis:
 
 TASKS - Acceptance Criteria Quality:
 
-T151 (Setup Gemini + Langchain):
+T151 (Setup Claude + Langchain):
   ✅ Specific: SDK installed, config, retry logic, tests >80%
   ✅ Testable: "Test básico de invocación completado"
 
@@ -598,7 +598,7 @@ Overall Spec-Plan-Tasks-Checklist Alignment: 72%
 ```
 TIER 1 - CRITICAL PATH (If slip, project slips):
 
-T151: Setup Gemini + Langchain (W1)
+T151: Setup Claude + Langchain (W1)
 └─ T152: Analyzer (W2)
     └─ T153: Strategist (W2-W3)
         └─ T154: Executor (W3)

@@ -9,7 +9,7 @@
 
 # GRUPO 1: CORE AI AGENTS (Semana 1-2)
 
-## T151: Setup Entorno Multi-Agente Gemini + Langchain
+## T151: Setup Entorno Multi-Agente Claude + Langchain
 
 **Story Points**: 8  
 **Prioridad**: P0  
@@ -18,20 +18,19 @@
 **Semana**: W1  
 
 ### Descripción
-Instalar y configurar el SDK de Gemini, Langchain para orquestación de agentes, y establecer los patrones de comunicación entre agentes. Incluye setup de API keys, variables de entorno, gestión de sesiones y mechanism de retry/fallback para garantizar resiliencia. Definir system prompts que produzcan salida textual analítica y de opinión además de datos estructurados.
+Instalar y configurar el SDK de Claude 3, Langchain para orquestación de agentes, y establecer los patrones de comunicación entre agentes. Incluye setup de API keys, variables de entorno, gestión de sesiones y mechanism de retry/fallback para garantizar resiliencia.
 
 ### Acceptance Criteria
-- [ ] SDK Gemini instalado y configurado correctamente
+- [ ] SDK Claude 3 instalado y configurado correctamente
 - [ ] Langchain integrado con soporte para multi-agent orchestration
 - [ ] System prompts definidos para cada tipo de agente
-- [ ] Gemini produce análisis textual de mercado y opinión de trading cuando se solicita
 - [ ] Test básico de invocación de agente completado
 - [ ] Retry logic con exponential backoff implementado
 - [ ] Fallback mechanisms funcionando entre modelos
 - [ ] Documentación de configuración lista
 
 ### Tareas Técnicas
-1. Instalar el SDK oficial de Gemini y langchain en `projects/rest-api/inversions_api`
+1. Instalar @anthropic-ai/sdk y langchain en `projects/rest-api/inversions_api`
 2. Configurar variables de entorno para API key en `.env.local`
 3. Implementar agent factory pattern con parámetros configurables
 4. Crear system prompts templates para Analyzer, Strategist, Executor
@@ -47,49 +46,9 @@ Instalar y configurar el SDK de Gemini, Langchain para orquestación de agentes,
 - PR aprobada por otro Backend
 
 ### Recursos
-- Docs: Gemini API Docs
+- Docs: [Claude API Docs](https://claude.ai/docs)
 - Docs: [Langchain JS](https://js.langchain.com)
 - Ejemplos: Pattern de retry con exponential backoff en `src/services/agent-service.ts`
-
----
-
-## T151B: Docker y Dev Containerization
-
-**Story Points**: 5  
-**Prioridad**: P0  
-**Asignado a**: Backend 1  
-**Dependencias**: [T151]  
-**Semana**: W1
-
-### Descripción
-Configurar la plataforma de desarrollo con Docker, containerización multietapa y un entorno local reproducible. Asegura que el backend y sus dependencias se ejecuten de forma consistente en todos los equipos de desarrollo.
-
-### Acceptance Criteria
-- [ ] Dockerfile multistage creado para backend y producción
-- [ ] `docker-compose.yml` con servicios de Supabase/PostgreSQL y API local
-- [ ] Entorno local reproducible con `docker-compose up`
-- [ ] Documentación de comandos de desarrollo y debugging
-- [ ] `npm run dev` funciona dentro del contenedor
-- [ ] No warnings de linting ni errores TS durante la build dentro del contenedor
-
-### Tareas Técnicas
-1. Crear Dockerfile multistage para `projects/rest-api/inversions_api`
-2. Crear `docker-compose.yml` con servicios de backend, Supabase y PostgreSQL
-3. Configurar volúmenes y env vars en `.env.example`
-4. Verificar que `npm run dev` funciona en el contenedor
-5. Documentar comandos `docker-compose up`, build y clean
-6. Probar en Windows y Linux
-
-### Criterios de Definición de Listo
-- Configuración reproducible en un solo comando
-- Contenedor arranca sin errores
-- No warnings de linting
-- PR aprobada
-
-### Recursos
-- Docs: Docker multistage builds
-- Docs: Docker Compose
-- Ejemplos: repositorios Node + Supabase
 
 ---
 
@@ -102,14 +61,13 @@ Configurar la plataforma de desarrollo con Docker, containerización multietapa 
 **Semana**: W2  
 
 ### Descripción
-Desarrollar agente especializado que recibe datos OHLCV históricos, indicadores técnicos y contexto de mercado, luego genera análisis técnico enriquecido. El agente debe procesar 30+ símbolos en paralelo y retornar contexto estructurado junto con un resumen textual de opinión de Gemini en <500ms.
+Desarrollar agente especializado que recibe datos OHLCV históricos, indicadores técnicos y contexto de mercado, luego genera análisis técnico enriquecido. El agente debe procesar 30+ símbolos en paralelo y retornar contexto estructurado en <500ms.
 
 ### Acceptance Criteria
 - [ ] Analyzer Agent procesa datos OHLCV correctamente
 - [ ] Soporta 30+ símbolos simultáneamente
 - [ ] Latencia <500ms por símbolo
 - [ ] Retorna JSON estructurado y validado
-- [ ] Retorna un resumen textual de opinión de Gemini junto al JSON estructurado
 - [ ] 100% tipado TypeScript con interfaces definidas
 - [ ] Manejo de errores de datos inválidos
 - [ ] Tests con datos reales de Alpaca
@@ -187,7 +145,7 @@ Desarrollar agente que recibe análisis de mercado del Analyzer Agent, toma deci
 **Semana**: W3  
 
 ### Descripción
-Desarrollar agente ejecutor que recibe estrategia validada del Strategist, envía órdenes a brokers (IBKR/Alpaca), confirma ejecución, registra en base de datos. Debe incluir circuit breaker, validación pre-trade y un control explícito de aprobación humana antes de ejecutar órdenes reales.
+Desarrollar agente ejecutor que recibe estrategia validada del Strategist, envía órdenes a brokers (IBKR/Alpaca), confirma ejecución, registra en base de datos. Debe incluir circuit breaker y validación pre-trade.
 
 ### Acceptance Criteria
 - [ ] Órdenes enviadas correctamente a brokers
@@ -195,7 +153,6 @@ Desarrollar agente ejecutor que recibe estrategia validada del Strategist, enví
 - [ ] Logs de auditoría completos para cada orden
 - [ ] Circuit breaker activo (detiene si hay excesivos fallos)
 - [ ] Pre-trade validation antes de enviar
-- [ ] Aprobación humana requerida antes de ejecutar la orden en producción
 - [ ] Manejo de rechazos de orden
 - [ ] Tests end-to-end con mock broker
 
@@ -203,11 +160,10 @@ Desarrollar agente ejecutor que recibe estrategia validada del Strategist, enví
 1. Crear interface `IOrderExecution` con campos de auditoría
 2. Implementar `ExecutorAgent` en `src/services/agents/executor.agent.ts`
 3. Implementar pre-trade validation checks
-4. Implementar gate de aprobación humana antes de ejecución real
-5. Integrar con broker adapters (T157)
-6. Implementar circuit breaker pattern
-7. Crear audit logging con timestamp y usuario
-8. Implementar retry logic con degraded mode
+4. Integrar con broker adapters (T157)
+5. Implementar circuit breaker pattern
+6. Crear audit logging con timestamp y usuario
+7. Implementar retry logic con degraded mode
 
 ### Criterios de Definición de Listo
 - Código comentado
@@ -326,11 +282,11 @@ Implementar adaptadores para Interactive Brokers (IBKR) y Alpaca que manejen ór
 - [ ] Tests con mock brokers
 
 ### Tareas Técnicas
-1. Instalar adaptador Node.js para IBKR en `projects/rest-api/inversions_api` (por ejemplo `ib` o `ibkr-api`)
-2. Instalar cliente Node.js de Alpaca en `projects/rest-api/inversions_api` (por ejemplo `@alpacahq/alpaca-trade-api`)
+1. Instalar ib-insync para IBKR en `projects/rest-api/inversions_api`
+2. Instalar alpaca-trade-api para opciones
 3. Crear adapter interface abstracto `IBrokerAdapter`
-4. Implementar `IBKRAdapter` con IB Gateway usando la librería Node.js seleccionada
-5. Implementar `AlpacaAdapter` con el SDK Node.js de Alpaca
+4. Implementar `IBKRAdapter` con IB Gateway
+5. Implementar `AlpacaAdapter` con SDK
 6. Implementar broker health check mechanism
 7. Crear fallback routing logic
 8. Tests con conexiones mock
@@ -775,13 +731,12 @@ Desarrollar componentes React tipados para seleccionar estrategia (Straddle/Stra
 **Semana**: W7-W8  
 
 ### Descripción
-Integrar TradingView Lightweight Charts con indicadores técnicos y overlay de estrategia. Incluir un panel de resumen textual que muestre análisis y recomendaciones de Gemini junto al gráfico. Incluye precio en tiempo real, indicadores, zoom/pan fluido, <500ms de render.
+Integrar TradingView Lightweight Charts con indicadores técnicos y overlay de estrategia. Incluye precio en tiempo real, indicadores, zoom/pan fluido, <500ms de render.
 
 ### Acceptance Criteria
 - [ ] Gráfico con precios OHLCV
 - [ ] Indicadores superpuestos (RSI, MACD, BB)
 - [ ] Overlay de estrategia (strikes, payoff)
-- [ ] Panel de resumen textual con análisis de Gemini
 - [ ] Zoom y pan fluido
 - [ ] Render <500ms
 - [ ] Responsive en mobile
@@ -793,9 +748,8 @@ Integrar TradingView Lightweight Charts con indicadores técnicos y overlay de e
 3. Integrar OHLCV data binding en tiempo real
 4. Implementar indicator overlays
 5. Implementar strategy payoff diagram
-6. Implementar panel textual de análisis y recomendaciones de Gemini
-7. Optimizar rendering con memoization
-8. Tests de charts
+6. Optimizar rendering con memoization
+7. Tests de charts
 
 ### Criterios de Definición de Listo
 - Código comentado
@@ -896,163 +850,11 @@ Implementar cobertura completa: unit tests (Jest BE, Vitest FE), integration tes
 
 ---
 
-## T171: Performance & Load Testing - 1000 órdenes/día
-
-**Story Points**: 8  
-**Prioridad**: P0  
-**Asignado a**: Backend 2 + QA  
-**Dependencias**: [T154, T157, T158, T163, T164, T170]  
-**Semana**: W9  
-
-### Descripción
-Diseñar y ejecutar pruebas de performance/carga para validar que el sistema soporta al menos **1000 órdenes/día** en condiciones realistas. Incluye pruebas de órdenes, persistencia y auditoría bajo carga, así como análisis de latencia y fallos controlados.
-
-### Acceptance Criteria
-- [ ] Carga sostenida de 1000 órdenes procesadas en 24 horas sin pérdida de datos
-- [ ] Latencia promedio de orden < 2s y p95 < 5s para creación/registro de órdenes
-- [ ] No más del 1% de errores de orden en el flujo simulado
-- [ ] Auditoría y trade persistence mantienen integridad bajo carga
-- [ ] Resultados documentados en reporte de performance
-- [ ] Conclusiones y ajustes de capacidad registrados en runbook
-
-### Tareas Técnicas
-1. Definir escenario de carga simulado: 1000 órdenes/día con mix de Straddle/Strangle
-2. Implementar pruebas de carga con k6 o Artillery contra API de ordenes y webhook de confirmación
-3. Simular broker responses y fallback entre IBKR/Alpaca bajo carga
-4. Monitorear métricas: throughput, latencia, error rate, CPU, memoria, DB connections
-5. Validar persistencia de todas las órdenes y logs en Supabase/audit_log
-6. Generar reporte de resultados y recomendaciones de tuning
-7. Ajustar configuraciones de pool, rate limits y timeouts según hallazgos
-
-### Criterios de Definición de Listo
-- Pruebas ejecutables desde CI y localmente
-- Reporte de performance completo entregado
-- Recomendaciones de tuning incorporadas en runbook
-- PR aprobada
-
-### Recursos
-- Docs: k6, Artillery, Node.js performance testing
-- Ejemplos: load tests en Node.js + Supabase
-
----
-
-## T172: Integration Tests - Broker Adapters & Persistence
-
-**Story Points**: 8  
-**Prioridad**: P0  
-**Asignado a**: Backend 1 + 2  
-**Dependencias**: [T154, T157, T163, T164]  
-**Semana**: W9  
-
-### Descripción
-Diseñar y ejecutar pruebas de integración que validen la comunicación completa entre Analyzer, Strategist, Executor y los adaptadores de brokers. Asegura que los datos se persistan correctamente y que el flujo de órdenes respete los estados esperados.
-
-### Acceptance Criteria
-- [ ] Flujo Analyzer → Strategist → Executor integrado sin fallos
-- [ ] Adaptadores IBKR y Alpaca procesan órdenes simuladas correctamente
-- [ ] Trade persistence y audit logs se generan correctamente
-- [ ] Todos los estados de orden (pending, submitted, filled, canceled) son manejados
-- [ ] Reporte de cobertura de integración generado
-- [ ] Tests ejecutan en CI sin fallos
-
-### Tareas Técnicas
-1. Configurar entorno de integración con mock brokers
-2. Crear pruebas de integración para `ExecutorAgent` y adaptadores
-3. Validar persistencia de órdenes y logs en Supabase
-4. Verificar state transitions completas
-5. Documentar escenarios de integración
-6. Ejecutar pruebas en CI pipeline
-
-### Criterios de Definición de Listo
-- Tests pasan en CI
-- Cobertura de integración documentada
-- PR aprobada
-
-### Recursos
-- Docs: Jest integration testing, Supabase integration patterns
-- Ejemplos: integration tests for backend workflows
-
----
-
-## T173: E2E Tests - Full Workflow Validation
-
-**Story Points**: 8  
-**Prioridad**: P0  
-**Asignado a**: Frontend + Backend  
-**Dependencias**: [T152, T153, T154, T157, T165]  
-**Semana**: W9  
-
-### Descripción
-Implementar pruebas end-to-end que cubran la experiencia completa del usuario desde la selección de estrategia hasta la confirmación de orden y visualización en el dashboard histórico.
-
-### Acceptance Criteria
-- [ ] Flujo de la UI al backend completo validado
-- [ ] Orden generada desde la interfaz aparece en el histórico
-- [ ] Mensajes de error y validación se muestran correctamente
-- [ ] Rendimiento básico en escenarios happy path y edge cases
-- [ ] Tests ejecutan en Playwright en CI
-
-### Tareas Técnicas
-1. Definir escenarios E2E principales
-2. Implementar scripts Playwright para el flujo completo
-3. Validar integración UI → API → persistence
-4. Verificar manejo de errores en UI
-5. Registrar resultados de E2E en CI
-6. Refinar tests según hallazgos
-
-### Criterios de Definición de Listo
-- E2E passing en CI
-- Escenarios documentados
-- PR aprobada
-
-### Recursos
-- Docs: Playwright E2E tests
-- Ejemplos: full-stack workflow tests
-
----
-
-## T174: API & Architecture Documentation
-
-**Story Points**: 5  
-**Prioridad**: P1  
-**Asignado a**: Lead + Backend 1  
-**Dependencias**: [T165, T166, T170]  
-**Semana**: W9  
-
-### Descripción
-Generar la documentación técnica necesaria para la API, la arquitectura del sistema y el runbook de despliegue. Incluye OpenAPI, ADRs, y guías de troubleshooting.
-
-### Acceptance Criteria
-- [ ] OpenAPI spec actualizada
-- [ ] ADRs de arquitectura completados
-- [ ] Runbook de despliegue listo
-- [ ] Troubleshooting guide para errores comunes
-- [ ] Documentación disponible en repo `/docs`
-
-### Tareas Técnicas
-1. Generar OpenAPI spec para endpoints clave
-2. Escribir ADRs de decisiones técnicas
-3. Crear runbook de despliegue y rollback
-4. Documentar configuración de Docker y env vars
-5. Crear guías de troubleshooting
-6. Revisar documentación en PR
-
-### Criterios de Definición de Listo
-- Docs revisadas y aprobadas
-- PR aprobada
-
-### Recursos
-- Docs: OpenAPI, ADR templates
-- Ejemplos: backend documentation patterns
-
----
-
 # DEPENDENCIAS Y FLUJO
 
 ```
 FASE 1 (W1):
-  ├─ T151: Setup Gemini + Langchain
-  ├─ T151B: Docker y Dev Containerization
+  ├─ T151: Setup Claude + Langchain
   └─ T157: Adaptadores Broker
 
 FASE 2 (W2-W3):
@@ -1081,11 +883,7 @@ FASE 5 (W7-W8):
   └─ T169: Tabla Histórico (depend: T165)
 
 FASE 6 (W9):
-  ├─ T170: Tests Completos (depend: T151-T169)
-  ├─ T171: Performance & Load Testing - 1000 órdenes/día (depend: T154, T157, T158, T163, T164, T170)
-  ├─ T172: Integration Tests - Broker Adapters & Persistence (depend: T154, T157, T163, T164)
-  ├─ T173: E2E Tests - Full Workflow Validation (depend: T152, T153, T154, T157, T165)
-  └─ T174: API & Architecture Documentation (depend: T165, T166, T170)
+  └─ T170: Tests Completos (depend: T151-T169)
 ```
 
 ---

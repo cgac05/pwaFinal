@@ -13,7 +13,6 @@ TEAM-07 (SixPackDevs) es responsable del **análisis de volatilidad con IA** y l
 
 **Decisiones de Arquitectura Confirmadas:**
 - 🤖 **Orquestación AI:** Secuencial con Coordinador Central (patrón A)
-- 🤖 **Proveedor IA:** Gemini SDK para análisis generativo y razonamiento dual
 - 📊 **Estrategias:** Straddle y Strangle con parametrización dinámica
 - 📈 **Indicadores:** RSI(14), MACD(12,26,9), Bollinger Bands(20,2), IV/HV ratio
 - 🏦 **Brokers:** IBKR (producción) + Alpaca (fallback)
@@ -332,7 +331,7 @@ interface AgentConfig {
   id: string;
   name: string;
   role: 'analyzer' | 'strategist' | 'executor';
-  model: 'gemini' | 'gemini-pro';
+  model: 'claude-opus' | 'claude-sonnet';
   systemPrompt: string;
   tools: Tool[];
   maxRetries: number;
