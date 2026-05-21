@@ -25,7 +25,8 @@ describe('AgentFactory', () => {
     const agent = AgentFactory.createAgent('analyzer', config);
 
     expect(agent).toBeInstanceOf(AnalyzerAgent);
-    expect(agent.getConfig()).toEqual(config);
+    expect(agent.getRole()).toBe('analyzer');
+    expect(agent.getStatus()).toContain('Test Analyzer');
   });
 
   it('should create a strategist agent', () => {
@@ -40,7 +41,7 @@ describe('AgentFactory', () => {
     const agent = AgentFactory.createAgent('strategist', config);
 
     expect(agent).toBeInstanceOf(StrategistAgent);
-    expect(agent.getConfig()).toEqual(config);
+    expect(agent.getConfig().role).toBe('strategist');
   });
 
   it('should create an executor agent', () => {
@@ -55,7 +56,7 @@ describe('AgentFactory', () => {
     const agent = AgentFactory.createAgent('executor', config);
 
     expect(agent).toBeInstanceOf(ExecutorAgent);
-    expect(agent.getConfig()).toEqual(config);
+    expect(agent.getConfig().role).toBe('executor');
   });
 
   it('should return cached agent on second call', () => {

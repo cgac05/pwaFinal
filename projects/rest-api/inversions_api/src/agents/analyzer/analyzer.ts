@@ -1,12 +1,19 @@
 /**
- * Analyzer Agent
- * Analyzes market data and technical indicators
+ * Analyzer Agent - Complete Implementation
+ * T152: Analyzer Agent Implementation
+ * 
+ * Receives market data OHLCV + calculates indicators
+ * Generates technical analysis via Claude API
+ * Latency target: <500ms per symbol
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { AgentConfig, MarketContext, AgentResponse } from '../types';
-import { logger } from '../utils/logger';
+import { AgentConfig, AgentResponse } from '../types/agentConfig';
+import { MarketContext, AnalysisResult } from '../types/marketData';
 import { retryWithBackoff } from '../utils/retry';
+import { logger } from '../utils/logger';
+import MarketDataFetcher from './marketDataFetcher';
+import TechnicalIndicatorsCalculator from './technicalIndicators';
 
 export class AnalyzerAgent {
   private config: AgentConfig;
@@ -20,103 +27,251 @@ export class AnalyzerAgent {
   }
 
   /**
-   * Analyze market data and return context
-   * @param marketContext Market data to analyze
-   * @returns Analysis result
+   * Main analysis method - fetches data, calculates indicators, calls Claude
+   * @param symbol Stock symbol (e.g., 'AAPL')
+   * @returns Analysis result with technical signals and Claude reasoning
    */
-  async analyze(marketContext: MarketContext): Promise<AgentResponse> {
-    try {
-      logger.info(`[${this.config.name}] Analyzing market: ${marketContext.symbol}`);
+  async analyze(symbol: string): Promise<AgentResponse> {
+    const startTime = Date.now();
+    logger.info(`[Analyzer] Starting analysis for ${symbol}`);
 
-      const analysis = await retryWithBackoff(
+    try {
+      return await retryWithBackoff(
         async () => {
-          const response = await this.client.messages.create({
+          // 1. Fetch market data (parallel calls for performance)
+          const marketContext = await MarketDataFetcher.fetchMarketContext(symbol);
+          logger.debug(`[Analyzer] Market context fetched for ${symbol}`);
+
+          // 2. Calculate technical indicators
+          const indicators = TechnicalIndicatorsCalculator.calculateIndicators(
+            marketContext.ohlcv1h,
+            marketContext.impliedVolatility,
+            marketContext.historicalVolatility20d
+          );
+          marketContext.indicators = indicators;
+          logger.debug(`[Analyzer] Indicators calculated for ${symbol}`);
+
+          // 3. Prepare analysis prompt for Claude
+          const analysisPrompt = this.buildAnalysisPrompt(marketContext);
+
+          // 4. Call Claude API
+          const message = await this.client.messages.create({
             model: this.config.model,
-            max_tokens: 1024,
-            temperature: this.config.temperature || 0.3,
+            max_tokens: 1500,
             system: this.config.systemPrompt,
             messages: [
               {
                 role: 'user',
-                content: `Analyze this market data and provide technical context:
-
-Symbol: ${marketContext.symbol}
-Current Price: $${marketContext.price}
-Bid/Ask: ${marketContext.bid} / ${marketContext.ask}
-Volume: ${marketContext.volume}
-Range Today: $${marketContext.low} - $${marketContext.high}
-
-Technical Indicators:
-- RSI(14): ${marketContext.rsi || 'N/A'}
-- MACD: ${marketContext.macd || 'N/A'}
-- Bollinger Bands: ${marketContext.bollingerLower || 'N/A'} - ${marketContext.bollingerUpper || 'N/A'}
-- IV: ${marketContext.iv || 'N/A'}%
-- HV: ${marketContext.hv || 'N/A'}%
-
-Provide analysis in JSON format with keys:
-- trend: "uptrend" | "downtrend" | "sideways"
-- strength: 0-100
-- volatility_state: "low" | "medium" | "high"
-- technical_signals: string
-- recommended_strategy_type: "straddle" | "strangle" | "none"
-- confidence: 0-1`,
+                content: analysisPrompt,
               },
             ],
           });
 
-          const content = response.content[0];
-          if (content.type !== 'text') {
-            throw new Error('Unexpected response type');
-          }
+          // 5. Parse and structure response
+          const claudeResponse =
+            message.content[0].type === 'text' ? message.content[0].text : '';
+          const analysisResult = this.parseAnalysisResponse(
+            marketContext,
+            claudeResponse
+          );
 
-          return this.parseAnalysisResponse(content.text);
+          const latency = Date.now() - startTime;
+          logger.info(
+            `[Analyzer] Analysis complete for ${symbol} in ${latency}ms`
+          );
+
+          return {
+            role: this.config.role,
+            status: 'success',
+            data: analysisResult,
+            timestamp: Date.now(),
+            latency,
+          };
         },
-        this.config.maxRetries || 3,
-        this.config.name
+        this.config.maxRetries,
+        this.config.id
+      );
+    } catch (error) {
+      logger.error(`[Analyzer] Error analyzing ${symbol}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Analyze multiple symbols in parallel (up to 30)
+   * @param symbols Array of stock symbols
+   * @returns Map of symbol to analysis result
+   */
+  async analyzeMultiple(
+    symbols: string[]
+  ): Promise<Map<string, AnalysisResult>> {
+    logger.info(`[Analyzer] Starting analysis for ${symbols.length} symbols`);
+
+    // Limit concurrency to prevent rate limits
+    const batchSize = Math.min(symbols.length, 10);
+    const results = new Map<string, AnalysisResult>();
+
+    for (let i = 0; i < symbols.length; i += batchSize) {
+      const batch = symbols.slice(i, i + batchSize);
+      const batchResults = await Promise.allSettled(
+        batch.map((symbol) => this.analyze(symbol))
       );
 
-      logger.info(`[${this.config.name}] Analysis complete for ${marketContext.symbol}`);
+      batchResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          const analysisData = result.value.data as AnalysisResult;
+          results.set(batch[index], analysisData);
+        } else {
+          logger.warn(`[Analyzer] Failed to analyze ${batch[index]}`);
+        }
+      });
+    }
+
+    logger.info(`[Analyzer] Analysis complete for ${results.size}/${symbols.length} symbols`);
+    return results;
+  }
+
+  /**
+   * Build detailed analysis prompt for Claude
+   * @param context Market data context
+   * @returns Formatted prompt string
+   */
+  private buildAnalysisPrompt(marketContext: MarketContext): string {
+    const lastPrice = marketContext.ohlcv1h[marketContext.ohlcv1h.length - 1].close;
+    const priceChange =
+      ((lastPrice - marketContext.ohlcv1h[0].close) /
+        marketContext.ohlcv1h[0].close) *
+      100;
+
+    return `
+You are an expert technical analysis AI. Analyze the following market data for ${marketContext.symbol}:
+
+**Current Market Data:**
+- Current Price: $${marketContext.currentPrice.toFixed(2)}
+- Bid/Ask: $${marketContext.bid.toFixed(2)} / $${marketContext.ask.toFixed(2)}
+- 24h Volume: ${(marketContext.volume24h / 1000000).toFixed(2)}M shares
+- Price Change (1h): ${priceChange.toFixed(2)}%
+
+**Technical Indicators:**
+- RSI(14): ${marketContext.indicators.rsi14.toFixed(2)} (0-30 oversold, 70-100 overbought)
+- MACD: ${marketContext.indicators.macd.macd.toFixed(4)} | Signal: ${marketContext.indicators.macd.signal.toFixed(4)} | Histogram: ${marketContext.indicators.macd.histogram.toFixed(4)}
+- Bollinger Bands: Upper $${marketContext.indicators.bollingerBands.upper.toFixed(2)} | Middle $${marketContext.indicators.bollingerBands.middle.toFixed(2)} | Lower $${marketContext.indicators.bollingerBands.lower.toFixed(2)}
+
+**Volatility Metrics:**
+- Implied Volatility: ${(marketContext.impliedVolatility * 100).toFixed(1)}%
+- Historical Volatility (20d): ${(marketContext.historicalVolatility20d * 100).toFixed(1)}%
+- IV/HV Ratio: ${marketContext.indicators.ivHvRatio.toFixed(2)}
+
+**Analysis Task:**
+1. Determine the current trend: BULLISH, BEARISH, or NEUTRAL
+2. Rate trend strength on 0-1 scale (0 = weak, 1 = strong)
+3. Classify volatility state: low, normal, high, or extreme
+4. Identify support and resistance levels
+5. Provide overall confidence (0-100) in the analysis
+6. Suggest action for volatility traders: STRADDLE, STRANGLE, or WAIT
+
+Respond in JSON format:
+{
+  "trend": "bullish|bearish|neutral",
+  "strength": 0.75,
+  "volatilityState": "high",
+  "support": 190.50,
+  "resistance": 200.00,
+  "confidence": 85,
+  "suggestedAction": "straddle",
+  "reasoning": "Clear reason based on indicators"
+}
+`;
+  }
+
+  /**
+   * Parse Claude's JSON response into AnalysisResult
+   * @param context Market context
+   * @param claudeResponse Raw text response from Claude
+   * @returns Structured AnalysisResult
+   */
+  private parseAnalysisResponse(
+    context: MarketContext,
+    claudeResponse: string
+  ): AnalysisResult {
+    try {
+      // Extract JSON from Claude response (may contain extra text)
+      const jsonMatch = claudeResponse.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in Claude response');
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
 
       return {
-        success: true,
-        data: analysis,
+        symbol: context.symbol,
         timestamp: Date.now(),
+        trend: parsed.trend || 'neutral',
+        strength: parsed.strength || 0.5,
+        volatilityState: parsed.volatilityState || 'normal',
+        technicalSignals: {
+          rsiSignal:
+            context.indicators.rsi14 < 30
+              ? 'oversold'
+              : context.indicators.rsi14 > 70
+                ? 'overbought'
+                : 'neutral',
+          macdSignal:
+            context.indicators.macd.histogram > 0
+              ? 'bullish_crossover'
+              : 'bearish_crossover',
+          bollingerSignal: 'middle',
+          ivHvSignal:
+            context.indicators.ivHvRatio < 0.8
+              ? 'low_iv'
+              : context.indicators.ivHvRatio > 1.2
+                ? 'high_iv'
+                : 'neutral',
+        },
+        confidence: (parsed.confidence || 50) / 100,
+        volatilityExpectation: parsed.volatilityExpectation || 0,
+        supportLevel: parsed.support || context.currentPrice * 0.95,
+        resistanceLevel: parsed.resistance || context.currentPrice * 1.05,
+        reasoning: parsed.reasoning || 'Analysis complete',
+        suggestedAction: parsed.suggestedAction || 'wait',
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`[${this.config.name}] Analysis failed: ${errorMessage}`);
-
+      logger.warn(`[Analyzer] Error parsing Claude response: ${error}`);
+      // Return default analysis if parsing fails
       return {
-        success: false,
-        error: errorMessage,
+        symbol: context.symbol,
         timestamp: Date.now(),
+        trend: 'neutral',
+        strength: 0.5,
+        volatilityState: 'normal',
+        technicalSignals: {
+          rsiSignal: 'neutral',
+          macdSignal: 'neutral',
+          bollingerSignal: 'middle',
+          ivHvSignal: 'neutral',
+        },
+        confidence: 0.3,
+        volatilityExpectation: 0,
+        supportLevel: context.currentPrice * 0.95,
+        resistanceLevel: context.currentPrice * 1.05,
+        reasoning: 'Default analysis - parsing error',
+        suggestedAction: 'wait',
       };
     }
   }
 
   /**
-   * Parse and validate analysis response
+   * Get agent status/configuration
    */
-  private parseAnalysisResponse(text: string): any {
-    try {
-      // Extract JSON from response (Claude sometimes adds markdown blocks)
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in response');
-      }
+  getStatus(): string {
+    return `Analyzer Agent "${this.config.name}" - Role: ${this.config.role}, Model: ${this.config.model}`;
+  }
 
-      const analysis = JSON.parse(jsonMatch[0]);
-
-      // Validate required fields
-      if (!analysis.trend || !analysis.strength === undefined || !analysis.volatility_state) {
-        throw new Error('Missing required fields in analysis');
-      }
-
-      return analysis;
-    } catch (error) {
-      logger.error(`Failed to parse analysis response: ${error}`);
-      throw error;
-    }
+  /**
+   * Get agent role
+   */
+  getRole(): string {
+    return this.config.role;
   }
 
   /**
@@ -124,12 +279,5 @@ Provide analysis in JSON format with keys:
    */
   getConfig(): AgentConfig {
     return this.config;
-  }
-
-  /**
-   * Get agent status
-   */
-  getStatus(): string {
-    return `${this.config.name} (${this.config.role}) - Ready`;
   }
 }
