@@ -1,56 +1,20 @@
 import { GoogleGenAI } from "@google/genai";
-import { PromptTemplate } from "langchain/prompts";
 import { getEnvironmentConfig } from "../../config/environment";
 import type { EnvironmentConfig } from "../../config/environment";
+import type {
+  AgentRole,
+  IAgentMessage,
+  IGeminiResponse,
+  IAgentOutput,
+  IGeminiStrategyAssessmentResponse,
+} from "../../types";
 
-export type AgentRole = "analyzer" | "strategist" | "executor";
-
-export interface GeminiAgentRequest {
-  role: AgentRole;
-  userPrompt: string;
-  context?: string;
-}
-
-export interface GeminiAgentResponse {
-  model: string;
-  text: string;
-  structured: unknown;
-  raw: unknown;
-  timestampUtc: string;
-}
-
-export interface IGeminiStrategyAssessmentResponse {
-  markdown: string; // full markdown response as returned by Gemini
-  strategies?: Array<{
-    strategy_id?: string;
-    name?: string;
-    symbol?: string;
-    viability?: "Alta" | "Media" | "Baja" | string;
-    strengths?: string[];
-    weaknesses?: string[];
-    action?: string;
-    justification?: string;
-  }>;
-  summary?: {
-    operate?: number;
-    pause?: number;
-    discard?: number;
-    bestRiskReward?: string;
-    highestRisk?: string;
-    observation?: string;
-  };
-}
+// Legacy aliases for backwards compatibility
+export type GeminiAgentRequest = IAgentMessage;
+export type GeminiAgentResponse = IGeminiResponse;
+export { IGeminiStrategyAssessmentResponse } from "../../types";
 
 export function createGeminiPrompt(role: AgentRole, userPrompt: string): string {
-  const prompt = new PromptTemplate({
-    template: `System Instructions:\n{systemInstructions}\n\nUser Input:\n{userPrompt}\n\nResponse Requirements:\n- Answer with a concise natural language analysis.
-- Include a valid JSON object under an "analysis" key.
-- Do not wrap JSON in markdown code fences.
-- If JSON cannot be produced, return {\"analysis\": {}} and explain why.
-- Keep the opinion summary short and specific.`,
-    inputVariables: ["systemInstructions", "userPrompt"],
-  });
-
   const systemInstructions =
     role === "analyzer"
       ? "You are a Gemini-powered market volatility analyzer. Produce both structured market insight and a short opinion summary."
@@ -58,7 +22,7 @@ export function createGeminiPrompt(role: AgentRole, userPrompt: string): string 
       ? "You are a Gemini-powered strategist. Generate a recommended options strategy with a clear rationale and a structured decision payload."
       : "You are a Gemini-powered executor advisor. Confirm execution readiness and describe any pre-trade checks required in structured form.";
 
-  return prompt.format({ systemInstructions, userPrompt });
+  return `System Instructions:\n${systemInstructions}\n\nUser Input:\n${userPrompt}\n\nResponse Requirements:\n- Answer with a concise natural language analysis.\n- Include a valid JSON object under an "analysis" key.\n- Do not wrap JSON in markdown code fences.\n- If JSON cannot be produced, return {"analysis": {}} and explain why.\n- Keep the opinion summary short and specific.`;
 }
 
 /**
@@ -155,7 +119,7 @@ export class GeminiAgentService {
     this.timeoutMs = config?.timeoutMs ?? 12000;
 
     if (config?.enabled && config.apiKey && config.apiKey.length > 0) {
-      this.ai = new GoogleGenAI({ apiKey: config.apiKey, timeout: this.timeoutMs });
+      this.ai = new GoogleGenAI({ apiKey: config.apiKey });
     } else {
       this.ai = null;
     }
@@ -172,16 +136,13 @@ export class GeminiAgentService {
 
     const response = await this.ai.models.generateContent({
       model,
-      contents: [prompt],
-      temperature: 0.25,
-      topP: 0.95,
-      maxOutputTokens: 1024,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
 
     return getResponseText(response);
   }
 
-  public async generateAgentResponse(request: GeminiAgentRequest): Promise<GeminiAgentResponse> {
+  public async generateAgentResponse(request: IAgentMessage): Promise<IGeminiResponse> {
     const prompt = createGeminiPrompt(request.role, request.userPrompt);
 
     try {

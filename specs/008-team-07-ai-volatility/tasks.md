@@ -19,7 +19,7 @@
 Configurar el SDK de Gemini y la infraestructura de orquestación de agentes para soportar salida dual: JSON estructurado y análisis/opinión textual. Incluye prompt base, retries, fallback y definición del contrato de mensajes entre agentes.
 
 ### Acceptance Criteria
- - [ ] Gemini SDK instalado y configurado en `projects/rest-api/inversions_api`
+ - [X] Gemini SDK instalado y configurado en `projects/rest-api/inversions_api`
  - [X] System prompts definidos para el flujo de agentes
  - [X] Salida dual de Gemini (JSON estructurado + texto) establecida
  - [X] Retries y fallback básico implementados

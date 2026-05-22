@@ -81,11 +81,9 @@ export class AnalyzerAgent {
           );
 
           return {
-            role: this.config.role,
-            status: 'success',
+            success: true,
             data: analysisResult,
             timestamp: Date.now(),
-            latency,
           };
         },
         this.config.maxRetries,

@@ -1,10 +1,15 @@
 import { Router, Request, Response } from "express";
 import { AgentFactory } from "../../modules/agents/agentFactory";
-import { AgentRole } from "../../modules/agents/geminiAgentService";
+import type { AgentRole } from "../../types";
 
 const router = Router();
 const geminiAgent = AgentFactory.createGeminiAgent();
 
+/**
+ * Test endpoint for Gemini agent
+ * POST /agents/gemini/test
+ * Body: { prompt: string, role?: "analyzer" | "strategist" | "executor" }
+ */
 router.post("/gemini/test", async (req: Request, res: Response) => {
   const rawPrompt = typeof req.body.prompt === "string" ? req.body.prompt.trim() : "Provide a concise market volatility opinion.";
   const roleValue = req.body.role as AgentRole | undefined;
@@ -38,6 +43,19 @@ router.post("/gemini/test", async (req: Request, res: Response) => {
       details: errorMessage,
     });
   }
+});
+
+/**
+ * Configuration status endpoint
+ * GET /agents/gemini/status
+ */
+router.get("/gemini/status", (req: Request, res: Response) => {
+  return res.status(200).json({
+    enabled: geminiAgent.isEnabled(),
+    message: geminiAgent.isEnabled()
+      ? "Gemini SDK is configured and ready"
+      : "Gemini SDK is not configured. Set GEMINI_API_KEY to enable.",
+  });
 });
 
 export default router;
