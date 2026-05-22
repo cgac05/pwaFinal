@@ -19,12 +19,12 @@
 Configurar el SDK de Gemini y la infraestructura de orquestación de agentes para soportar salida dual: JSON estructurado y análisis/opinión textual. Incluye prompt base, retries, fallback y definición del contrato de mensajes entre agentes.
 
 ### Acceptance Criteria
-- [ ] Gemini SDK instalado y configurado en `projects/rest-api/inversions_api`
-- [ ] System prompts definidos para el flujo de agentes
-- [ ] Salida dual de Gemini (JSON estructurado + texto) establecida
-- [ ] Retries y fallback básico implementados
-- [ ] Interfaz TypeScript de mensajes de agente creada
-- [ ] Tests unitarios para la inicialización del servicio Gemini
+ - [ ] Gemini SDK instalado y configurado en `projects/rest-api/inversions_api`
+ - [X] System prompts definidos para el flujo de agentes
+ - [X] Salida dual de Gemini (JSON estructurado + texto) establecida
+ - [X] Retries y fallback básico implementados
+ - [X] Interfaz TypeScript de mensajes de agente creada
+ - [X] Tests unitarios para la inicialización del servicio Gemini
 
 ### Tareas Técnicas
 1. Instalar Gemini SDK y dependencias necesarias
@@ -161,12 +161,12 @@ Diseñar y exponer el historial auditable de operaciones junto con endpoints API
 Implementar el servicio y endpoint que reciben la tabla CSV como string, construyen el prompt exacto de Gemini y retornan el mensaje final en el formato Markdown especificado.
 
 ### Acceptance Criteria
-- [ ] El servicio recibe la tabla en formato string y la inserta en el prompt requerido
-- [ ] El prompt exacto incluye la instrucción de columnas y el bloque `--- INICIO DE TABLA ---`
-- [ ] La respuesta de Gemini retorna como string y puede mapearse a la interfaz `IGeminiStrategyAssessmentResponse`
-- [ ] La salida esperada coincide con el ejemplo de formato Markdown solicitado
-- [ ] Tests unitarios de concatenación del prompt y respuesta retornada incluidos
-- [ ] Endpoint integrado y documentado
+ - [ ] El servicio recibe la tabla en formato string y la inserta en el prompt requerido
+ - [X] El prompt exacto incluye la instrucción de columnas y el bloque `--- INICIO DE TABLA ---`
+ - [ ] La respuesta de Gemini retorna como string y puede mapearse a la interfaz `IGeminiStrategyAssessmentResponse`
+ - [ ] La salida esperada coincide con el ejemplo de formato Markdown solicitado
+ - [X] Tests unitarios de concatenación del prompt y respuesta retornada incluidos
+ - [ ] Endpoint integrado y documentado
 
 ### Tareas Técnicas
 1. Definir la interfaz de entrada para el CSV string

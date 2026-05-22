@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetEnvironment } from "../../../src/config/environment";
-import { createGeminiPrompt, GeminiAgentService } from "../../../src/modules/agents/geminiAgentService";
+import { createGeminiPrompt, createGeminiCSVPrompt, GeminiAgentService } from "../../../src/modules/agents/geminiAgentService";
 
 describe("GeminiAgentService", () => {
   beforeEach(() => {
@@ -16,6 +16,21 @@ describe("GeminiAgentService", () => {
     expect(prompt).toContain("strategist");
     expect(prompt).toContain("Recommend a short volatility strategy.");
     expect(prompt).toContain("valid JSON object");
+  });
+
+  it("builds a CSV prompt with table markers and instructions", () => {
+    const csv = `strategy_id,name,symbol\n1,MeanReversion,AAPL`;
+    const prompt = createGeminiPrompt("strategist", "placeholder");
+    // ensure the general prompt builder still includes system role text
+    expect(prompt).toContain("strategist");
+
+    // Now test the CSV-specific prompt generator
+    const csvPrompt = createGeminiCSVPrompt(csv);
+    expect(csvPrompt).toContain("strategy_id, name, symbol");
+    expect(csvPrompt).toContain("--- INICIO DE TABLA ---");
+    expect(csvPrompt).toContain("--- FIN DE TABLA ---");
+    expect(csvPrompt).toContain(csv);
+    expect(csvPrompt).toContain("Por favor responda únicamente en Markdown");
   });
 
   it("fails gracefully when Gemini is not configured", async () => {

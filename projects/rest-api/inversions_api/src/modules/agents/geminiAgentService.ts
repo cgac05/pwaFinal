@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { PromptTemplate } from "langchain/prompts";
 import { getEnvironmentConfig } from "../../config/environment";
+import type { EnvironmentConfig } from "../../config/environment";
 
 export type AgentRole = "analyzer" | "strategist" | "executor";
 
@@ -16,6 +17,28 @@ export interface GeminiAgentResponse {
   structured: unknown;
   raw: unknown;
   timestampUtc: string;
+}
+
+export interface IGeminiStrategyAssessmentResponse {
+  markdown: string; // full markdown response as returned by Gemini
+  strategies?: Array<{
+    strategy_id?: string;
+    name?: string;
+    symbol?: string;
+    viability?: "Alta" | "Media" | "Baja" | string;
+    strengths?: string[];
+    weaknesses?: string[];
+    action?: string;
+    justification?: string;
+  }>;
+  summary?: {
+    operate?: number;
+    pause?: number;
+    discard?: number;
+    bestRiskReward?: string;
+    highestRisk?: string;
+    observation?: string;
+  };
 }
 
 export function createGeminiPrompt(role: AgentRole, userPrompt: string): string {
@@ -36,6 +59,19 @@ export function createGeminiPrompt(role: AgentRole, userPrompt: string): string 
       : "You are a Gemini-powered executor advisor. Confirm execution readiness and describe any pre-trade checks required in structured form.";
 
   return prompt.format({ systemInstructions, userPrompt });
+}
+
+/**
+ * Build the exact CSV prompt required by the T151 task.
+ * Inserts the provided table string inside the required template block.
+ */
+export function createGeminiCSVPrompt(tableString: string): string {
+  const header =
+    "A continuación se presentan las estrategias de trading activas. La tabla está en formato CSV con los siguientes campos:\nstrategy_id, name, symbol, asset_type, timeframe, direction, indicators, entry_conditions, stop_loss_pct, take_profit_pct, risk_reward_ratio, win_rate_pct, max_drawdown_pct, total_trades\n\n";
+
+  const instructions = `Para cada estrategia, proporciona:\n\n1. VIABILIDAD: Alta / Media / Baja\n2. FORTALEZAS: máximo 2 puntos concretos\n3. DEBILIDADES: máximo 2 puntos concretos\n4. ACCIÓN RECOMENDADA: Operar / Pausar / Descartar\n5. JUSTIFICACIÓN: 2-3 líneas explicando la recomendación\n\nAl final, incluye un RESUMEN GLOBAL con:\n- Número de estrategias por acción recomendada\n- La estrategia con mejor relación riesgo/beneficio\n- La estrategia con mayor riesgo\n- Una observación general del portafolio de estrategias\n\nLa salida esperada de Gemini debe estar en el siguiente formato Markdown:\n\n## Estrategia: {{name}} ({{symbol}})\n\n- Viabilidad: Alta\n- Fortalezas: ...\n- Debilidades: ...\n- Acción recomendada: Operar\n- Justificación: ...\n\n---\n\n## Resumen global\n\n- Operar: X | Pausar: Y | Descartar: Z\n- Mejor riesgo/beneficio: name — ratio N.N\n- Mayor riesgo: name — drawdown N.N%\n- Observación: ...\n\nPor favor responda únicamente en Markdown siguiendo estrictamente el formato anterior.`;
+
+  return `${header}--- INICIO DE TABLA ---\n${tableString}\n--- FIN DE TABLA ---\n\n${instructions}`;
 }
 
 function getResponseText(response: unknown): string {
@@ -101,12 +137,24 @@ export class GeminiAgentService {
   private readonly timeoutMs: number;
 
   constructor() {
-    const config = getEnvironmentConfig().gemini;
+    let config: EnvironmentConfig["gemini"] | undefined;
+    try {
+      const env = getEnvironmentConfig();
+      config = env.gemini;
+    } catch (err) {
+      // Environment not initialized — treat Gemini as not configured for tests
+      this.ai = null;
+      this.primaryModel = "gemini-2.5-flash";
+      this.fallbackModel = "gemini-2.0-pro";
+      this.timeoutMs = 12000;
+      return;
+    }
+
     this.primaryModel = config?.model ?? "gemini-2.5-flash";
     this.fallbackModel = config?.fallbackModel ?? "gemini-2.0-pro";
     this.timeoutMs = config?.timeoutMs ?? 12000;
 
-    if (config?.enabled && config.apiKey.length > 0) {
+    if (config?.enabled && config.apiKey && config.apiKey.length > 0) {
       this.ai = new GoogleGenAI({ apiKey: config.apiKey, timeout: this.timeoutMs });
     } else {
       this.ai = null;
