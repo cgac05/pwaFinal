@@ -3,7 +3,7 @@ import path from "node:path";
 import {
   AvailabilityDashboard,
   AvailabilitySloService
-} from "../observability/availabilitySlo";
+} from "../observability/availabilitySlo.js";
 
 export interface MonthlyAvailabilityReportResult {
   reportPath: string;

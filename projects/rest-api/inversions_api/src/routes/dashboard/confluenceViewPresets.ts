@@ -2,8 +2,8 @@
 // FIC: Rutas CRUD de presets de vista de confluencia para vistas guardadas por usuario/rol
 
 import { Router, Request, Response } from "express";
-import { authContextMiddleware } from "../../middleware/authContext";
-import { createAuthenticatedClient } from "../../database/supabase/client";
+import { authContextMiddleware } from "../../middleware/authContext.js";
+import { createAuthenticatedClient } from "../../database/supabase/client.js";
 
 const router = Router();
 

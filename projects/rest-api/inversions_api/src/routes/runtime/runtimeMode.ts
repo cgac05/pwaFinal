@@ -2,8 +2,8 @@
 // FIC: Rutas de modo runtime para conmutar ONLINE/OFFLINE y DEMO/REAL.
 
 import { Router } from "express";
-import { authContextMiddleware } from "../../middleware/authContext";
-import { getRuntimeMode, setRuntimeMode } from "../../modules/runtime/runtimeModeStore";
+import { authContextMiddleware } from "../../middleware/authContext.js";
+import { getRuntimeMode, setRuntimeMode } from "../../modules/runtime/runtimeModeStore.js";
 
 export const runtimeModeRouter = Router();
 

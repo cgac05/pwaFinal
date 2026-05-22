@@ -13,10 +13,10 @@
  * Mapeo: FR-004, FR-005, FR-009, PL-001, PL-010
  */
 
-import { BrokerAdapterRegistry } from "../brokers/brokerAdapter";
-import { IBKRAdapter } from "../brokers/ibkrAdapter";
-import { AlpacaAdapter } from "../brokers/alpacaAdapter";
-import { BrokerIntegrationService } from "../brokers/brokerIntegration";
+import { BrokerAdapterRegistry } from "../brokers/brokerAdapter.js";
+import { IBKRAdapter } from "../brokers/ibkrAdapter.js";
+import { AlpacaAdapter } from "../brokers/alpacaAdapter.js";
+import { BrokerIntegrationService } from "../brokers/brokerIntegration.js";
 
 export type ProposalState = 
   | 'PENDING_APPROVAL'

@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { authContextMiddleware } from "../../middleware/authContext";
+import { authContextMiddleware } from "../../middleware/authContext.js";
 import {
   buildDashboardConfluencePayload,
   type SourceVerdict
-} from "../../modules/signals/confluenceEngine";
-import { sourceConfigRegistry } from "../../modules/signals/sourceConfig";
+} from "../../modules/signals/confluenceEngine.js";
+import { sourceConfigRegistry } from "../../modules/signals/sourceConfig.js";
 
 interface DashboardQuery {
   instruments?: string;

@@ -1,5 +1,5 @@
-import type { IBrokerAdapter, NormalizedOrderResponse } from "./brokerAdapter";
-import { BrokerAdapterRegistry } from "./brokerAdapter";
+import type { IBrokerAdapter, NormalizedOrderResponse } from "./brokerAdapter.js";
+import { BrokerAdapterRegistry } from "./brokerAdapter.js";
 
 export interface BrokerOrderPayload {
   broker: "IBKR" | "ALPACA";

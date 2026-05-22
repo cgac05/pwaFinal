@@ -2,7 +2,7 @@
 // FIC: Servicio de watchlist con CRUD por usuario y fallback local.
 
 import { randomUUID } from "crypto";
-import { supabaseClient } from "../../database/supabase/client";
+import { supabaseClient } from "../../database/supabase/client.js";
 
 export interface WatchlistItem {
   id: string;

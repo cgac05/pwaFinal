@@ -258,26 +258,3 @@ No los descarta ni los reinterpreta — los optimiza con su lógica SDD.
 9. `speckit.specify` → `speckit.plan` → `speckit.tasks` → `speckit.implement`
 
 ### Multi-Team
-
-1. `/diana.change ...`
-2. `/diana.integrate action="bootstrap" engine="speckit" orchestration="manual" topology="multi_team"`
-3. `/diana.constitution action="generate"`
-4. `/diana.teams action="topology"` — aplicar topology=multi_team desde integration-profile.md y definir equipos + scope_primario.md
-5. `/diana.skills action="validate"`
-6. `/diana.knowledge`
-7. `/diana.specify` → genera teams/TEAM-XX/spec.md por equipo
-8. `/diana.plan` → genera teams/TEAM-XX/plan.md por equipo
-9. `/diana.tasks` → genera teams/TEAM-XX/tasks.md por equipo
-10. `/diana.teams action="generate"` → roster + allocation + bootstrap
-11. `/diana.integrate action="all" engine="speckit"` → ejecuta speckit completo por equipo
-
-Regla incremental multi-team:
-- Si no se especifica `team` en `/diana.specify`, `/diana.plan` o `/diana.tasks`, solo se generan los equipos pendientes.
-- Los archivos globales `001-inv-spec.md`, `001-inv-plan.md` y `001-inv-tasks.md` no son obligatorios para completar el flujo multi-team.
-
-## Notas de agente (Diana)
-
-Roles conceptuales durante esta accion:
-- BULMA: engine-architect
-- VEGETA: canon-reviewer
-- KRILIN: handoff-readiness

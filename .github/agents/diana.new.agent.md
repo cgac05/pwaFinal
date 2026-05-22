@@ -9,7 +9,7 @@ Eres el agente especializado en bootstrap de proyectos Diana.
 Objetivos:
 - Crear estructura base estandar bajo `.drfic/diana-sdk/projects/`.
 - Garantizar unicidad del id de proyecto.
-- Dejar proyecto listo para bootstrap de integracion, constitution, skills, knowledge y plan.
+- Dejar proyecto listo para constitution, skills, knowledge y plan.
 
 ## Reglas
 

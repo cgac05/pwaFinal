@@ -128,39 +128,6 @@ const ENVIRONMENT_REQUIREMENTS: EnvironmentRequirement[] = [
     example: "true",
   },
 
-  // FIC: Gemini AI configuration (Optional)
-  {
-    name: "GEMINI_API_KEY",
-    required: false,
-    validator: (value) => value.length > 20,
-    description: "Gemini API key for Google GenAI SDK",
-    example: "AIzaSy...",
-  },
-  {
-    name: "GEMINI_MODEL",
-    required: false,
-    validator: /.+/,
-    description: "Gemini model name to use for agent orchestration",
-    example: "gemini-2.5-flash",
-  },
-  {
-    name: "GEMINI_FALLBACK_MODEL",
-    required: false,
-    validator: /.+/,
-    description: "Fallback Gemini model name when primary model fails",
-    example: "gemini-2.0-pro",
-  },
-  {
-    name: "GEMINI_TIMEOUT_MS",
-    required: false,
-    validator: (value) => {
-      const ms = parseInt(value, 10);
-      return !Number.isNaN(ms) && ms > 0 && ms < 60000;
-    },
-    description: "Gemini request timeout in milliseconds",
-    example: "12000",
-  },
-
   // FIC: Broker integration (Optional, but required for execution features)
   {
     name: "IBKR_ACCOUNT_ID",
@@ -274,14 +241,6 @@ export function validateEnvironment(): ValidationResult {
     warnings.push({
       variable: "BROKER_CONFIG",
       reason: "No broker configuration detected. Broker execution will be unavailable. No se detectó configuración de broker. La ejecución del broker no estará disponible.",
-    });
-  }
-
-  const geminiKey = resolveEnvironmentValue("GEMINI_API_KEY");
-  if (!geminiKey) {
-    warnings.push({
-      variable: "GEMINI_API_KEY",
-      reason: "No Gemini API key configured. Gemini-powered AI agents will be unavailable.",
     });
   }
 

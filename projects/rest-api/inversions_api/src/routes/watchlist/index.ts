@@ -2,8 +2,8 @@
 // FIC: Rutas CRUD de watchlist para instrumentos de mercado por usuario.
 
 import { Router } from "express";
-import { authContextMiddleware } from "../../middleware/authContext";
-import { WatchlistService } from "../../modules/watchlist/watchlistService";
+import { authContextMiddleware } from "../../middleware/authContext.js";
+import { WatchlistService } from "../../modules/watchlist/watchlistService.js";
 
 const service = new WatchlistService();
 

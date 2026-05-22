@@ -15,6 +15,5 @@ Objetivos:
 
 1. Aplicar defaults de scope, project e initiative.
 2. Cargar primero skills y knowledge requeridos por la etapa de planificacion.
-3. Usar como base la template core `.drfic/diana-sdk/sdk/diana/templates/initiative-plan.md` en generate y regenerate.
-4. En validate, reportar OK/GAPS con acciones concretas.
-5. En regenerate, comparar y reportar cambios significativos frente a la version previa.
+3. En validate, reportar OK/GAPS con acciones concretas.
+4. En regenerate, comparar y reportar cambios significativos frente a la version previa.

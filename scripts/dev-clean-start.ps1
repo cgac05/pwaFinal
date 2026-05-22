@@ -1,6 +1,6 @@
 ﻿Param(
   [int[]]$PortsToClean = @(3000, 5173, 5174, 5175),
-  [bool]$StreamLogs = $false
+  [switch]$StreamLogs
 )
 
 $ErrorActionPreference = "Stop"
@@ -121,8 +121,8 @@ if ($StreamLogs) {
   Write-Host "StreamLogs=false: services start in background and only write logs to disk."
 }
 
-$backendCommand = "cd /d $backendDir && npx ts-node src/index.ts"
-$frontendCommand = "pwsh -NoProfile -File scripts/dev-frontend-wait-backend.ps1"
+$backendCommand = "cd /d $backendDir && npm run dev"
+$frontendCommand = "powershell -NoProfile -File scripts/dev-frontend-wait-backend.ps1"
 
 if ($StreamLogs) {
   $concurrentlyArgs = @(
@@ -140,7 +140,7 @@ if ($StreamLogs) {
   exit $LASTEXITCODE
 }
 
-$backendProcess = Start-DetachedProcess -WorkingDirectory $backendDir -Command "npx ts-node src/index.ts" -StdOutPath $backendOutLog -StdErrPath $backendErrLog
+$backendProcess = Start-DetachedProcess -WorkingDirectory $backendDir -Command "npm run dev" -StdOutPath $backendOutLog -StdErrPath $backendErrLog
 
 if (-not (Wait-BackendHealth)) {
   Write-Error "Backend health did not become ready. Revisa $backendOutLog y $backendErrLog"
@@ -151,7 +151,7 @@ if (-not (Wait-BackendHealth)) {
   exit 1
 }
 
-$frontendProcess = Start-DetachedProcess -WorkingDirectory $repoRoot -Command "pwsh -NoProfile -File scripts/dev-frontend-wait-backend.ps1" -StdOutPath $frontendOutLog -StdErrPath $frontendErrLog
+$frontendProcess = Start-DetachedProcess -WorkingDirectory $repoRoot -Command "powershell -NoProfile -File scripts/dev-frontend-wait-backend.ps1" -StdOutPath $frontendOutLog -StdErrPath $frontendErrLog
 
 Write-Host ""
 Write-Host "Started in background:"

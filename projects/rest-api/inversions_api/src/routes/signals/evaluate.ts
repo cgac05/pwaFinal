@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
-import { authContextMiddleware } from "../../middleware/authContext";
-import { buildExplainability } from "../../modules/signals/explainability";
-import { evaluateConfluence, type SourceVerdict } from "../../modules/signals/confluenceEngine";
-import { emitSignalGenerated } from "../../modules/signals/signalAudit";
-import { sourceConfigRegistry } from "../../modules/signals/sourceConfig";
+import { authContextMiddleware } from "../../middleware/authContext.js";
+import { buildExplainability } from "../../modules/signals/explainability.js";
+import { evaluateConfluence, type SourceVerdict } from "../../modules/signals/confluenceEngine.js";
+import { emitSignalGenerated } from "../../modules/signals/signalAudit.js";
+import { sourceConfigRegistry } from "../../modules/signals/sourceConfig.js";
 
 interface EvaluateRequestBody {
   instrument: string;

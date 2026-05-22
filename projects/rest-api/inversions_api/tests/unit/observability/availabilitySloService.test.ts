@@ -35,7 +35,7 @@ describe("availabilitySlo service", () => {
   it("builds current-month dashboard from reference date", () => {
     const service = new AvailabilitySloService();
     service.recordSample({
-      dependency: "GEMINI",
+      dependency: "CLAUDE",
       success: true,
       latencyMs: 80,
       timestampUtc: "2026-06-01T00:00:00.000Z"

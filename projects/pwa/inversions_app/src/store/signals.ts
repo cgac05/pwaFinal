@@ -2,6 +2,7 @@
 // FIC: Store global ligero para seleccion de senales y modos runtime del dashboard.
 
 import { useSyncExternalStore } from "react";
+import type { DashboardOrchestratorResponse } from "../services/signals/signalApi";
 
 export interface SelectedInstrument {
   symbol: string;
@@ -23,6 +24,7 @@ type OperationalMode = "demo" | "real";
 interface SignalStoreState {
   selectedInstrument?: SelectedInstrument;
   selectedSignal?: SelectedSignal;
+  dashboardSnapshot?: DashboardOrchestratorResponse;
   runtimeMode: RuntimeMode;
   operationalMode: OperationalMode;
 }
@@ -44,6 +46,7 @@ const initialOperationalMode =
 const state: SignalStoreState = {
   selectedInstrument: undefined,
   selectedSignal: undefined,
+  dashboardSnapshot: undefined,
   runtimeMode: initialRuntimeMode,
   operationalMode: initialOperationalMode
 };
@@ -76,6 +79,10 @@ export function useSignalStore() {
       state.selectedSignal = signal;
       emit();
     },
+    setDashboardSnapshot: (snapshot?: DashboardOrchestratorResponse | null) => {
+      state.dashboardSnapshot = snapshot ?? undefined;
+      emit();
+    },
     setRuntimeMode: (mode: RuntimeMode) => {
       state.runtimeMode = mode;
       if (typeof window !== "undefined") {
@@ -91,4 +98,13 @@ export function useSignalStore() {
       emit();
     }
   };
+}
+
+export function resetSignalStore() {
+  state.selectedInstrument = undefined;
+  state.selectedSignal = undefined;
+  state.dashboardSnapshot = undefined;
+  state.runtimeMode = initialRuntimeMode;
+  state.operationalMode = initialOperationalMode;
+  emit();
 }

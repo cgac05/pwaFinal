@@ -27,7 +27,7 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { ExecutionService, Proposal, ExecutionRequest } from '../../modules/execution/executionService';
+import { ExecutionService, Proposal, ExecutionRequest } from '../../modules/execution/executionService.js';
 
 /**
  * Tipos para request/response del endpoint

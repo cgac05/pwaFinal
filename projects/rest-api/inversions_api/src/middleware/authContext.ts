@@ -16,7 +16,7 @@
 
 import type { NextFunction, Request, Response } from "express";
 import { verify } from "jsonwebtoken";
-import { getEnvironmentConfig } from "../config/environment";
+import { getEnvironmentConfig } from "../config/environment.js";
 
 export type UserRole = "viewer" | "trader" | "admin" | "service_role";
 

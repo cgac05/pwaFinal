@@ -16,8 +16,8 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { ApprovalService, ApprovalRequest, MFAContext } from '../../modules/execution/approvalService';
-import { ExecutionAuditService } from '../../modules/execution/executionAudit';
+import { ApprovalService, ApprovalRequest, MFAContext } from '../../modules/execution/approvalService.js';
+import { ExecutionAuditService } from '../../modules/execution/executionAudit.js';
 
 /**
  * Tipos para request/response del endpoint

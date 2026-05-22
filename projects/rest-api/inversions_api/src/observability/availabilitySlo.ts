@@ -1,4 +1,4 @@
-export type DependencyName = "IBKR" | "ALPACA" | "MARKET_DATA" | "GEMINI";
+export type DependencyName = "IBKR" | "ALPACA" | "MARKET_DATA" | "CLAUDE";
 
 export interface AvailabilitySample {
   dependency: DependencyName;
@@ -70,7 +70,7 @@ const DEFAULT_TARGETS: DependencySloTarget[] = [
   { dependency: "IBKR", monthlyAvailabilityTargetPercent: 99.5 },
   { dependency: "ALPACA", monthlyAvailabilityTargetPercent: 99.5 },
   { dependency: "MARKET_DATA", monthlyAvailabilityTargetPercent: 99.0 },
-  { dependency: "GEMINI", monthlyAvailabilityTargetPercent: 99.0 }
+  { dependency: "CLAUDE", monthlyAvailabilityTargetPercent: 99.0 }
 ];
 
 function pad2(value: number): string {
@@ -108,7 +108,7 @@ export class AvailabilitySloService {
       IBKR: targets.find((item) => item.dependency === "IBKR")?.monthlyAvailabilityTargetPercent ?? 99.5,
       ALPACA: targets.find((item) => item.dependency === "ALPACA")?.monthlyAvailabilityTargetPercent ?? 99.5,
       MARKET_DATA: targets.find((item) => item.dependency === "MARKET_DATA")?.monthlyAvailabilityTargetPercent ?? 99.0,
-      GEMINI: targets.find((item) => item.dependency === "GEMINI")?.monthlyAvailabilityTargetPercent ?? 99.0
+      CLAUDE: targets.find((item) => item.dependency === "CLAUDE")?.monthlyAvailabilityTargetPercent ?? 99.0
     };
   }
 
@@ -130,7 +130,7 @@ export class AvailabilitySloService {
     const monthKey = `${year}-${pad2(month)}`;
     const monthlySamples = this.samples.filter((item) => toMonthKeyFromIso(item.timestampUtc) === monthKey);
 
-    const dependencyList: DependencyName[] = ["IBKR", "ALPACA", "MARKET_DATA", "GEMINI"];
+    const dependencyList: DependencyName[] = ["IBKR", "ALPACA", "MARKET_DATA", "CLAUDE"];
 
     const dependencies: DependencyAvailabilitySummary[] = dependencyList.map(
       (dependency) => this.computeDependencySummary(dependency, monthlySamples)

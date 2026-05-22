@@ -1,4 +1,4 @@
-import { MfaCoverageAuditService } from "./mfaCoverageAudit";
+import { MfaCoverageAuditService } from "./mfaCoverageAudit.js";
 
 export interface MfaCoverageReport {
   generatedAtUtc: string;

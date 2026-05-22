@@ -29,8 +29,8 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { AuditHistoryService, AuditHistoryFilters, PaginationParams } from '../../modules/audit/historyService';
-import { HistoryMetricsService } from '../../observability/historyMetrics';
+import { AuditHistoryService, AuditHistoryFilters, PaginationParams } from '../../modules/audit/historyService.js';
+import { HistoryMetricsService } from '../../observability/historyMetrics.js';
 
 export function createAuditHistoryRouter(historyService: AuditHistoryService): Router {
   const router = Router();

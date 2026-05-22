@@ -2,7 +2,7 @@
 // FIC: Endpoint de capacidades de broker para selector dinamico de temporalidad.
 
 import { Router } from "express";
-import { supabaseClient } from "../../database/supabase/client";
+import { supabaseClient } from "../../database/supabase/client.js";
 
 export const brokerCapabilitiesRouter = Router();
 

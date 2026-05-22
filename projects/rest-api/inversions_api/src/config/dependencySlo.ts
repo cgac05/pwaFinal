@@ -1,5 +1,5 @@
 export interface DependencySlo {
-  name: "IBKR" | "ALPACA" | "MARKET_DATA" | "GEMINI";
+  name: "IBKR" | "ALPACA" | "MARKET_DATA" | "CLAUDE";
   availabilityTarget: number;
   timeoutMs: number;
   retries: number;
@@ -29,7 +29,7 @@ export const dependencySloPolicies: DependencySlo[] = [
     degradedMode: "marcar DATA_STALE y pausar nuevas senales"
   },
   {
-    name: "GEMINI",
+    name: "CLAUDE",
     availabilityTarget: 99,
     timeoutMs: 8000,
     retries: 1,

@@ -22,7 +22,7 @@ import {
   OrderState,
   NormalizedOrderResponse,
   NormalizedBrokerError,
-} from './brokerAdapter';
+} from './brokerAdapter.js';
 
 /**
  * Tipos nativos de Alpaca (simplificados para ejemplo)

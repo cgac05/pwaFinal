@@ -42,7 +42,7 @@ export function MainDashboard() {
   const [payload, setPayload] = useState<DashboardOrchestratorResponse | null>(null);
   const [selectedSignal, setSelectedSignal] = useState<DashboardSignalCard | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const { selectedInstrument } = useSignalStore();
+  const { selectedInstrument, setDashboardSnapshot } = useSignalStore();
 
   const selectedSymbol = selectedInstrument?.symbol ?? payload?.cards[0]?.instrument ?? "SPY";
 
@@ -59,6 +59,7 @@ export function MainDashboard() {
       });
 
       setPayload(response);
+      setDashboardSnapshot(response);
       setSelectedSignal(response.cards[0] ?? null);
       setLastUpdated(new Date());
     } catch (err) {

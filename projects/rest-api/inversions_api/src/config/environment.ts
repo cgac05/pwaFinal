@@ -68,15 +68,6 @@ export interface EnvironmentConfig {
     enabled: boolean;
   };
 
-  // FIC: Gemini AI configuration (optional)
-  gemini?: {
-    apiKey: string;
-    model: string;
-    fallbackModel: string;
-    timeoutMs: number;
-    enabled: boolean;
-  };
-
   // FIC: Broker integration configuration (optional)
   // FIC: Configuración de integración de broker (opcional)
   brokers: {
@@ -163,17 +154,6 @@ export function initializeEnvironment(): EnvironmentConfig {
     tracing: {
       enabled: process.env.TRACE_ENABLED === "true",
     },
-
-    // Gemini AI
-    ...(process.env.GEMINI_API_KEY && {
-      gemini: {
-        apiKey: process.env.GEMINI_API_KEY,
-        model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
-        fallbackModel: process.env.GEMINI_FALLBACK_MODEL || "gemini-2.0-pro",
-        timeoutMs: parseInt(process.env.GEMINI_TIMEOUT_MS || "12000", 10),
-        enabled: true,
-      },
-    }),
 
     // Brokers
     brokers: {
