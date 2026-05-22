@@ -54,12 +54,12 @@ Configurar el SDK de Gemini y la infraestructura de orquestación de agentes par
 Construir la cadena de agentes que reciba inputs de mercado y estrategias, seleccione la mejor acción y prepare órdenes. El pipeline debe ser auditable y compatible con la aprobación humana antes de ejecución real.
 
 ### Acceptance Criteria
-- [ ] Analyzer genera un resumen técnico desde datos de entrada
-- [ ] Strategist selecciona una estrategia óptima (Straddle/Strangle) y calcula parámetros clave
-- [ ] Executor prepara órdenes y valida condiciones pre-trade
-- [ ] Cada paso genera metadatos para auditoría
-- [ ] El flujo puede detenerse con un gate de aprobación humana antes de ejecutar órdenes reales
-- [ ] Tests de integración del flujo de agentes disponibles
+ - [X] Analyzer genera un resumen técnico desde datos de entrada
+ - [X] Strategist selecciona una estrategia óptima (Straddle/Strangle) y calcula parámetros clave
+ - [X] Executor prepara órdenes y valida condiciones pre-trade
+ - [X] Cada paso genera metadatos para auditoría
+ - [X] El flujo puede detenerse con un gate de aprobación humana antes de ejecutar órdenes reales
+ - [X] Tests de integración del flujo de agentes disponibles
 
 ### Tareas Técnicas
 1. Implementar `AnalyzerAgent` que procesa datos de mercado y genera contexto técnico
@@ -90,12 +90,12 @@ Construir la cadena de agentes que reciba inputs de mercado y estrategias, selec
 Implementar adaptadores de brokers IBKR y Alpaca, con fallback automático, y conectar el Executor al flujo de ordenes. Incluir confirmación de ejecución y manejo de rechazos.
 
 ### Acceptance Criteria
-- [ ] Adaptadores IBKR y Alpaca implementados
-- [ ] El executor puede enviar órdenes a brokers y recibir confirmación
-- [ ] Fallback automático entre brokers funciona
-- [ ] Order state machine soporta estados `pending`, `submitted`, `filled`, `canceled`
-- [ ] Rechazos de orden son manejados y auditados
-- [ ] Tests de broker integration con simulación de fallos disponibles
+ - [X] Adaptadores IBKR y Alpaca implementados
+ - [X] El executor puede enviar órdenes a brokers y recibir confirmación
+ - [X] Fallback automático entre brokers funciona
+ - [X] Order state machine soporta estados `pending`, `submitted`, `filled`, `canceled`
+ - [X] Rechazos de orden son manejados y auditados
+ - [X] Tests de broker integration con simulación de fallos disponibles
 
 ### Tareas Técnicas
 1. Definir interfaz `IBrokerAdapter`
@@ -126,12 +126,12 @@ Implementar adaptadores de brokers IBKR y Alpaca, con fallback automático, y co
 Diseñar y exponer el historial auditable de operaciones junto con endpoints API para alimentar un dashboard visual. Incluye trade logs, métricas de performance y estados de órdenes.
 
 ### Acceptance Criteria
-- [ ] Trade history y audit log persistidos correctamente
-- [ ] Endpoints para `GET /trades`, `GET /trades/metrics` y `GET /audit` implementados
-- [ ] Consultas de métricas responden en <1s para datasets razonables
-- [ ] Dashboard API soporta filtros por fecha, estrategia y símbolo
-- [ ] El flujo de auditoría conserva agente, decisión y estado de orden
-- [ ] Tests de API e integración disponibles
+ - [X] Trade history y audit log persistidos correctamente
+ - [X] Endpoints para `GET /trades`, `GET /trades/metrics` y `GET /audit` implementados
+ - [X] Consultas de métricas responden en <1s para datasets razonables
+ - [X] Dashboard API soporta filtros por fecha, estrategia y símbolo
+ - [X] El flujo de auditoría conserva agente, decisión y estado de orden
+ - [X] Tests de API e integración disponibles
 
 ### Tareas Técnicas
 1. Crear esquema de datos para trades, executions y audit logs
@@ -161,10 +161,10 @@ Diseñar y exponer el historial auditable de operaciones junto con endpoints API
 Implementar el servicio y endpoint que reciben la tabla CSV como string, construyen el prompt exacto de Gemini y retornan el mensaje final en el formato Markdown especificado.
 
 ### Acceptance Criteria
- - [ ] El servicio recibe la tabla en formato string y la inserta en el prompt requerido
+ - [X] El servicio recibe la tabla en formato string y la inserta en el prompt requerido
  - [X] El prompt exacto incluye la instrucción de columnas y el bloque `--- INICIO DE TABLA ---`
- - [ ] La respuesta de Gemini retorna como string y puede mapearse a la interfaz `IGeminiStrategyAssessmentResponse`
- - [ ] La salida esperada coincide con el ejemplo de formato Markdown solicitado
+ - [X] La respuesta de Gemini retorna como string y puede mapearse a la interfaz `IGeminiStrategyAssessmentResponse`
+ - [X] La salida esperada coincide con el ejemplo de formato Markdown solicitado
  - [X] Tests unitarios de concatenación del prompt y respuesta retornada incluidos
  - [ ] Endpoint integrado y documentado
 
@@ -196,11 +196,11 @@ Implementar el servicio y endpoint que reciben la tabla CSV como string, constru
 Definir y entregar los contratos API y los endpoints necesarios para soportar un dashboard visual de análisis de volatilidad y órdenes. Incluir el diseño de los datos que el frontend consumirá para mostrar indicadores, estados de órdenes y métricas.
 
 ### Acceptance Criteria
-- [ ] Contratos API documentados para dashboard visual
-- [ ] Endpoints listos para alimentar componentes de UI
-- [ ] Datos de indicadores, órdenes y métricas disponibles en formato JSON
-- [ ] Compatibilidad con gráficos y tablas del dashboard
-- [ ] Pruebas de contrato y validación de payload
+ - [X] Contratos API documentados para dashboard visual
+ - [X] Endpoints listos para alimentar componentes de UI
+ - [X] Datos de indicadores, órdenes y métricas disponibles en formato JSON
+ - [X] Compatibilidad con gráficos y tablas del dashboard
+ - [X] Pruebas de contrato y validación de payload
 
 ### Tareas Técnicas
 1. Definir contratos JSON para dashboard
@@ -229,10 +229,10 @@ Definir y entregar los contratos API y los endpoints necesarios para soportar un
 Implementar el backend necesario para soportar dashboards visuales, asegurando que los datos, métricas y estados de órdenes estén disponibles para consumo frontend, sin incluir ningún gráfico ni componente de UI.
 
 ### Acceptance Criteria
-- [ ] Endpoints de dashboard proporcionan datos de métricas, órdenes y estados de análisis
-- [ ] Los datos están estructurados para consumo visual pero no implementan componentes gráficos
-- [ ] Se documenta el contrato de datos para el frontend
-- [ ] Pruebas de integración verifican la disponibilidad y validez de los payloads
+ - [X] Endpoints de dashboard proporcionan datos de métricas, órdenes y estados de análisis
+ - [X] Los datos están estructurados para consumo visual pero no implementan componentes gráficos
+ - [X] Se documenta el contrato de datos para el frontend
+ - [X] Pruebas de integración verifican la disponibilidad y validez de los payloads
 
 ### Tareas Técnicas
 1. Implementar endpoints de dashboard que entreguen métricas y datos de órdenes

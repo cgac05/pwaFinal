@@ -106,17 +106,35 @@ export function AIChatPage() {
         selectedSignal
       });
 
-      updateMessage(assistantMessageId, {
-        content: reply,
-        status: "completed"
-      });
+      // Typewriter/Streaming effect for natural AI feel
+      let currentIndex = 0;
+      const typingSpeed = 8; // ms per tick
+      const chunkSize = 5; // characters typed per tick
+
+      const intervalId = setInterval(() => {
+        if (currentIndex >= reply.length) {
+          clearInterval(intervalId);
+          updateMessage(assistantMessageId, {
+            content: reply,
+            status: "completed"
+          });
+          setLoading(false);
+        } else {
+          currentIndex += chunkSize;
+          const nextText = reply.slice(0, currentIndex);
+          updateMessage(assistantMessageId, {
+            content: nextText + "▌",
+            status: "processing"
+          });
+        }
+      }, typingSpeed);
+
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo construir la respuesta desde el dashboard.";
       updateMessage(assistantMessageId, {
         content: `No pude leer el dashboard para responder: ${message}`,
         status: "error"
       });
-    } finally {
       setLoading(false);
     }
   }, [input, loading, ticker, currentPrice, addMessage, updateMessage, dashboardSnapshot, selectedSignal]);
