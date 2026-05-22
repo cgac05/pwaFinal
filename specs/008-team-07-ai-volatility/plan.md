@@ -91,6 +91,8 @@ T153: AI Orchestration Architecture (Analyzer → Strategist → Executor)
         - [ ] Diseñar pattern de comunicación entre agentes
         - [ ] Definir mensaje protocol (types/AIMessage.ts)
         - [ ] Error handling strategy (retry logic, fallbacks)
+        - [ ] Definir formato de salida de Gemini: JSON estructurado + análisis/opinión textual
+        - [ ] Definir plantilla de prompt para tabla CSV y salida Markdown esperada
         - [ ] Create ADR (Architecture Decision Record)
       DoD: Documento ADR + TypeScript types en repo
 
