@@ -1,3 +1,24 @@
 {
-  "feature_directory": "specs/002-team-01-dashboard-brokers"
+  "feature_directory": "specs/003-fundamental-opciones-ia",
+  "feature_id": "TEAM-03-FUNDAMENTAL-OPTIONS-AI",
+  "short_name": "fundamental-opciones-ia",
+  "created": "2026-05-22T11:35:00Z",
+  "origin": "Diana.integrate / speckit.specify",
+  "status": "spec-complete",
+  "source_canon": ".drfic/diana-sdk/projects/diana-inversions/initiatives/001-inversions/teams/TEAM-03/spec.md",
+  "language": "es",
+  "team": "TEAM-03 (SQLitoNo)",
+  "coverage": {
+    "canon_preserved": "100%",
+    "canon_dropped": "0",
+    "elements_expanded": 45,
+    "elements_added": 0,
+    "checksum": "spec-v1.0-complete"
+  },
+  "readiness": {
+    "specification": "READY",
+    "quality_checklist": "PASS",
+    "clarifications_pending": 0,
+    "next_phase": "speckit.plan"
+  }
 }
