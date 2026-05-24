@@ -41,7 +41,7 @@ const auditHistoryService = new AuditHistoryService();
 const approvalService = new ApprovalService();
 const executionService = new ExecutionService();
 
-app.use("/api/signals", signalEvaluateRouter);
+app.use('/news/sentiment', newsSentimentRouter);
 app.use("/api/signals", signalDetailsRouter);
 app.use("/api/signals", signalConfluenceRouter);
 app.use("/api/dashboard", dashboardOrchestratorRouter);

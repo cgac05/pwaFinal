@@ -1,6 +1,6 @@
-# inversions_app_pwa Development Guidelines
+﻿# inversions_app_pwa Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-04-28
+Auto-generated from all feature plans. Last updated: 2026-05-21
 
 ## Active Technologies
 - TypeScript 5.x, React 18, Node.js 22 LTS + Vite, React, Zustand, TailwindCSS, TradingView Lightweight Charts, Express, Supabase client, optional MongoDB driver, Claude API client, broker SDKs for IBKR and Alpaca (001-plataforma-inversiones-ia)
@@ -30,7 +30,6 @@ TypeScript 5.x across frontend and backend; React 18 on the client; Node.js 22 L
 - 003-run-git-feature: Added TypeScript 5.x en frontend y backend; Node.js 22 LTS en API + React 18, Vite, Zustand, TailwindCSS, Express, Supabase JS client, TradingView Lightweight Charts, SDKs IBKR y Alpaca, cliente Claude API
 - 001-plataforma-inversiones-ia: Added TypeScript 5.x, React 18, Node.js 22 LTS + Vite, React, Zustand, TailwindCSS, TradingView Lightweight Charts, Express, Supabase client, optional MongoDB driver, Claude API client, broker SDKs for IBKR and Alpaca
 
-- 001-plataforma-inversiones-ia: Added TypeScript 5.x across frontend and backend; React 18 on the client; Node.js 22 LTS runtime for the REST API + Vite, React 18, Zustand, TailwindCSS, TradingView Lightweight Charts, Express, Supabase JavaScript client, optional MongoDB Node driver, broker SDKs for IBKR and Alpaca, Claude API client
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

@@ -13,7 +13,7 @@ router.get('/:symbol', async (req, res) => {
     const { symbol } = req.params;
 
     if (!symbol || symbol.length > 10) {
-        return res.status(400).json({ error: 'Símbolo inválido.' });
+        return res.status(400).json({ error: 'Símbolo inválido.' }); 5
     }
 
     try {
