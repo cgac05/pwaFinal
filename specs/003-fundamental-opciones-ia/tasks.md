@@ -176,97 +176,97 @@ Fase 7 (T171)
 
 ### Tareas
 
-- [ ] T008-T082 Definir contrato base de parámetros de estrategias de opciones en backend/src/modules/strategies/optionsStrategyContract.ts
-  - [ ] T008a Crear tipos TypeScript: OptionType (CALL|PUT), Direction (LONG|SHORT), StrikePriceLevel (ATM|ITM_5|OTM_5|etc.), ExpirationDate, PremiumPaid/Received, SharesContacted, AvailableCapital, RiskTolerance (LOW|MEDIUM|HIGH), SimulationAssumptions (impliedVol%, timeDecayModel)
-  - [ ] T008b Definir entrada a motor: { ticker, optionType, strike, expiration, premium, direction, quantity, capital, riskTolerance, assumptions }
-  - [ ] T008c Definir salida: { scenario_at_atm: { price, pnl_best, pnl_worst, breakeven }, scenario_at_+5: {...}, scenario_at_-5: {...}, max_profit, max_loss, roi_percent, margin_required_short, recommendation, warnings }
-  - [ ] T008d Versionado: v1.0 compatible con Black-Scholes, futuro v2.0 binomial si lo requiere
-  - [ ] T008e Documentar en backend/src/modules/strategies/schemas/optionsStrategy.schema.json
+- [x] T008-T082 Definir contrato base de parámetros de estrategias de opciones en backend/src/modules/strategies/optionsStrategyContract.ts
+  - [x] T008a Crear tipos TypeScript: OptionType (CALL|PUT), Direction (LONG|SHORT), StrikePriceLevel (ATM|ITM_5|OTM_5|etc.), ExpirationDate, PremiumPaid/Received, SharesContacted, AvailableCapital, RiskTolerance (LOW|MEDIUM|HIGH), SimulationAssumptions (impliedVol%, timeDecayModel)
+  - [x] T008b Definir entrada a motor: { ticker, optionType, strike, expiration, premium, direction, quantity, capital, riskTolerance, assumptions }
+  - [x] T008c Definir salida: { scenario_at_atm: { price, pnl_best, pnl_worst, breakeven }, scenario_at_+5: {...}, scenario_at_-5: {...}, max_profit, max_loss, roi_percent, margin_required_short, recommendation, warnings }
+  - [x] T008d Versionado: v1.0 compatible con Black-Scholes, futuro v2.0 binomial si lo requiere
+  - [x] T008e Documentar en backend/src/modules/strategies/schemas/optionsStrategy.schema.json
   - **Criterios de Aceptación**:
     - Contrato preserva precisión: precios a 0.01$, P&L a 1$, %ROI a 0.1%
     - Calculo determinístico: mismo input → mismo output
 
-- [ ] T009-T083 [P] [US2] Implementar core de estrategia Long Call en backend/src/modules/strategies/options/longCall.ts
-  - [ ] T009a Implementar función calcPnL(currentPrice, strike, premium, quantity) → pnl_at_current
-  - [ ] T009b Implementar escenarios de precio: scenario[ATM], scenario[+5%], scenario[-5%] con P&L y breakeven
-  - [ ] T009c Integrar simulación temporal: theta decay por día hasta expiration (modelo: decay lineal simple, mejora futura: modelo exp)
-  - [ ] T009d Generar matriz de riesgo: max profit = (strike_change * quantity * 100) - premium, max_loss = premium
-  - [ ] T009e Implementar stop-loss logic: si close_trigger=true, marcar como "solicitar cierre" en sistema de alertas
-  - [ ] T009f Emitir event(strategy_signal) cuando precio cruza breakeven o stop-loss
-  - [ ] T009g Unit tests: validar P&L positivo si precio > strike + premium, test theta decay
+- [x] T009-T083 [P] [US2] Implementar core de estrategia Long Call en backend/src/modules/strategies/options/longCall.ts
+  - [x] T009a Implementar función calcPnL(currentPrice, strike, premium, quantity) → pnl_at_current
+  - [x] T009b Implementar escenarios de precio: scenario[ATM], scenario[+5%], scenario[-5%] con P&L y breakeven
+  - [x] T009c Integrar simulación temporal: theta decay por día hasta expiration (modelo: decay lineal simple, mejora futura: modelo exp)
+  - [x] T009d Generar matriz de riesgo: max profit = (strike_change * quantity * 100) - premium, max_loss = premium
+  - [x] T009e Implementar stop-loss logic: si close_trigger=true, marcar como "solicitar cierre" en sistema de alertas
+  - [x] T009f Emitir event(strategy_signal) cuando precio cruza breakeven o stop-loss
+  - [x] T009g Unit tests: validar P&L positivo si precio > strike + premium, test theta decay
   - **Criterios de Aceptación**:
     - Breakeven = strike + premium (exacto a 0.01)
     - Max profit = (max_price - strike - premium) * quantity * 100 (realista)
     - Theta decay reduce PnL cada día según tiempo restante
 
-- [ ] T010-T084 [P] [US2] Implementar core de estrategia Long Put en backend/src/modules/strategies/options/longPut.ts
-  - [ ] T010a Implementar función calcPnL(currentPrice, strike, premium, quantity) → pnl_at_current
-  - [ ] T010b Escenarios: ATM, +5%, -5% (Long Put gana si precio sube... recalcular)
-  - [ ] T010c Integrar theta decay (Long Put sufre theta: decay linear hasta expiration)
-  - [ ] T010d Max profit = (strike - premium) * quantity * 100 (si precio cae a 0)
-  - [ ] T010e Max loss = premium (cantidad pagada)
-  - [ ] T010f Stop-loss e integración de alertas (análogo a Long Call)
-  - [ ] T010g Unit tests: validar P&L negativo si precio cae bajo (strike - premium)
+- [x] T010-T084 [P] [US2] Implementar core de estrategia Long Put en backend/src/modules/strategies/options/longPut.ts
+  - [x] T010a Implementar función calcPnL(currentPrice, strike, premium, quantity) → pnl_at_current
+  - [x] T010b Escenarios: ATM, +5%, -5% (Long Put gana si precio sube... recalcular)
+  - [x] T010c Integrar theta decay (Long Put sufre theta: decay linear hasta expiration)
+  - [x] T010d Max profit = (strike - premium) * quantity * 100 (si precio cae a 0)
+  - [x] T010e Max loss = premium (cantidad pagada)
+  - [x] T010f Stop-loss e integración de alertas (análogo a Long Call)
+  - [x] T010g Unit tests: validar P&L negativo si precio cae bajo (strike - premium)
   - **Criterios de Aceptación**:
     - Breakeven = strike - premium (exacto)
     - Lógica de ganancias invertida respecto a Long Call
 
-- [ ] T011-T085 [P] [US2] Implementar core de estrategia Short Call en backend/src/modules/strategies/options/shortCall.ts
-  - [ ] T011a Implementar función calcPnL(currentPrice, strike, premium, quantity) con lógica SHORT
-  - [ ] T011b Escenarios: ATM, +5%, -5% (Short Call pierde si precio sube)
-  - [ ] T011c Theta decay beneficia Short Call (premium decay a favor del vendedor)
-  - [ ] T011d Max profit = premium recibido * quantity * 100 (si precio stays <= strike)
-  - [ ] T011e Max loss = ILIMITADA si no hay hedge (marcar warning)
-  - [ ] T011f Lógica de margen requerido: margen = (strike * quantity * 100) * 0.2 (simplificado, IBKR/Alpaca definen real)
-  - [ ] T011g Emitir evento si margen cae bajo umbral (alertar operador)
-  - [ ] T011h Unit tests: max loss scenario, margen validation
+- [x] T011-T085 [P] [US2] Implementar core de estrategia Short Call en backend/src/modules/strategies/options/shortCall.ts
+  - [x] T011a Implementar función calcPnL(currentPrice, strike, premium, quantity) con lógica SHORT
+  - [x] T011b Escenarios: ATM, +5%, -5% (Short Call pierde si precio sube)
+  - [x] T011c Theta decay beneficia Short Call (premium decay a favor del vendedor)
+  - [x] T011d Max profit = premium recibido * quantity * 100 (si precio stays <= strike)
+  - [x] T011e Max loss = ILIMITADA si no hay hedge (marcar warning)
+  - [x] T011f Lógica de margen requerido: margen = (strike * quantity * 100) * 0.2 (simplificado, IBKR/Alpaca definen real)
+  - [x] T011g Emitir evento si margen cae bajo umbral (alertar operador)
+  - [x] T011h Unit tests: max loss scenario, margen validation
   - **Criterios de Aceptación**:
     - Warning explícito sobre riesgo ilimitado
     - Margen calculado, no garantizado (exigir confirmación humana)
 
-- [ ] T012-T086 [P] [US2] Implementar core de estrategia Short Put en backend/src/modules/strategies/options/shortPut.ts
-  - [ ] T012a Implementar función calcPnL con lógica SHORT PUT
-  - [ ] T012b Escenarios: ATM, +5%, -5% (Short Put pierde si precio cae)
-  - [ ] T012c Theta decay beneficia Short Put
-  - [ ] T012d Max profit = premium recibido (si precio stays >= strike)
-  - [ ] T012e Max loss = (strike - premium) * quantity * 100 (si precio cae a 0)
-  - [ ] T012f Margen requerido: margen = (strike * quantity * 100) * 0.2
-  - [ ] T012g Unit tests: max loss scenario, margen validation
+- [x] T012-T086 [P] [US2] Implementar core de estrategia Short Put en backend/src/modules/strategies/options/shortPut.ts
+  - [x] T012a Implementar función calcPnL con lógica SHORT PUT
+  - [x] T012b Escenarios: ATM, +5%, -5% (Short Put pierde si precio cae)
+  - [x] T012c Theta decay beneficia Short Put
+  - [x] T012d Max profit = premium recibido (si precio stays >= strike)
+  - [x] T012e Max loss = (strike - premium) * quantity * 100 (si precio cae a 0)
+  - [x] T012f Margen requerido: margen = (strike * quantity * 100) * 0.2
+  - [x] T012g Unit tests: max loss scenario, margen validation
   - **Criterios de Aceptación**:
     - Lógica coherente: vende put, gana si precio sube, pierde si cae
     - Max loss finito (a diferencia de Short Call)
 
-- [ ] T013-T087 Implementar motor de simulación temporal de estrategias en backend/src/modules/strategies/simulationEngine.ts
-  - [ ] T013a Crear función simulate(strategy, startDate, endDate, underlyingPrices, impliedVolPath) → timeSeriesPnL
-  - [ ] T013b Proyectar P&L día a día: aplicar theta decay, actualizar P&L con cambio de precio
-  - [ ] T013c Incluir modelo de vol: si vol realizada cambia, recalcular option price (Black-Scholes simple)
-  - [ ] T013d Retornar: max_drawdown_percent, cumulative_pnl, pnl_path (array), breakeven_date (si aplica), risk_metrics (sharpe_ratio_daily)
-  - [ ] T013e Validar: dadas precios históricos reales AAPL 2026-01, simular Long Call, resultado debe estar en rango razonable
-  - [ ] T013f Unit tests: simulación determinística, validar theta decay matemáticamente
+- [x] T013-T087 Implementar motor de simulación temporal de estrategias en backend/src/modules/strategies/simulationEngine.ts
+  - [x] T013a Crear función simulate(strategy, startDate, endDate, underlyingPrices, impliedVolPath) → timeSeriesPnL
+  - [x] T013b Proyectar P&L día a día: aplicar theta decay, actualizar P&L con cambio de precio
+  - [x] T013c Incluir modelo de vol: si vol realizada cambia, recalcular option price (Black-Scholes simple)
+  - [x] T013d Retornar: max_drawdown_percent, cumulative_pnl, pnl_path (array), breakeven_date (si aplica), risk_metrics (sharpe_ratio_daily)
+  - [x] T013e Validar: dadas precios históricos reales AAPL 2026-01, simular Long Call, resultado debe estar en rango razonable
+  - [x] T013f Unit tests: simulación determinística, validar theta decay matemáticamente
   - **Criterios de Aceptación**:
     - Simulación reproducible con mismo seed / datos
     - Max drawdown calculado correctamente
     - Theta decay se aplica a diario
 
-- [ ] T014-T088 [P] [US2] Implementar servicio de alertas en tiempo real y ejecución de stop-loss en backend/src/modules/strategies/alertService.ts
-  - [ ] T014a Crear tabla Supabase: open_positions (ticker, strategy_type, entry_price, stop_loss_level, take_profit_level, status, created_at)
-  - [ ] T014b Implementar polling job (cada 1 min): leer open_positions, verificar precio actual contra triggers
-  - [ ] T014c Emitir alerta si: precio < stop_loss OR precio > take_profit (WebSocket a frontend + email + Slack)
-  - [ ] T014d Registrar alerta en tabla: alerts (position_id, alert_type, triggered_at, price_at_trigger)
-  - [ ] T014e Implementar API endpoint PATCH /api/team-03/positions/{id}/request-close: crear request de cierre (NO ejecutar automáticamente)
-  - [ ] T014f Unit tests: trigger alert cuando precio cruza, request close se registra
+- [x] T014-T088 [P] [US2] Implementar servicio de alertas en tiempo real y ejecución de stop-loss en backend/src/modules/strategies/alertService.ts
+  - [x] T014a Crear tabla Supabase: open_positions (ticker, strategy_type, entry_price, stop_loss_level, take_profit_level, status, created_at)
+  - [x] T014b Implementar polling job (cada 1 min): leer open_positions, verificar precio actual contra triggers
+  - [x] T014c Emitir alerta si: precio < stop_loss OR precio > take_profit (WebSocket a frontend + email + Slack)
+  - [x] T014d Registrar alerta en tabla: alerts (position_id, alert_type, triggered_at, price_at_trigger)
+  - [x] T014e Implementar API endpoint PATCH /api/team-03/positions/{id}/request-close: crear request de cierre (NO ejecutar automáticamente)
+  - [x] T014f Unit tests: trigger alert cuando precio cruza, request close se registra
   - **Criterios de Aceptación**:
     - Alerta se dispara dentro de 2 min de cruce
     - Cierre es manual (solicitud, no automático)
     - Auditoría completa: quién cerró, a qué precio, timestamp
 
-- [ ] T015-T089 [P] [US2] Implementar motor comparador de estrategias en backend/src/modules/strategies/strategyComparator.ts
-  - [ ] T015a Crear función compareStrategies(ticker, direction, capital, riskTolerance) → ranked list of strategies
-  - [ ] T015b Orquestar: para cada estrategia base (Long Call, Long Put, Short Call, Short Put), calcular expected_pnl, risk_score, risk_adjusted_return (pnl / max_loss)
-  - [ ] T015c Ranking: sort by risk_adjusted_return DESC (mejor trade-off)
-  - [ ] T015d Retornar top 2: primaria recomendación + alternativa, con justificación ("Short Call superior: capture 2% premium, theta decay favorable")
-  - [ ] T015e Validar: No recomendar si viability <= MARGINAL
-  - [ ] T015f Unit tests: dado ticker viable alcista, Long Call ranks primera; dado bajista, Long Put ranks primera
+- [x] T015-T089 [P] [US2] Implementar motor comparador de estrategias en backend/src/modules/strategies/strategyComparator.ts
+  - [x] T015a Crear función compareStrategies(ticker, direction, capital, riskTolerance) → ranked list of strategies
+  - [x] T015b Orquestar: para cada estrategia base (Long Call, Long Put, Short Call, Short Put), calcular expected_pnl, risk_score, risk_adjusted_return (pnl / max_loss)
+  - [x] T015c Ranking: sort by risk_adjusted_return DESC (mejor trade-off)
+  - [x] T015d Retornar top 2: primaria recomendación + alternativa, con justificación ("Short Call superior: capture 2% premium, theta decay favorable")
+  - [x] T015e Validar: No recomendar si viability <= MARGINAL
+  - [x] T015f Unit tests: dado ticker viable alcista, Long Call ranks primera; dado bajista, Long Put ranks primera
   - **Criterios de Aceptación**:
     - Recomendación coherente con direction + volatility
     - Justificación clara, sin jerga

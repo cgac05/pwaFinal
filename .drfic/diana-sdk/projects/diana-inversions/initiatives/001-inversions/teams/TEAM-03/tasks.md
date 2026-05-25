@@ -4,6 +4,8 @@
 **Proyecto**: diana-inversions
 **Equipo**: TEAM-03
 **Fuente**: 001-inv-tasks.md + team-task-allocation.md
+**Última Sincronización**: 2026-05-24 00:00 UTC (diana.sync mode=apply)
+**Feature Sync**: 003-fundamental-opciones-ia
 
 ## Tareas (literal del canon, con checkbox)
 
