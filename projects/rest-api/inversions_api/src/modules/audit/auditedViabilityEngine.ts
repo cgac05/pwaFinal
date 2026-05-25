@@ -39,13 +39,17 @@ export class AuditedViabilityEngine {
       benchmark_market_cap: "10B-500B",
       engine_version: "1.0",
       marketCapNorm: this.engine.normalize(
-        data.market_cap || 0,
+        data.metrics.marketCap?.value || 0,
         1000000000,
         3000000000000
       ),
-      volatilityNorm: this.engine.normalize(data.volatility_60d || 0, 5, 80),
-      roe_norm: this.engine.normalize(data.roe || 0, 0, 100),
-      pe_norm: this.engine.normalize(data.pe_ratio || 0, 5, 50)
+      volatilityNorm: this.engine.normalize(
+        data.metrics.volatility?.annualizedVolatility || 0,
+        5,
+        80
+      ),
+      roe_norm: this.engine.normalize(data.metrics.financialRatios?.roe || 0, 0, 100),
+      pe_norm: this.engine.normalize(data.metrics.financialRatios?.peRatio || 0, 5, 50)
     };
 
     const auditRecord = await saveAnalysisAudit(

@@ -50,8 +50,9 @@ export class FundamentalCopilotChat {
     if (fundamentalContext.strategySummary) {
       baseContext.push(`Strategy summary available`);
     }
-    if (fundamentalContext.recentUserAnalysis.length > 0) {
-      baseContext.push(`User analysis history available: ${fundamentalContext.recentUserAnalysis.length} entries`);
+    const recentUserAnalysis = fundamentalContext.recentUserAnalysis ?? [];
+    if (recentUserAnalysis.length > 0) {
+      baseContext.push(`User analysis history available: ${recentUserAnalysis.length} entries`);
     }
 
     const systemMessage: ChatMessage = {
@@ -106,9 +107,10 @@ export class FundamentalCopilotChat {
     if (context.strategySummary) {
       lines.push(`Strategy summary: ${context.strategySummary}`);
     }
-    if (context.recentUserAnalysis.length > 0) {
+    const recentUserAnalysis = context.recentUserAnalysis ?? [];
+    if (recentUserAnalysis.length > 0) {
       lines.push("Recent user analysis history:");
-      context.recentUserAnalysis.forEach((entry, index) => {
+      recentUserAnalysis.forEach((entry) => {
         lines.push(`- ${entry}`);
       });
     }
@@ -165,7 +167,10 @@ export class FundamentalCopilotChat {
         return undefined;
       }
 
-      const payload = await response.json();
+      const payload = (await response.json()) as {
+        completion?: unknown;
+        response?: unknown;
+      };
       if (payload?.completion) {
         return String(payload.completion).trim();
       }
@@ -271,8 +276,13 @@ export class FundamentalCopilotChat {
   }
 
   private async fetchFundamentals(ticker: string): Promise<{ viability_score?: number; justification?: string } | null> {
+    const client = this.supabaseClient;
+    if (!client) {
+      return null;
+    }
+
     try {
-      const { data, error } = await this.supabaseClient
+      const { data, error } = await client
         .from("company_fundamentals")
         .select("ticker, viability_score, justification")
         .eq("ticker", ticker)
@@ -289,8 +299,13 @@ export class FundamentalCopilotChat {
   }
 
   private async fetchStrategySummary(ticker: string): Promise<{ summary?: string } | null> {
+    const client = this.supabaseClient;
+    if (!client) {
+      return null;
+    }
+
     try {
-      const { data, error } = await this.supabaseClient
+      const { data, error } = await client
         .from("strategy_evaluations")
         .select("ticker, summary")
         .eq("ticker", ticker)
@@ -309,8 +324,13 @@ export class FundamentalCopilotChat {
   }
 
   private async fetchUserHistory(userId: string, ticker: string): Promise<string[]> {
+    const client = this.supabaseClient;
+    if (!client) {
+      return [];
+    }
+
     try {
-      const { data, error } = await this.supabaseClient
+      const { data, error } = await client
         .from("user_analysis_history")
         .select("interaction_summary")
         .eq("user_id", userId)

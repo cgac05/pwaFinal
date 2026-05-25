@@ -14,22 +14,22 @@ import {
   getAnalysisAudit,
   validateAuditSnapshot,
   validateAuditTimestamp
-} from "../../modules/audit/fundamentalAnalysisAudit";
+} from "../modules/audit/fundamentalAnalysisAudit";
 import {
   handleValidationRequest,
   validateDeterminism
-} from "../../modules/audit/auditValidation";
+} from "../modules/audit/auditValidation";
 import {
   getAuditReport,
   generateAuditReportCSV,
   generateAuditReportJSON,
   validateReportIntegrity
-} from "../../modules/audit/auditReport";
+} from "../modules/audit/auditReport";
 import {
   getStrategyRecommendationAudit,
   validateStrategyAuditCompleteness,
   validateStrategyDeterminism
-} from "../../modules/audit/strategyRecommendationAudit";
+} from "../modules/audit/strategyRecommendationAudit";
 
 /**
  * T017e: GET /api/team-03/audit/{ticker}/{dateIso}

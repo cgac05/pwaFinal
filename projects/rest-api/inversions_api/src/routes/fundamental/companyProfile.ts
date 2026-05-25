@@ -63,12 +63,9 @@ export function createCompanyProfileRouter(supabaseClient: SupabaseClient): Rout
       const data = fundamentalData.data;
 
       // Validar histórico mínimo (>= 30 días)
-      if (
-        data.metrics.priceHistory &&
-        data.metrics.priceHistory.pricePoints &&
-        data.metrics.priceHistory.pricePoints.length < 30
-      ) {
-        const daysAvailable = data.metrics.priceHistory.pricePoints.length;
+      const daysAvailable =
+        data.metrics.volatility?.lookbackDays ?? Number(lookbackDays);
+      if (data.metrics.priceHistory && daysAvailable < 30) {
         await auditLog(supabaseClient, {
           ...auditEntry,
           status: "rejected_insufficient_history",
@@ -94,8 +91,8 @@ export function createCompanyProfileRouter(supabaseClient: SupabaseClient): Rout
         profile: {
           market_cap: data.metrics.marketCap?.value,
           market_cap_currency: data.metrics.marketCap?.currency || "USD",
-          revenue: data.metrics.sales?.totalRevenue,
-          revenue_currency: data.metrics.sales?.currency || "USD",
+          revenue: data.metrics.sales?.annualRevenue,
+          revenue_currency: data.metrics.marketCap?.currency || "USD",
           employees: data.metrics.employees?.count,
           sector: data.metrics.sector?.sector,
           industry: data.metrics.sector?.industry,
@@ -112,8 +109,8 @@ export function createCompanyProfileRouter(supabaseClient: SupabaseClient): Rout
           eps_growth_yoy: data.metrics.eps?.epsGrowthYoYPercent,
           pe_ratio: data.metrics.financialRatios?.peRatio,
           roe: data.metrics.financialRatios?.roe,
-          pb_ratio: data.metrics.financialRatios?.priceToBook,
-          ps_ratio: data.metrics.financialRatios?.priceToSales,
+          pb_ratio: data.metrics.financialRatios?.pbRatio,
+          ps_ratio: data.metrics.financialRatios?.psRatio,
           debt_to_equity: data.metrics.financialRatios?.debtToEquity
         },
         viability: {
@@ -128,14 +125,14 @@ export function createCompanyProfileRouter(supabaseClient: SupabaseClient): Rout
         },
         timestamp: new Date().toISOString(),
         assumptions: {
-          volatility_calculation_method: data.metadata.assumptions?.volatility_calculation_method,
+          volatility_calculation_method: data.metadata.assumptions?.volatilityCalculationMethod,
           lookback_days_used: Number(lookbackDays)
         },
         metadata: {
           data_source_id: data.metadata.sourceId,
           data_version: data.metadata.dataVersion,
           calculation_version: "1.0",
-          sources: data.metadata.quality?.sources || []
+          sources: [data.metadata.sourceId]
         }
       };
 

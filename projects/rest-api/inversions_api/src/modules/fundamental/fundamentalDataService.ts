@@ -159,7 +159,7 @@ export class FinvizDataSource implements PluggableSource {
   }
 
   validate(data: FundamentalAnalysisData): boolean {
-    return (
+    return !!(
       data.ticker &&
       data.metrics.priceHistory &&
       data.metrics.volatility &&
@@ -271,7 +271,7 @@ export class YahooFinanceDataSource implements PluggableSource {
   }
 
   validate(data: FundamentalAnalysisData): boolean {
-    return data.ticker && data.metadata.sourceId === "yahoo_finance";
+    return !!(data.ticker && data.metadata.sourceId === "yahoo_finance");
   }
 
   async isHealthy(): Promise<boolean> {

@@ -5,9 +5,15 @@
  * Hace reproducible la selección de estrategia.
  */
 
-import { supabase } from "../../database/supabase/client";
+import supabase from "../../database/supabase/client";
 import type { OptionStrategyOutput } from "../strategies/optionsStrategyContract";
 import type { StrategyRanking } from "../strategies/strategyComparator";
+
+function getStrategyLabel(strategy: OptionStrategyOutput): string {
+  const direction = strategy.direction === "LONG" ? "Long" : "Short";
+  const optionType = strategy.optionType === "CALL" ? "Call" : "Put";
+  return `${direction} ${optionType}`;
+}
 
 /**
  * T020a: Estructura de auditoría de recomendación de estrategia
@@ -57,12 +63,16 @@ export async function saveStrategyRecommendationAudit(
   // T020c: Guardar full ranking, reasoning para cada estrategia
   const comparatorResults: StrategyRankingAudit[] = strategiesRanking.map(
     (ranking, index) => ({
-      strategy: ranking.strategy.type || ranking.strategy.strategyName,
+      strategy: getStrategyLabel(ranking.strategy),
       rank: index + 1,
       score: ranking.score,
       rationale: ranking.rationale,
-      scenarios: ranking.strategy.scenarios || {},
-      risks: ranking.strategy.risks || []
+      scenarios: {
+        atm: ranking.strategy.scenarioAtm?.profitLoss,
+        itm: ranking.strategy.scenarioPlus5?.profitLoss,
+        otm: ranking.strategy.scenarioMinus5?.profitLoss
+      },
+      risks: ranking.strategy.warnings || []
     })
   );
 
@@ -75,7 +85,7 @@ export async function saveStrategyRecommendationAudit(
     fundamental_viability_score: fundamentalViabilityScore,
     direction_hypothesis: directionHypothesis,
     comparator_results: comparatorResults,
-    top_recommended_strategy: recommendedStrategy.type || "Unknown",
+    top_recommended_strategy: getStrategyLabel(recommendedStrategy),
     reasoning: buildReasoningNarrative(
       recommendedStrategy,
       strategiesRanking,
@@ -113,14 +123,14 @@ function buildReasoningNarrative(
 ): string {
   const topStrategies = strategiesRanking
     .slice(0, 3)
-    .map((r) => `${r.strategy.type} (score: ${r.score.toFixed(2)})`)
+    .map((r) => `${getStrategyLabel(r.strategy)} (score: ${r.score.toFixed(2)})`)
     .join(", ");
 
   return (
     `Strategy recommended based on fundamental viability (${viabilityScore.toFixed(2)}) ` +
     `and ${direction} direction hypothesis. ` +
     `Top ranked strategies: ${topStrategies}. ` +
-    `Selected: ${recommendedStrategy.type} due to optimal risk-adjusted return profile.`
+    `Selected: ${getStrategyLabel(recommendedStrategy)} due to optimal risk-adjusted return profile.`
   );
 }
 

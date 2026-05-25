@@ -5,7 +5,7 @@
  * con trazabilidad hacia audit table.
  */
 
-import { supabase } from "../../database/supabase/client";
+import supabase from "../../database/supabase/client";
 import type { FundamentalAnalysisAuditRecord } from "./fundamentalAnalysisAudit";
 
 /**

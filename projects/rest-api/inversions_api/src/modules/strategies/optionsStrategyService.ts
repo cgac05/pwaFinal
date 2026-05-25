@@ -12,14 +12,14 @@ export function buildOptionStrategyResult(
   params: OptionStrategyContract
 ): OptionStrategyResult {
   if (params.direction === "long") {
-    return params.optionType === "call"
+    return (params.optionType === "call"
       ? calculateLongCallResult(params)
-      : calculateLongPutResult(params);
+      : calculateLongPutResult(params)) as unknown as OptionStrategyResult;
   }
 
-  return params.optionType === "call"
+  return (params.optionType === "call"
     ? calculateShortCallResult(params)
-    : calculateShortPutResult(params);
+    : calculateShortPutResult(params)) as unknown as OptionStrategyResult;
 }
 
 /**
@@ -28,6 +28,8 @@ export function buildOptionStrategyResult(
 export function buildOptionStrategyCandidates(
   baseParams: OptionStrategyContract
 ): OptionStrategyResult[] {
+  const rawParams = baseParams as OptionStrategyContract & Partial<OptionStrategyInput>;
+
   // Normalize parameters to OptionStrategyInput format for evaluation functions
   const normalizedParams: OptionStrategyInput = {
     ticker: baseParams.ticker,
@@ -37,8 +39,14 @@ export function buildOptionStrategyCandidates(
     currentPrice: baseParams.currentPrice ?? baseParams.strikePrice,
     expirationDate: baseParams.expirationDate,
     daysToExpiration: (baseParams as any).daysToExpiration || 30,
-    premiumPerContract: ("premiumPerContract" in baseParams) ? baseParams.premiumPerContract : baseParams.premium || 0,
-    numberOfContracts: ("numberOfContracts" in baseParams) ? baseParams.numberOfContracts : baseParams.quantity || 1,
+    premiumPerContract:
+      typeof rawParams.premiumPerContract === "number"
+        ? rawParams.premiumPerContract
+        : baseParams.premium || 0,
+    numberOfContracts:
+      typeof rawParams.numberOfContracts === "number"
+        ? rawParams.numberOfContracts
+        : baseParams.quantity || 1,
     availableCapital: baseParams.capitalAvailable || 10000,
     riskTolerance: ((baseParams.riskTolerance?.toUpperCase() as any) || "MEDIUM") as any,
     assumptions: baseParams.assumptions || { impliedVolatility: 25 }

@@ -5,10 +5,9 @@
  * Hace posible reproducir y validar análisis históricos.
  */
 
-import type { Database } from "../../database/types";
 import type { ViabilityScore } from "../fundamental/viabilityEngine";
 import type { FundamentalAnalysisData } from "../fundamental/fundamentalSourceContract";
-import { supabase } from "../../database/supabase/client";
+import supabase from "../../database/supabase/client";
 
 /**
  * T017a-c: Estructura de auditoría
@@ -40,28 +39,32 @@ export async function saveAnalysisAudit(
   userId?: string
 ): Promise<FundamentalAnalysisAuditRecord> {
   // T017c: Guardar snapshot_data: precios, ratios, vol, todo lo usado en cálculo
+  const metrics = snapshotData.metrics;
+  const metadata = snapshotData.metadata;
+
   const auditRecord: Omit<FundamentalAnalysisAuditRecord, "id" | "created_at"> = {
     ticker,
     snapshot_date: snapshotDate.toISOString().split("T")[0], // YYYY-MM-DD
     snapshot_data: {
       // Precios históricos
-      priceHistory: snapshotData.priceHistory,
+      companyName: snapshotData.companyName,
+      priceHistory: metrics.priceHistory,
       // Ratios financieros
-      pe_ratio: snapshotData.pe_ratio,
-      roe: snapshotData.roe,
+      pe_ratio: metrics.financialRatios?.peRatio,
+      roe: metrics.financialRatios?.roe,
       // Volatilidad
-      volatility_30d: snapshotData.volatility_30d,
-      volatility_60d: snapshotData.volatility_60d,
-      volatility_252d: snapshotData.volatility_252d,
+      volatility_30d: metrics.volatility?.annualizedVolatility,
+      volatility_60d: metrics.volatility?.annualizedVolatility,
+      volatility_252d: metrics.volatility?.annualizedVolatility,
       // Otros fundamentales
-      market_cap: snapshotData.market_cap,
-      dividend_yield: snapshotData.dividend_yield,
-      eps_growth: snapshotData.eps_growth,
-      beta: snapshotData.beta,
+      market_cap: metrics.marketCap?.value,
+      dividend_yield: metrics.dividend?.dividendYieldPercent,
+      eps_growth: metrics.eps?.epsGrowthYoYPercent,
+      beta: metrics.beta?.value,
       // Metadata
-      source: snapshotData.source,
-      dataVersion: snapshotData.dataVersion,
-      fetchTimestamp: snapshotData.fetchTimestamp
+      source: metadata.sourceId,
+      dataVersion: metadata.dataVersion,
+      fetchTimestamp: metadata.fetchTimestamp
     },
     // T017d: Guardar assumptions
     assumptions: {

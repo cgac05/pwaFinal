@@ -99,6 +99,7 @@ export function rankOptionStrategies(
         componentes: {
           fundamental: 0.5,
           tecnico: 0.2,
+          confluence: 0,
           mecanico: 0.1,
           machine_learning: 0.2
         },

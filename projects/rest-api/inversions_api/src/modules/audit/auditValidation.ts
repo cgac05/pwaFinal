@@ -46,21 +46,71 @@ export async function validateDeterminism(
   }
 
   // Reconstituir datos de snapshot
+  const snapshot = auditRecord.snapshot_data;
   const reconstructedData: FundamentalAnalysisData = {
     ticker: auditRecord.ticker,
-    source: auditRecord.snapshot_data.source,
-    dataVersion: auditRecord.snapshot_data.dataVersion,
-    fetchTimestamp: auditRecord.snapshot_data.fetchTimestamp,
-    priceHistory: auditRecord.snapshot_data.priceHistory,
-    pe_ratio: auditRecord.snapshot_data.pe_ratio,
-    roe: auditRecord.snapshot_data.roe,
-    volatility_30d: auditRecord.snapshot_data.volatility_30d,
-    volatility_60d: auditRecord.snapshot_data.volatility_60d,
-    volatility_252d: auditRecord.snapshot_data.volatility_252d,
-    market_cap: auditRecord.snapshot_data.market_cap,
-    dividend_yield: auditRecord.snapshot_data.dividend_yield,
-    eps_growth: auditRecord.snapshot_data.eps_growth,
-    beta: auditRecord.snapshot_data.beta
+    companyName: snapshot.companyName || `Company ${auditRecord.ticker}`,
+    metrics: {
+      marketCap:
+        typeof snapshot.market_cap === "number"
+          ? {
+              value: snapshot.market_cap,
+              currency: "USD",
+              timestamp: snapshot.fetchTimestamp
+            }
+          : undefined,
+      priceHistory: snapshot.priceHistory,
+      financialRatios: {
+        roe: Number(snapshot.roe || 0),
+        peRatio: Number(snapshot.pe_ratio || 0),
+        pbRatio: 0,
+        psRatio: 0,
+        debtToEquity: 0,
+        timestamp: snapshot.fetchTimestamp
+      },
+      beta:
+        typeof snapshot.beta === "number"
+          ? {
+              value: snapshot.beta,
+              confidenceLevel: "MEDIUM",
+              calculationMethod: "audit_snapshot",
+              timestamp: snapshot.fetchTimestamp
+            }
+          : undefined,
+      eps:
+        typeof snapshot.eps_growth === "number"
+          ? {
+              eps: 0,
+              epsGrowthYoYPercent: snapshot.eps_growth,
+              timestamp: snapshot.fetchTimestamp
+            }
+          : undefined,
+      volatility:
+        typeof snapshot.volatility_60d === "number"
+          ? {
+              annualizedVolatility: snapshot.volatility_60d,
+              lookbackDays: 60,
+              calculationMethod: "audit_snapshot",
+              timestamp: snapshot.fetchTimestamp
+            }
+          : undefined
+    },
+    metadata: {
+      sourceId: snapshot.source || "audit_snapshot",
+      fetchTimestamp: snapshot.fetchTimestamp || auditRecord.timestamp_calculated,
+      dataVersion: snapshot.dataVersion || "audit",
+      assumptions: {
+        volatilityCalculationMethod:
+          auditRecord.assumptions.volatility_calc_method || "audit_snapshot",
+        lookbackPeriod: 60,
+        riskFreeRate: 0,
+        marketIndexBench: "SPX"
+      },
+      quality: {
+        completenessPercent: 100,
+        lastValidation: new Date().toISOString()
+      }
+    }
   };
 
   // T018b: Re-ejecutar viabilityEngine.score() con mismos datos
