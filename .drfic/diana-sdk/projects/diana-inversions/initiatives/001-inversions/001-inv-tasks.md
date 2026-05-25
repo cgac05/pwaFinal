@@ -230,8 +230,8 @@ Tareas:
 - [x] T077 Definir contrato de parámetros de análisis fundamental en backend/src/modules/fundamental/fundamentalSourceContract.ts incluyendo campos clave: Market Cap, Sales, Dividendos, Precio, ROE, P/E, Empleados, Beta, EPS, Sector, país y metadata de fuente
 - [x] T078 Implementar servicio de integración con fuentes externas (Finviz, Yahoo Finance, Alphavantage u otras gratuitas/de paga) en backend/src/modules/fundamental/fundamentalDataService.ts con manejo de rate limits, caché y fallback entre fuentes
 - [x] T079 Implementar motor de viabilidad de inversión fundamental en backend/src/modules/fundamental/viabilityEngine.ts que puntúa cada empresa con scorecard ponderado y retorna recomendación (viable / neutral / no viable) con justificación por atributo
-- [ ] T080 Implementar API REST de perfil fundamental por empresa en backend/src/routes/fundamental/companyProfile.ts retornando todos los atributos, score de viabilidad y datos de contexto para modal/apartado en interfaz principal
-- [ ] T081 Implementar API de screener S&P500 en backend/src/routes/fundamental/sp500Screener.ts que rankea empresas del índice por tipo de estrategia y viabilidad fundamental, retornando top N candidatos con justificación
+- [x] T080 Implementar API REST de perfil fundamental por empresa en backend/src/routes/fundamental/companyProfile.ts retornando todos los atributos, score de viabilidad y datos de contexto para modal/apartado en interfaz principal
+- [x] T081 Implementar API de screener S&P500 en backend/src/routes/fundamental/sp500Screener.ts que rankea empresas del índice por tipo de estrategia y viabilidad fundamental, retornando top N candidatos con justificación
 
 ### Estrategias Básicas de Opciones
 - [ ] T082 Definir contrato base de parámetros de estrategias de opciones en backend/src/modules/strategies/optionsStrategyContract.ts con campos: ticker, tipo de opción, strike, fecha expiración, prima, cantidad, dirección, capital disponible, tolerancia al riesgo y metadatos de simulación

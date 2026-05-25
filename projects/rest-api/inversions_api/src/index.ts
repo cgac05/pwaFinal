@@ -20,6 +20,11 @@ import { instrumentsCatalogRouter } from "./routes/catalogs/instruments";
 import { brokerCapabilitiesRouter } from "./routes/brokers/capabilities";
 import { marketDataOhlcRouter } from "./routes/market-data/ohlc";
 import { indicatorsCatalogRouter } from "./routes/indicators/catalog";
+import { createCompanyProfileRouter } from "./routes/fundamental/companyProfile";
+import { createSp500ScreenerRouter } from "./routes/fundamental/sp500Screener";
+import { createOptionsRouter } from "./routes/strategies/optionsRouter";
+import { createFundamentalCopilotRouter } from "./routes/ai/fundamentalCopilot";
+import { supabaseClient } from "./database/supabase/client";
 
 const envValidation = validateEnvironment();
 if (!envValidation.isValid) {
@@ -55,6 +60,10 @@ app.use("/api/catalogs", instrumentsCatalogRouter);
 app.use("/api/brokers", brokerCapabilitiesRouter);
 app.use("/api/market-data", marketDataOhlcRouter);
 app.use("/api/indicators", indicatorsCatalogRouter);
+app.use("/api/team-03/fundamental", createCompanyProfileRouter(supabaseClient));
+app.use("/api/team-03/screener/sp500", createSp500ScreenerRouter(supabaseClient));
+app.use("/api/team-03/options", createOptionsRouter(supabaseClient));
+app.use("/api/team-03/ai", createFundamentalCopilotRouter(supabaseClient));
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
