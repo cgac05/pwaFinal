@@ -99,6 +99,18 @@ export interface StrategyComparison {
  * Simplified contract for option strategies (test/API compatibility)
  * Maps to OptionStrategyInput with simplified field names
  */
+
+/**
+ * Strategy result that includes ticker, optionType, and direction
+ * Unified type for all strategy calculations
+ */
+export type OptionStrategyResult = OptionStrategyOutput & {
+  ticker: string;
+  optionType: "CALL" | "PUT" | "call" | "put";
+  direction: "LONG" | "SHORT" | "long" | "short";
+  payoffProfile?: Array<{ price: number; profitLoss: number }>; // Optional for payoff visualization
+};
+
 export interface OptionStrategyContract {
   // Core parameters
   ticker: string;

@@ -184,6 +184,9 @@ export function checkStopLoss(
  * Calculate Long Put result - simplified output for tests
  */
 export function calculateLongPutResult(params: OptionStrategyInput | OptionStrategyContract): {
+  ticker: string;
+  optionType: "put";
+  direction: "long";
   breakEven: number;
   maxLoss: number;
   maxProfit: number;
@@ -200,6 +203,9 @@ export function calculateLongPutResult(params: OptionStrategyInput | OptionStrat
   const requiredMargin = premium * numberOfContracts * 100;
   
   return {
+    ticker: params.ticker,
+    optionType: "put",
+    direction: "long",
     breakEven,
     maxLoss,
     maxProfit,

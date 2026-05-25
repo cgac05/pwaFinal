@@ -193,6 +193,9 @@ export function checkMarginAlert(
  * Calculate Short Call result - simplified output for tests
  */
 export function calculateShortCallResult(params: OptionStrategyInput | OptionStrategyContract): {
+  ticker: string;
+  optionType: "call";
+  direction: "short";
   breakEven: number;
   maxLoss: number;
   maxProfit: number;
@@ -209,6 +212,9 @@ export function calculateShortCallResult(params: OptionStrategyInput | OptionStr
   const requiredMargin = parseFloat((strikePrice * numberOfContracts * 100 * 0.2).toFixed(2));
   
   return {
+    ticker: params.ticker,
+    optionType: "call",
+    direction: "short",
     breakEven,
     maxLoss,
     maxProfit,

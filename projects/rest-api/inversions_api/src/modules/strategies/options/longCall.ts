@@ -184,6 +184,9 @@ export function checkStopLoss(
  * Calculate Long Call result - simplified output for tests
  */
 export function calculateLongCallResult(params: OptionStrategyInput | OptionStrategyContract): {
+  ticker: string;
+  optionType: "call";
+  direction: "long";
   breakEven: number;
   maxLoss: number;
   maxProfit: number;
@@ -200,6 +203,9 @@ export function calculateLongCallResult(params: OptionStrategyInput | OptionStra
   const requiredMargin = premium * numberOfContracts * 100;
   
   return {
+    ticker: params.ticker,
+    optionType: "call",
+    direction: "long",
     breakEven,
     maxLoss,
     maxProfit,

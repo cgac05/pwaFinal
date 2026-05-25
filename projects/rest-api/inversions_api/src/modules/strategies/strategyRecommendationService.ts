@@ -8,6 +8,7 @@ export interface RankedStrategyRecommendation {
   ticker: string;
   optionType: OptionStrategyResult["optionType"];
   direction: OptionStrategyResult["direction"];
+  score: number; // confluencia_score
   expectedReturn: number;
   riskAdjustedReturn: number;
   maxLoss: number;
@@ -25,25 +26,48 @@ export interface StrategyRecommendationResult {
 const MARGINAL_VIABILITY_THRESHOLD = 0.55;
 
 function approximateProfitAtPrice(candidate: OptionStrategyResult, price: number): number {
-  let closest = candidate.payoffProfile[0];
-  for (const point of candidate.payoffProfile) {
-    if (Math.abs(point.price - price) < Math.abs(closest.price - price)) {
-      closest = point;
+  // Use payoffProfile if available
+  if (candidate.payoffProfile && candidate.payoffProfile.length > 0) {
+    let closest = candidate.payoffProfile[0];
+    for (const point of candidate.payoffProfile) {
+      if (Math.abs(point.price - price) < Math.abs(closest.price - price)) {
+        closest = point;
+      }
     }
+    return closest.profitLoss;
   }
-  return closest.profitLoss;
+  
+  // Fall back to scenario-based estimation
+  const atPrice = candidate.scenarioAtm?.priceAtScenario ?? candidate.breakEvenPrice;
+  const atPnL = candidate.scenarioAtm?.profitLoss ?? 0;
+  
+  if (price >= atPrice) {
+    // Interpolate between ATM and +5%
+    const plus5Price = candidate.scenarioPlus5?.priceAtScenario ?? (atPrice * 1.05);
+    const plus5PnL = candidate.scenarioPlus5?.profitLoss ?? 0;
+    const ratio = (plus5Price - atPrice) > 0 ? (price - atPrice) / (plus5Price - atPrice) : 0;
+    return atPnL + ratio * (plus5PnL - atPnL);
+  } else {
+    // Interpolate between -5% and ATM
+    const minus5Price = candidate.scenarioMinus5?.priceAtScenario ?? (atPrice * 0.95);
+    const minus5PnL = candidate.scenarioMinus5?.profitLoss ?? 0;
+    const ratio = (atPrice - minus5Price) > 0 ? (price - minus5Price) / (atPrice - minus5Price) : 0;
+    return minus5PnL + ratio * (atPnL - minus5PnL);
+  }
 }
 
 function scoreCandidate(
   candidate: OptionStrategyResult,
   params: OptionStrategyContract
 ): { expectedReturn: number; riskAdjustedReturn: number; recommendation: RecommendationType; justification: string } {
-  const priceTarget = params.direction === "long" ? params.strikePrice * 1.05 : params.strikePrice * 0.95;
+  // Normalize direction for comparison
+  const paramDirection = (params.direction || "").toLowerCase();
+  const priceTarget = paramDirection === "long" ? params.strikePrice * 1.05 : params.strikePrice * 0.95;
   const expectedReturn = approximateProfitAtPrice(candidate, priceTarget);
   const risk = candidate.maxLoss === Number.POSITIVE_INFINITY ? 1_000_000 : Math.max(1, candidate.maxLoss);
   const riskAdjustedReturn = expectedReturn / risk;
 
-  const recommendation = params.direction === "long" ? RecommendationType.COMPRA : RecommendationType.VENTA;
+  const recommendation = paramDirection === "long" ? RecommendationType.COMPRA : RecommendationType.VENTA;
   const justification = `Basado en el perfil ${candidate.optionType}-${candidate.direction}, el retorno esperado a precio objetivo ${priceTarget.toFixed(2)} es ${expectedReturn.toFixed(2)} y el riesgo ajustado es ${riskAdjustedReturn.toFixed(4)}.`;
 
   return { expectedReturn, riskAdjustedReturn, recommendation, justification };

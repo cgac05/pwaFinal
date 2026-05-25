@@ -81,7 +81,9 @@ export function simulateStrategy(
   const volPath = volatilityPathDaily ?? Array(pricePathDaily.length).fill(assumptions.impliedVolatility ?? 25);
   const simDays = daysToSimulate ?? pricePathDaily.length;
   
-  const strategyType = `${normalizedParams.direction}_${normalizedParams.optionType}`;
+  // Create lowercase strategyType for consistent output format
+  const strategyTypeUpper = `${normalizedParams.direction}_${normalizedParams.optionType}`;
+  const strategyType = strategyTypeUpper.toLowerCase();
   const dailyPoints: DailySimulationPoint[] = [];
   const pnlPath: number[] = [];
   
@@ -111,7 +113,7 @@ export function simulateStrategy(
     
     // Evaluate strategy at this point in time
     let strategyOutput: OptionStrategyOutput;
-    switch (strategyType.toUpperCase()) {
+    switch (strategyTypeUpper) {
       case "LONG_CALL":
         strategyOutput = evaluateLongCall(updatedParams);
         break;
@@ -125,7 +127,7 @@ export function simulateStrategy(
         strategyOutput = evaluateShortPut(updatedParams);
         break;
       default:
-        throw new Error(`Unknown strategy type: ${strategyType}`);
+        throw new Error(`Unknown strategy type: ${strategyTypeUpper}`);
     }
     
     // Extract P&L from current scenario
@@ -145,7 +147,7 @@ export function simulateStrategy(
     }
     
     // Calculate Greeks (simplified)
-    const theta = calculateTheta(daysRemaining, params.daysToExpiration, dailyPnL);
+    const theta = calculateTheta(daysRemaining, normalizedParams.daysToExpiration, dailyPnL);
     const gamma = calculateGamma(currentPrice, params.strikePrice, currentVol, daysRemaining);
     const vega = calculateVega(currentVol, params.strikePrice, daysRemaining);
     

@@ -185,6 +185,9 @@ export function checkMarginAlert(
  * Calculate Short Put result - simplified output for tests
  */
 export function calculateShortPutResult(params: OptionStrategyInput | OptionStrategyContract): {
+  ticker: string;
+  optionType: "put";
+  direction: "short";
   breakEven: number;
   maxLoss: number;
   maxProfit: number;
@@ -201,6 +204,9 @@ export function calculateShortPutResult(params: OptionStrategyInput | OptionStra
   const requiredMargin = parseFloat((strikePrice * numberOfContracts * 100 * 0.2).toFixed(2));
   
   return {
+    ticker: params.ticker,
+    optionType: "put",
+    direction: "short",
     breakEven,
     maxLoss,
     maxProfit,
