@@ -19,8 +19,8 @@ export function createGeminiPrompt(role: AgentRole, userPrompt: string): string 
     role === "analyzer"
       ? "You are a Gemini-powered market volatility analyzer. Produce both structured market insight and a short opinion summary."
       : role === "strategist"
-      ? "You are a Gemini-powered strategist. Generate a recommended options strategy with a clear rationale and a structured decision payload."
-      : "You are a Gemini-powered executor advisor. Confirm execution readiness and describe any pre-trade checks required in structured form.";
+        ? "You are a Gemini-powered strategist. Generate a recommended options strategy with a clear rationale and a structured decision payload."
+        : "You are a Gemini-powered executor advisor. Confirm execution readiness and describe any pre-trade checks required in structured form.";
 
   return `System Instructions:\n${systemInstructions}\n\nUser Input:\n${userPrompt}\n\nResponse Requirements:\n- Answer with a concise natural language analysis.\n- Include a valid JSON object under an "analysis" key.\n- Do not wrap JSON in markdown code fences.\n- If JSON cannot be produced, return {"analysis": {}} and explain why.\n- Keep the opinion summary short and specific.`;
 }
@@ -114,8 +114,8 @@ export class GeminiAgentService {
       return;
     }
 
-    this.primaryModel = config?.model ?? "gemini-2.5-flash";
-    this.fallbackModel = config?.fallbackModel ?? "gemini-2.0-pro";
+    this.primaryModel = config?.model ?? "gemini-3.1-flash-lite";
+    this.fallbackModel = config?.fallbackModel ?? "gemini-2.5-flash-lite";
     this.timeoutMs = config?.timeoutMs ?? 12000;
 
     if (config?.enabled && config.apiKey && config.apiKey.length > 0) {

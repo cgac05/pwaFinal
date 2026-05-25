@@ -97,10 +97,10 @@ interface GeminiParsedPayload {
 }
 
 export class InstitutionalCopilotChat {
-  private readonly modelVersion = "gemini/gemini-2.5-flash";
+  private readonly modelVersion = "gemini/gemini-3.1-flash-lite";
   // Tag demo responses explicitly so the UI can distinguish synthetic output from Gemini-backed output.
   private readonly demoModelVersion = "demo/institutional-copilot-v1";
-  private readonly endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+  private readonly endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent";
   private readonly timeoutMs = 30_000;
   private readonly initialDecisionWindowMs = 5_000;
   private readonly pollingIntervalMs = 2_000;

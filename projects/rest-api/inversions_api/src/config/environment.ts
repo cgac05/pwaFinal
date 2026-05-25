@@ -181,8 +181,8 @@ export function initializeEnvironment(): EnvironmentConfig {
       gemini: {
         apiKey: process.env.GEMINI_API_KEY,
         enabled: process.env.GEMINI_ENABLED !== "false",
-        model: process.env.GEMINI_PRIMARY_MODEL || "gemini-2.0-flash",
-        fallbackModel: process.env.GEMINI_FALLBACK_MODEL || "gemini-1.5-flash",
+        model: process.env.GEMINI_PRIMARY_MODEL || "gemini-3.1-flash-lite",
+        fallbackModel: process.env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash-lite",
         timeoutMs: process.env.GEMINI_TIMEOUT_MS ? parseInt(process.env.GEMINI_TIMEOUT_MS, 10) : 12000,
       },
     }),
