@@ -80,6 +80,13 @@ export interface EnvironmentConfig {
       enabled: boolean;
     };
   };
+  gemini?: {
+    apiKey: string;
+    enabled: boolean;
+    model?: string;
+    fallbackModel?: string;
+    timeoutMs?: number;
+  };
 }
 
 /**
@@ -170,6 +177,15 @@ export function initializeEnvironment(): EnvironmentConfig {
         },
       }),
     },
+    ...(process.env.GEMINI_API_KEY && {
+      gemini: {
+        apiKey: process.env.GEMINI_API_KEY,
+        enabled: process.env.GEMINI_ENABLED !== "false",
+        model: process.env.GEMINI_PRIMARY_MODEL || "gemini-2.0-flash",
+        fallbackModel: process.env.GEMINI_FALLBACK_MODEL || "gemini-1.5-flash",
+        timeoutMs: process.env.GEMINI_TIMEOUT_MS ? parseInt(process.env.GEMINI_TIMEOUT_MS, 10) : 12000,
+      },
+    }),
   };
 
   // FIC: Cache and return

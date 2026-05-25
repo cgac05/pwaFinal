@@ -23,6 +23,7 @@ export const MainLayout: React.FC = () => {
           <Link to="/institutional/positions" style={{ color: "var(--color-text)", textDecoration: "none", padding: "0.5rem", borderRadius: "var(--radius-sm)", display: "block" }}>Posiciones Reg.</Link>
           <Link to="/coverage/strategies" style={{ color: "var(--color-text)", textDecoration: "none", padding: "0.5rem", borderRadius: "var(--radius-sm)", display: "block" }}>Coberturas</Link>
           <Link to="/ai/chat" style={{ color: "var(--color-text)", textDecoration: "none", padding: "0.5rem", borderRadius: "var(--radius-sm)", display: "block" }}>Chat IA</Link>
+          <Link to="/ai/evaluacion-tabla" style={{ color: "var(--color-text)", textDecoration: "none", padding: "0.5rem", borderRadius: "var(--radius-sm)", display: "block" }}>Panel de Análisis (Tabla)</Link>
         </nav>
       </aside>
 

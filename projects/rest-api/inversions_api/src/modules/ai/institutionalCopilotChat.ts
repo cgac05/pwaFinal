@@ -389,7 +389,7 @@ export class InstitutionalCopilotChat {
       strategySummary,
       "",
       "Evidence:",
-      evidenceSummary || "- none",
+      evidenceSummary || "- none",    
       "",
       "Explain likely coverage scenarios, protection trade-offs, and what institutional evidence supports the recommendation."
     ].join("\n");

@@ -8,6 +8,7 @@ import { InstitutionalAnalysisPage } from "./pages/institutional/InstitutionalAn
 import { RegulatoryPositionsPage } from "./pages/institutional/RegulatoryPositionsPage";
 import { CoverageStrategiesPage } from "./pages/coverage/CoverageStrategiesPage";
 import { AIChatPage } from "./pages/ai/AIChatPage";
+import { VolatilityAnalysisPage } from "./pages/ai/VolatilityAnalysisPage";
 
 const rootElement = document.getElementById("root");
 
@@ -25,6 +26,7 @@ createRoot(rootElement).render(
           <Route path="institutional/positions" element={<RegulatoryPositionsPage />} />
           <Route path="coverage/strategies" element={<CoverageStrategiesPage />} />
           <Route path="ai/chat" element={<AIChatPage />} />
+          <Route path="ai/evaluacion-tabla" element={<VolatilityAnalysisPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

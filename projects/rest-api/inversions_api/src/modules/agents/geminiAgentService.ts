@@ -108,8 +108,8 @@ export class GeminiAgentService {
     } catch (err) {
       // Environment not initialized — treat Gemini as not configured for tests
       this.ai = null;
-      this.primaryModel = "gemini-2.5-flash";
-      this.fallbackModel = "gemini-2.0-pro";
+      this.primaryModel = "gemini-2.0-flash";
+      this.fallbackModel = "gemini-1.5-flash";
       this.timeoutMs = 12000;
       return;
     }

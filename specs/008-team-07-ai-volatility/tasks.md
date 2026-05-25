@@ -1,7 +1,7 @@
 # Tasks - TEAM-07 AI Volatility Analysis
 **Equipo:** SixPackDevs  
 **Rama:** feature/008-team-07-ai-volatility  
-**Total Tasks:** 6
+**Total Tasks:** 7
 
 ---
 
@@ -248,6 +248,39 @@ Implementar el backend necesario para soportar dashboards visuales, asegurando q
 
 ---
 
+## T158: Refinamientos de Volatilidad y Simulador del Profesor (TAM07)
+
+**Story Points**: 5  
+**Prioridad**: P0  
+**Asignado a**: Backend + Frontend  
+**Dependencias**: [T155]  
+**Semana**: W5  
+
+### Descripción
+Implementar los requerimientos y refinamientos finales para la evaluación académica. Incluye la dinamización de scores por ticker en el frontend, la integración del mini-chat de seguimiento con llamadas reales a Gemini en el backend y el desarrollo de un comportamiento de fallback híbrido inteligente que sirva como simulador cuando la API Key no esté presente.
+
+### Acceptance Criteria
+ - [X] Scores dinámicos por ticker (SPY, AAPL, TSLA, NVDA) en el frontend
+ - [X] Mini-chat interactivo de seguimiento conectado directamente a `GeminiAgentService`
+ - [X] Manejo inteligente de fallbacks: simulación realista si no hay API Key, y error 500 estricto si falla la llamada real
+ - [X] Corrección de enrutamiento relativo `/analyze-scores` para evitar errores 404
+ - [X] Integración limpia de dependencias npm `@google/genai` y `@anthropic-ai/sdk` en backend
+ - [X] Proyecto compilando sin warnings de TS ni linter (`npm run lint` pasa en verde)
+
+### Tareas Técnicas
+1. Definir mapa de scores en frontend `VolatilityAnalysisPage.tsx` y actualizar `scores` al cambiar ticker
+2. Remover fallback estático directo en backend y mapear contexto enriquecido a Gemini
+3. Implementar lógica híbrida de fallback si `geminiService.isEnabled()` es falso en `volatilityAnalysis.ts`
+4. Añadir tipado de variables de entorno de `gemini` en `environment.ts`
+5. Ajustar URL en `volatilityAnalysisApi.ts` para resolver redirección de Vite proxy
+
+### Criterios de Definición de Listo
+- Ambos servidores inician y responden correctamente (`npm run dev:clean-start`)
+- Linter en verde sin errores de tipado
+- Prototipo con cobertura para pruebas locales sin API Key
+
+---
+
 ## DEPENDENCIAS Y FLUJO
 
 ```
@@ -264,14 +297,15 @@ FASE 2 (W2-W3):
 FASE 3 (W4-W5):
   ├─ T154: Historial auditable y dashboard API
   ├─ T156: Dashboard visual y contrato de integración frontend
-  └─ T155: Servicio de prompt CSV y retorno de salida Gemini (ajustes)
+  ├─ T155: Servicio de prompt CSV y retorno de salida Gemini (ajustes)
+  └─ T158: Refinamientos de Volatilidad y Simulador del Profesor (TAM07)
 ```
 
 ---
 
 ## NOTAS FINALES
 
-- **Story Points**: 8, 13, 13, 8, 5, 5
+- **Story Points**: 8, 13, 13, 8, 5, 5, 5
 - **Prioridad**: P0 = blocker, P1 = soporte
 - **DoD Universal**: TypeScript 100%, ESLint 0 warnings, PR reviewed, tests incluidos
 - **Alcance**: mantener análisis de volatilidad completo, ejecutar órdenes en brokers integrados, persistir historial auditable, exponer dashboard API, usar Gemini para salida dual y aplicar gate humano antes de ejecuciones reales
