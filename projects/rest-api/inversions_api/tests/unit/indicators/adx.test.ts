@@ -17,11 +17,18 @@ function bar(time: number, close: number, spread = 1): OhlcBar {
 }
 
 describe("adxStrength", () => {
+  // FIC: T139/T141 — limites exactos: <20 sin_tendencia, [20,25) debil, [25,50) fuerte, >=50 muy_fuerte.
   it.each([
     [null, "sin_tendencia"],
     [10, "sin_tendencia"],
+    [19.99, "sin_tendencia"],
+    [20, "debil"],
     [22, "debil"],
+    [24.99, "debil"],
+    [25, "fuerte"],
     [35, "fuerte"],
+    [49.99, "fuerte"],
+    [50, "muy_fuerte"],
     [60, "muy_fuerte"]
   ] as const)("classifies adx=%s as %s", (value, expected) => {
     expect(adxStrength(value)).toBe(expected);

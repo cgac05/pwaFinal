@@ -2,7 +2,13 @@
 // FIC: Orquestador del Chat IA explicativo — explica señales tecnicas, nunca ejecuta ordenes (Hansel, TEAM-02).
 
 import { computeConfluence } from "./confluence";
-import type { ConfluenceVerdict, OhlcBar, Timeframe } from "./types";
+import {
+  IA_DISCLAIMER_ID,
+  type ConfluenceVerdict,
+  type OhlcBar,
+  type SignalObservation,
+  type Timeframe
+} from "./types";
 
 // FIC: Constitutional disclaimer — MUST be present in every Chat IA response.
 // FIC: Disclaimer constitucional — DEBE estar presente en toda respuesta del Chat IA.
@@ -40,6 +46,33 @@ export interface ChatExplanationResponse {
   model_version: string;
   computed_at: string;
   refused: boolean;
+  // FIC: Phase 5 Bloque D (T104) — observacion estructurada para alimentar la fila A_IA.
+  observation?: SignalObservation;
+  // FIC: Phase 5 Bloque D (T105) — flag y disclaimer_id presentes en respuestas IA (FR-019, SC-009).
+  ia_revisada?: boolean;
+  disclaimer_id?: string;
+  degraded?: boolean;
+  error_code?: "LLM_UNAVAILABLE" | "LLM_RATE_LIMITED";
+}
+
+// FIC: Construye una SignalObservation tipada desde la confluencia (T104).
+// FIC: Build a typed SignalObservation from confluence (FR-020).
+export function buildObservationFromVerdict(
+  verdict: ConfluenceVerdict,
+  question: string
+): SignalObservation {
+  const cited = verdict.components
+    .filter((c) => c.available)
+    .map((c) => `${c.indicator.toUpperCase()}=${c.value ?? "n/a"}`)
+    .join(", ");
+  return {
+    objetivo: `Responder en lenguaje natural: "${question}".`,
+    senal: `Veredicto ${verdict.verdict} (score ${verdict.score}).`,
+    explicacion: `Indicadores citados: ${cited || "ninguno disponible"}.`,
+    metricas: {
+      MODEL_VERSION: verdict.algorithm_version
+    }
+  };
 }
 
 // FIC: Detects user questions that imply executing/placing an order (ES + EN).
@@ -177,7 +210,9 @@ function buildRefusal(computedAt: string): ChatExplanationResponse {
     disclaimer: CHAT_DISCLAIMER,
     model_version: "refusal-guard",
     computed_at: computedAt,
-    refused: true
+    refused: true,
+    ia_revisada: true,
+    disclaimer_id: IA_DISCLAIMER_ID
   };
 }
 
@@ -218,6 +253,12 @@ export async function explainSignal(
     disclaimer: CHAT_DISCLAIMER,
     model_version: llm.model,
     computed_at: computedAt,
-    refused: false
+    refused: false,
+    // FIC: T104/T105 — observacion estructurada + flags constitucionales para fila A_IA.
+    observation: buildObservationFromVerdict(verdict, request.question),
+    ia_revisada: true,
+    disclaimer_id: IA_DISCLAIMER_ID,
+    degraded: (llm as any).degraded === true ? true : undefined,
+    error_code: (llm as any).error_code
   };
 }

@@ -39,7 +39,9 @@ describe("E2E: OHLC -> indicators -> confluence -> chat", () => {
     // FIC: 1) the core is healthy. / FIC: 1) el core esta saludable.
     const health = await request(app).get("/api/indicators/health");
     expect(health.status).toBe(200);
-    expect(health.body.status).toBe("ok");
+    // FIC: Phase 6 (T136-T138) — el endpoint ahora reporta status agregado de 3 dependencias;
+    // FIC: en CI sin Anthropic/Supabase, el status es "degraded" pero 200 sigue siendo correcto.
+    expect(["up", "degraded"]).toContain(health.body.status);
 
     // FIC: 2) every individual indicator answers. / FIC: 2) cada indicador responde.
     for (const indicator of ["rsi", "macd", "ema", "adx", "bollinger"]) {

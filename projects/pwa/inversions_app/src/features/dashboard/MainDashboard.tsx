@@ -14,6 +14,8 @@ import { TimeControls } from "./TimeControls";
 import { IndicatorsMenu } from "./IndicatorsMenu";
 import { RuntimeModeSwitches } from "./RuntimeModeSwitches";
 import { ConfluenceSignalsTable } from "./ConfluenceSignalsTable";
+import { SimulationControlPanel } from "./simulation/SimulationControlPanel";
+import type { ConfluenceSignalRow, SimulationResponse } from "../../services/signals/confluenceTableApi";
 import { useSignalStore } from "../../store/signals";
 
 const initialCores: CoreDefinition[] = [
@@ -42,7 +44,14 @@ export function MainDashboard() {
   const [payload, setPayload] = useState<DashboardOrchestratorResponse | null>(null);
   const [selectedSignal, setSelectedSignal] = useState<DashboardSignalCard | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const { selectedInstrument } = useSignalStore();
+  const [simulationRows, setSimulationRows] = useState<ConfluenceSignalRow[] | undefined>(undefined);
+  const [simulationVerdict, setSimulationVerdict] = useState<any | null>(null);
+  const { selectedInstrument, selectedSignal: storeSelectedRow } = useSignalStore();
+
+  const handleSimulationResult = useCallback((result: SimulationResponse) => {
+    setSimulationRows(result.table);
+    setSimulationVerdict(result.verdict);
+  }, []);
 
   const selectedSymbol = selectedInstrument?.symbol ?? payload?.cards[0]?.instrument ?? "SPY";
 
@@ -229,7 +238,17 @@ export function MainDashboard() {
                       endDate={periodRange?.endDate}
                     />
                   </div>
-                  <ConfluenceSignalsTable symbol={selectedSymbol} />
+                  <SimulationControlPanel ticket={selectedSymbol} onResult={handleSimulationResult} />
+                  {simulationVerdict && (
+                    <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+                      <strong>Verdict derivado:</strong>
+                      <span>
+                        {String(simulationVerdict.verdict)} (score {Number(simulationVerdict.score ?? 0).toFixed(3)})
+                        {simulationVerdict.degraded ? <em style={{ color: "var(--color-text-muted)" }}> · degradado</em> : null}
+                      </span>
+                    </div>
+                  )}
+                  <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} />
                 </div>
               </div>
             ) : null}
@@ -254,6 +273,17 @@ export function MainDashboard() {
                 </div>
               </div>
               <SignalEvidencePanel evidence={selectedSignal?.evidence ?? []} />
+              {/* FIC: Phase 5 T102 — click en fila de tabla canonica abre las evidencia_refs aqui. */}
+              {storeSelectedRow && Array.isArray((storeSelectedRow.metadata as any)?.evidencia_refs) && (
+                <div style={{ marginTop: "0.75rem", padding: "0.5rem 0.75rem", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
+                  <strong style={{ fontSize: "0.8rem" }}>Evidencia de la fila seleccionada</strong>
+                  <ul style={{ margin: "0.4rem 0 0 1rem", padding: 0, fontSize: "0.75rem" }}>
+                    {((storeSelectedRow.metadata as any).evidencia_refs as string[]).map((ref, i) => (
+                      <li key={`${ref}-${i}`}>{ref}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
         ) : !loading ? (

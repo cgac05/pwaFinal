@@ -5,6 +5,7 @@ import { Router } from "express";
 import { computeEma } from "../../modules/indicators/ema";
 import { getCandles, isSupportedTimeframe } from "../../modules/indicators/ohlcSource";
 import { respondError } from "../../modules/indicators/errors";
+import { memoizeIndicator } from "../../modules/indicators/cache";
 import type { Timeframe } from "../../modules/indicators/types";
 
 export const emaRouter = Router();
@@ -50,6 +51,13 @@ emaRouter.get("/ema", (req, res) => {
     );
   }
 
-  const result = computeEma(candles, { period: periodRaw }, { symbol, timeframe });
+  const result = memoizeIndicator({
+    indicator: "ema",
+    symbol,
+    timeframe,
+    params: { period: periodRaw },
+    candles,
+    compute: () => computeEma(candles, { period: periodRaw }, { symbol, timeframe })
+  });
   return res.status(200).json(result);
 });

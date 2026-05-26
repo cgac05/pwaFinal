@@ -3,6 +3,9 @@
 
 import { ALGORITHM_VERSION, type IndicatorResult, type OhlcBar, type Timeframe } from "./types";
 import { inputHash } from "./ohlcSource";
+import { ADX_THRESHOLDS } from "./thresholds";
+
+export { ADX_THRESHOLDS };
 
 export interface AdxParams {
   period: number;
@@ -26,9 +29,9 @@ export type AdxResult = IndicatorResult<AdxCurrent, AdxPoint>;
 // FIC: Umbrales de fuerza — <20 nula, 20-25 debil, 25-50 fuerte, >=50 muy fuerte.
 export function adxStrength(adx: number | null): AdxStrength {
   if (adx === null || Number.isNaN(adx)) return "sin_tendencia";
-  if (adx < 20) return "sin_tendencia";
-  if (adx < 25) return "debil";
-  if (adx < 50) return "fuerte";
+  if (adx < ADX_THRESHOLDS.sin_tendencia) return "sin_tendencia";
+  if (adx < ADX_THRESHOLDS.debil) return "debil";
+  if (adx < ADX_THRESHOLDS.fuerte) return "fuerte";
   return "muy_fuerte";
 }
 

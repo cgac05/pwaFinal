@@ -5,6 +5,7 @@ import { Router } from "express";
 import { computeBollinger } from "../../modules/indicators/bollinger";
 import { getCandles, isSupportedTimeframe } from "../../modules/indicators/ohlcSource";
 import { respondError } from "../../modules/indicators/errors";
+import { memoizeIndicator } from "../../modules/indicators/cache";
 import type { Timeframe } from "../../modules/indicators/types";
 
 export const bollingerRouter = Router();
@@ -54,6 +55,13 @@ bollingerRouter.get("/bollinger", (req, res) => {
     );
   }
 
-  const result = computeBollinger(candles, { period: periodRaw, stdDev: stdDevRaw }, { symbol, timeframe });
+  const result = memoizeIndicator({
+    indicator: "bollinger",
+    symbol,
+    timeframe,
+    params: { period: periodRaw, stdDev: stdDevRaw },
+    candles,
+    compute: () => computeBollinger(candles, { period: periodRaw, stdDev: stdDevRaw }, { symbol, timeframe })
+  });
   return res.status(200).json(result);
 });

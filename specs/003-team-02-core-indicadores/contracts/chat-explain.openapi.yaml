@@ -58,6 +58,29 @@ components:
         refused:
           type: boolean
           description: true cuando la pregunta implicaba ejecutar una orden y fue rechazada.
+        # FIC: Phase 5 T104/T105 — observacion estructurada, ia_revisada + disclaimer_id (FR-019, SC-009).
+        observation:
+          type: object
+          description: SignalObservation tipada producida por el chat IA cuando se invoca desde el pipeline.
+          properties:
+            objetivo: { type: string }
+            senal: { type: string }
+            explicacion: { type: string }
+            metricas: { type: object, additionalProperties: true }
+        ia_revisada:
+          type: boolean
+          description: Phase 5 FR-019/SC-009 — true cuando la respuesta paso por la IA constitucional.
+        disclaimer_id:
+          type: string
+          description: Referencia al disclaimer constitucional (no nulo cuando ia_revisada=true).
+        # FIC: Phase 6 T124 — degradacion grace de LLM (no propaga 5xx al cliente).
+        degraded:
+          type: boolean
+          description: true cuando el LLM externo cayo o agoto rate-limit y se uso fallback determinista.
+        error_code:
+          type: string
+          enum: [LLM_UNAVAILABLE, LLM_RATE_LIMITED]
+          description: Presente solo cuando degraded=true.
     Error:
       type: object
       required: [error_code, message]

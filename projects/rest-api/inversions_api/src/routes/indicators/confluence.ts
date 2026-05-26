@@ -5,6 +5,7 @@ import { Router } from "express";
 import { computeConfluence } from "../../modules/indicators/confluence";
 import { getCandles, isSupportedTimeframe } from "../../modules/indicators/ohlcSource";
 import { respondError } from "../../modules/indicators/errors";
+import { memoizeIndicator } from "../../modules/indicators/cache";
 import type { Timeframe } from "../../modules/indicators/types";
 
 export const indicatorsConfluenceRouter = Router();
@@ -39,6 +40,13 @@ indicatorsConfluenceRouter.get("/confluence", (req, res) => {
 
   // FIC: computeConfluence never throws — a missing indicator degrades, it does not 500.
   // FIC: computeConfluence nunca lanza — un indicador faltante degrada, no produce 500.
-  const verdict = computeConfluence(candles, { symbol, timeframe });
+  const verdict = memoizeIndicator({
+    indicator: "confluence",
+    symbol,
+    timeframe,
+    params: { count: countRaw },
+    candles,
+    compute: () => computeConfluence(candles, { symbol, timeframe })
+  });
   return res.status(200).json(verdict);
 });

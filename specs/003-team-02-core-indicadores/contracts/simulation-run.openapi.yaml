@@ -1,0 +1,160 @@
+# FIC: OpenAPI contract for the simulation runner endpoint (Phase 5, FR-015, US6).
+openapi: 3.1.0
+info:
+  title: Indicators Core — Simulation Runner
+  version: 1.0.0
+  description: >-
+    Ejecuta una simulacion completa (OHLC -> indicadores filtrados -> tabla canonica -> verdict derivado)
+    a partir de un SimulationRequest. Idempotente: misma request + mismo last_bar_ts produce mismas filas.
+
+paths:
+  /api/simulation/run:
+    post:
+      summary: Ejecuta una simulacion y devuelve la tabla + verdict consolidado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SimulationRequest" }
+      responses:
+        "200":
+          description: Resultado de la simulacion (verdict derivado de la tabla).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SimulationResponse" }
+        "400":
+          description: "INVALID_SIMULATION_REQUEST (from>to, cores vacios, estrategia desconocida — US6.4)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: "AUTH_REQUIRED / AUTH_INVALID (US7)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: "AUTH_FORBIDDEN."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: "Ticket sin datos OHLC en el rango."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "insufficient_data — la ventana no tiene velas suficientes para los indicadores habilitados."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: "RATE_LIMITED (60/min)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RateLimitError" }
+      security:
+        - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CoreId:
+      type: string
+      enum: [A_INDICADORES, A_FUNDAMENTAL, A_TECNICO, A_INSTITUCIONAL, A_NOTICIAS, A_IA]
+    SubCoreIndicador:
+      type: string
+      enum: [RSI, MACD, EMA, ADX, BB]
+    Timeframe:
+      type: string
+      enum: [1m, 5m, 15m, 1h, 4h, 1d]
+    Tolerancia:
+      type: string
+      enum: [BAJO, MEDIO, ALTO]
+    RuntimeMode:
+      type: string
+      enum: [ONLINE, OFFLINE]
+
+    RangoHistorico:
+      oneOf:
+        - type: string
+          enum: [2A, 1A, 6M, 3M, 1M]
+        - type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date }
+            to:   { type: string, format: date }
+
+    RangoEstrategia:
+      type: object
+      required: [from, to]
+      properties:
+        from: { type: string, format: date }
+        to:   { type: string, format: date }
+
+    SimulationRequest:
+      type: object
+      required: [ticket, rangoHistorico, rangoEstrategia, temporalidad, runtimeMode, coresHabilitados, indicadoresHabilitados, estrategia, toleranciaRiesgo]
+      properties:
+        ticket: { type: string, example: AAPL }
+        rangoHistorico: { $ref: "#/components/schemas/RangoHistorico" }
+        rangoEstrategia: { $ref: "#/components/schemas/RangoEstrategia" }
+        temporalidad: { $ref: "#/components/schemas/Timeframe" }
+        runtimeMode: { $ref: "#/components/schemas/RuntimeMode" }
+        coresHabilitados:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/CoreId" }
+        indicadoresHabilitados:
+          type: array
+          items: { $ref: "#/components/schemas/SubCoreIndicador" }
+        estrategia: { type: string, example: IRON_CONDOR }
+        toleranciaRiesgo: { $ref: "#/components/schemas/Tolerancia" }
+
+    SimulationResponse:
+      type: object
+      required: [verdict, table, inputs_echo, computed_at, algorithm_version, simulation_run_id]
+      properties:
+        simulation_run_id: { type: string, format: uuid }
+        verdict:
+          type: object
+          required: [label, score, degraded]
+          properties:
+            label: { type: string, enum: [alcista, neutral, bajista] }
+            score: { type: number, minimum: -1, maximum: 1 }
+            degraded: { type: boolean }
+            missing:
+              type: array
+              items: { type: string }
+        table:
+          type: array
+          description: "Filas canonicas (FR-014). Mismo schema que /api/signals/confluence-table."
+          items: { $ref: "./confluence-table.openapi.yaml#/components/schemas/ConfluenceSignalRow" }
+        inputs_echo:
+          type: object
+          description: "Reflejo literal del SimulationRequest, para auditoria (FR-008, T088)."
+        computed_at: { type: string, format: date-time }
+        algorithm_version: { type: string }
+
+    Error:
+      type: object
+      required: [error_code, message]
+      properties:
+        error_code:
+          type: string
+          description: "INVALID_SIMULATION_REQUEST | AUTH_REQUIRED | AUTH_INVALID | AUTH_FORBIDDEN | OHLC_NOT_FOUND | INSUFFICIENT_DATA"
+        message: { type: string }
+        hint: { type: string }
+
+    RateLimitError:
+      allOf:
+        - { $ref: "#/components/schemas/Error" }
+        - type: object
+          required: [retry_after_seconds]
+          properties:
+            error_code: { type: string, enum: [RATE_LIMITED] }
+            retry_after_seconds: { type: integer, minimum: 1 }

@@ -5,6 +5,7 @@ import { Router } from "express";
 import { computeAdx } from "../../modules/indicators/adx";
 import { getCandles, isSupportedTimeframe } from "../../modules/indicators/ohlcSource";
 import { respondError } from "../../modules/indicators/errors";
+import { memoizeIndicator } from "../../modules/indicators/cache";
 import type { Timeframe } from "../../modules/indicators/types";
 
 export const adxRouter = Router();
@@ -52,6 +53,13 @@ adxRouter.get("/adx", (req, res) => {
     );
   }
 
-  const result = computeAdx(candles, { period: periodRaw }, { symbol, timeframe });
+  const result = memoizeIndicator({
+    indicator: "adx",
+    symbol,
+    timeframe,
+    params: { period: periodRaw },
+    candles,
+    compute: () => computeAdx(candles, { period: periodRaw }, { symbol, timeframe })
+  });
   return res.status(200).json(result);
 });

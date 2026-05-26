@@ -5,6 +5,7 @@ import { Router } from "express";
 import { computeMacd } from "../../modules/indicators/macd";
 import { getCandles, isSupportedTimeframe } from "../../modules/indicators/ohlcSource";
 import { respondError } from "../../modules/indicators/errors";
+import { memoizeIndicator } from "../../modules/indicators/cache";
 import type { Timeframe } from "../../modules/indicators/types";
 
 export const macdRouter = Router();
@@ -57,6 +58,13 @@ macdRouter.get("/macd", (req, res) => {
     );
   }
 
-  const result = computeMacd(candles, { fast, slow, signal }, { symbol, timeframe });
+  const result = memoizeIndicator({
+    indicator: "macd",
+    symbol,
+    timeframe,
+    params: { fast, slow, signal },
+    candles,
+    compute: () => computeMacd(candles, { fast, slow, signal }, { symbol, timeframe })
+  });
   return res.status(200).json(result);
 });

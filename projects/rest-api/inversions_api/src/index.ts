@@ -28,6 +28,9 @@ import { bollingerRouter } from "./routes/indicators/bollinger";
 import { indicatorsConfluenceRouter } from "./routes/indicators/confluence";
 import { indicatorsHealthRouter } from "./routes/indicators/health";
 import { chatExplainRouter } from "./routes/indicators/chatExplain";
+import { confluenceTableRouter } from "./routes/signals/confluenceTable";
+import { simulationRunRouter } from "./routes/simulation/run";
+import { indicatorsRateLimit, chatRateLimit } from "./middleware/indicatorsRateLimit";
 
 const envValidation = validateEnvironment();
 if (!envValidation.isValid) {
@@ -51,6 +54,8 @@ const executionService = new ExecutionService();
 app.use("/api/signals", signalEvaluateRouter);
 app.use("/api/signals", signalDetailsRouter);
 app.use("/api/signals", signalConfluenceRouter);
+app.use("/api/signals", indicatorsRateLimit, confluenceTableRouter);
+app.use("/api/simulation", indicatorsRateLimit, simulationRunRouter);
 app.use("/api/dashboard", dashboardOrchestratorRouter);
 app.use("/api/dashboard", confluenceViewPresetsRouter);
 app.use("/api/execution", createApprovalRouter(approvalService));
@@ -63,14 +68,14 @@ app.use("/api/catalogs", instrumentsCatalogRouter);
 app.use("/api/brokers", brokerCapabilitiesRouter);
 app.use("/api/market-data", marketDataOhlcRouter);
 app.use("/api/indicators", indicatorsCatalogRouter);
-app.use("/api/indicators", rsiRouter);
-app.use("/api/indicators", macdRouter);
-app.use("/api/indicators", emaRouter);
-app.use("/api/indicators", adxRouter);
-app.use("/api/indicators", bollingerRouter);
-app.use("/api/indicators", indicatorsConfluenceRouter);
+app.use("/api/indicators", indicatorsRateLimit, rsiRouter);
+app.use("/api/indicators", indicatorsRateLimit, macdRouter);
+app.use("/api/indicators", indicatorsRateLimit, emaRouter);
+app.use("/api/indicators", indicatorsRateLimit, adxRouter);
+app.use("/api/indicators", indicatorsRateLimit, bollingerRouter);
+app.use("/api/indicators", indicatorsRateLimit, indicatorsConfluenceRouter);
 app.use("/api/indicators", indicatorsHealthRouter);
-app.use("/api/chat", chatExplainRouter);
+app.use("/api/chat", chatRateLimit, chatExplainRouter);
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });

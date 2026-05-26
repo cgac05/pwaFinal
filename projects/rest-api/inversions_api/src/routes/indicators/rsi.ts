@@ -5,6 +5,7 @@ import { Router } from "express";
 import { computeRsi } from "../../modules/indicators/rsi";
 import { getCandles, isSupportedTimeframe } from "../../modules/indicators/ohlcSource";
 import { respondError } from "../../modules/indicators/errors";
+import { memoizeIndicator } from "../../modules/indicators/cache";
 import type { Timeframe } from "../../modules/indicators/types";
 
 export const rsiRouter = Router();
@@ -50,6 +51,14 @@ rsiRouter.get("/rsi", (req, res) => {
     );
   }
 
-  const result = computeRsi(candles, { period: periodRaw }, { symbol, timeframe });
+  // FIC: T143 — memoiza por (symbol, timeframe, params, last_bar_ts), TTL = duracion de 1 vela.
+  const result = memoizeIndicator({
+    indicator: "rsi",
+    symbol,
+    timeframe,
+    params: { period: periodRaw },
+    candles,
+    compute: () => computeRsi(candles, { period: periodRaw }, { symbol, timeframe })
+  });
   return res.status(200).json(result);
 });

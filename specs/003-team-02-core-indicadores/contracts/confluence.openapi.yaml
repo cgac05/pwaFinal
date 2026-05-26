@@ -70,10 +70,30 @@ components:
         bars_used: { type: integer }
     HealthReport:
       type: object
-      required: [status, ohlc_source, indicators, timestamp]
+      required: [status, indicators, timestamp]
       properties:
-        status: { type: string, enum: [ok, degraded] }
-        ohlc_source: { type: string, enum: [ok, degraded] }
+        # FIC: T110 / FR-020 — metadata: Record<string,unknown> queda DEPRECADO.
+        # FIC: La fuente de verdad pasa a ser ConfluenceSignalRow.observacion (SignalObservation tipada).
+        status: { type: string, enum: [up, degraded, down] }
+        metadata:
+          type: object
+          deprecated: true
+          description: "DEPRECADO (FR-020). Usar ConfluenceSignalRow.observacion (SignalObservation tipada)."
+        ohlc_source:
+          type: string
+          enum: [ok, degraded]
+          deprecated: true
+          description: "DEPRECADO Phase 6 (T136-T138). Usar dependencies[name=ohlc_source].status."
+        dependencies:
+          type: array
+          description: "Phase 6 (T136-T138). 3 dependencias en paralelo (ohlc_source, anthropic_llm, supabase)."
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              status: { type: string, enum: [up, degraded, down] }
+              latency_ms: { type: number }
+              detail: { type: string }
         indicators:
           type: object
           properties:

@@ -36,11 +36,14 @@ function throwingProbe(name: string, weight: number): IndicatorProbe {
 }
 
 describe("verdictFromScore", () => {
+  // FIC: T140/T141 — verdict thresholds: alcista >0.2, bajista <-0.2, neutral inclusivo en limites.
   it.each([
     [0.8, "alcista"],
-    [0.15, "alcista"],
+    [0.21, "alcista"],
+    [0.2, "neutral"],
     [0.0, "neutral"],
-    [-0.14, "neutral"],
+    [-0.2, "neutral"],
+    [-0.21, "bajista"],
     [-0.5, "bajista"]
   ] as const)("maps score=%s to %s", (score, expected) => {
     expect(verdictFromScore(score)).toBe(expected);

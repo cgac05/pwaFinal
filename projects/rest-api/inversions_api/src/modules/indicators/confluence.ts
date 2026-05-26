@@ -10,6 +10,7 @@ import {
   type Timeframe
 } from "./types";
 import { inputHash } from "./ohlcSource";
+import { verdictFromScore as thresholdVerdict } from "./thresholds";
 import { computeRsi } from "./rsi";
 import { computeMacd } from "./macd";
 import { computeEma } from "./ema";
@@ -124,10 +125,10 @@ export const bollingerProbe: IndicatorProbe = {
 // FIC: Conjunto de sondas por defecto — los 5 indicadores canonicos del core de TEAM-02.
 export const DEFAULT_PROBES: IndicatorProbe[] = [rsiProbe, macdProbe, emaProbe, adxProbe, bollingerProbe];
 
+// FIC: Re-export centralized verdict thresholds (T140). Original heuristic kept for backwards-compat
+// FIC: pero ahora delega a thresholds.ts donde >0.2 alcista, <-0.2 bajista, resto neutral.
 export function verdictFromScore(score: number): ConfluenceVerdictLabel {
-  if (score >= 0.15) return "alcista";
-  if (score <= -0.15) return "bajista";
-  return "neutral";
+  return thresholdVerdict(score);
 }
 
 // FIC: Consolidate probes into a verdict. Never throws: a failing probe degrades gracefully.
