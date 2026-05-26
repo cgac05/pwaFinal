@@ -25,6 +25,21 @@ export interface MockResult {
   date: string;
   scores: string;
   chatHistory: ChatMessage[];
+  analysisSummary?: string;
+  recommendedStrategy?: string;
+  riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH';
+  popEstimate?: number;
+  confidence?: number;
+  warnings?: string[];
+  scoreSnapshot?: {
+    financial: number | null;
+    technical: number | null;
+    news: number | null;
+    options: number | null;
+    weighted: number | null;
+    completeness: number;
+  };
+  analysisSource?: 'gemini' | 'fallback';
 }
 
 // Base de datos en memoria (Singleton)

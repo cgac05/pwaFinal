@@ -190,6 +190,79 @@ export function AnalysisDetailsModal({ result, onClose }: AnalysisDetailsModalPr
               {result.justification}
             </p>
 
+            {(result.analysisSummary || result.recommendedStrategy || result.popEstimate !== undefined || result.warnings?.length || result.scoreSnapshot) && (
+              <>
+                <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)', margin: '1rem 0' }} />
+
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
+                  Diagnóstico Estructurado
+                </h3>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <div style={{ padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'rgba(255, 255, 255, 0.02)' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Estrategia sugerida</div>
+                    <div style={{ fontWeight: 700, color: 'var(--color-text)' }}>{result.recommendedStrategy ?? 'N/D'}</div>
+                  </div>
+
+                  <div style={{ padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'rgba(255, 255, 255, 0.02)' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Riesgo</div>
+                    <div style={{ fontWeight: 700, color: 'var(--color-text)' }}>{result.riskLevel ?? 'MEDIUM'}</div>
+                  </div>
+
+                  <div style={{ padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'rgba(255, 255, 255, 0.02)' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>POP estimada</div>
+                    <div style={{ fontWeight: 700, color: 'var(--color-text)' }}>{typeof result.popEstimate === 'number' ? `${result.popEstimate}%` : 'N/D'}</div>
+                  </div>
+
+                  <div style={{ padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'rgba(255, 255, 255, 0.02)' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Confianza</div>
+                    <div style={{ fontWeight: 700, color: 'var(--color-text)' }}>{typeof result.confidence === 'number' ? `${Math.round(result.confidence * 100)}%` : 'N/D'}</div>
+                  </div>
+
+                  <div style={{ padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'rgba(255, 255, 255, 0.02)' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Origen</div>
+                    <div style={{ fontWeight: 700, color: 'var(--color-text)' }}>{result.analysisSource ?? 'gemini'}</div>
+                  </div>
+                </div>
+
+                {result.analysisSummary ? (
+                  <p style={{ margin: '0 0 0.75rem 0', color: 'var(--color-text-muted)', fontSize: '0.9rem', lineHeight: 1.6 }}>
+                    {result.analysisSummary}
+                  </p>
+                ) : null}
+
+                {result.scoreSnapshot ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    {[
+                      ['Financiero', result.scoreSnapshot.financial],
+                      ['Técnico', result.scoreSnapshot.technical],
+                      ['Noticias', result.scoreSnapshot.news],
+                      ['Opciones', result.scoreSnapshot.options],
+                      ['Ponderado', result.scoreSnapshot.weighted],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ padding: '0.65rem 0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'rgba(255, 255, 255, 0.02)' }}>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>{label}</div>
+                        <div style={{ fontWeight: 700, color: 'var(--color-text)' }}>{typeof value === 'number' ? value.toFixed(2) : 'N/D'}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {result.warnings && result.warnings.length > 0 ? (
+                  <div style={{ padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(248, 81, 73, 0.25)', background: 'rgba(248, 81, 73, 0.08)', marginBottom: '0.75rem' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+                      Advertencias
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '1.1rem', color: 'var(--color-text)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                      {result.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </>
+            )}
+
             <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)', margin: '1rem 0' }} />
             
             <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>

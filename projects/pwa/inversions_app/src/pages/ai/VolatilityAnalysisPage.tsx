@@ -118,7 +118,7 @@ export function VolatilityAnalysisPage() {
     try {
       const data = await runAnalysis(ticker, scores);
       setResults(prev => [data, ...prev]); // Prepend new simulation to history
-      showFeedback(`Corrida ejecutada con éxito. Conclusión: ${data.decision}`, 'success');
+      showFeedback(`Corrida ejecutada con éxito. Conclusión: ${data.decision} · Estrategia: ${data.recommendedStrategy ?? 'N/D'}`, 'success');
     } catch (err) {
       showFeedback('Error al ejecutar la corrida de análisis', 'error');
     } finally {

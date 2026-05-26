@@ -1,8 +1,20 @@
 import { Router, type Request, type Response } from 'express';
 import { mockDb } from '../../modules/volatility/mockDb.js';
 import { GeminiAgentService } from '../../modules/agents/geminiAgentService.js';
+import {
+  assessVolatility,
+  buildLocalFallbackNarrative,
+  buildVolatilityGeminiPrompt,
+  parseGeminiDecision,
+  VolatilityCircuitBreaker,
+  type VolatilityAssessment,
+} from '../../modules/volatility/analysisEngine.js';
 
 const router = Router();
+const volatilityCircuitBreaker = new VolatilityCircuitBreaker({
+  failureThreshold: 3,
+  cooldownMs: 30_000,
+});
 
 let _geminiService: GeminiAgentService | null = null;
 function getGeminiService(): GeminiAgentService {
@@ -12,42 +24,35 @@ function getGeminiService(): GeminiAgentService {
   return _geminiService;
 }
 
-// Helper to simulate Gemini's response when API is disabled or fails
-function simulateGeminiResponse(ticker: string, scores: string): string {
-  const isYes = Math.random() > 0.4; // 60% probability of SÍ
-  const strategyInfo = scores.toLowerCase().includes('condor') 
-    ? 'Iron Condor' 
-    : scores.toLowerCase().includes('butterfly') 
-      ? 'Butterfly Spread' 
-      : 'esta estrategia de volatilidad';
-  
-  if (isYes) {
-    return `SÍ. Tras realizar un análisis cuantitativo profundo de los scores proporcionados para ${ticker}, se concluye que la viabilidad para ejecutar un ${strategyInfo} es alta. 
-
-1. **Estructura de Rango:** El Score de Opciones y el Score Financiero reflejan un canal de volatilidad óptimo con una compresión saludable. Esto sitúa la prima cobrada en una relación riesgo-recompensa extremadamente asimétrica a favor del operador de rango.
-2. **Factores Técnicos:** Los promedios móviles y el índice de fuerza relativa confirman una inercia de consolidación lateral, lo que reduce drásticamente las colas de riesgo a corto plazo.
-3. **Sentimiento de Mercado:** El análisis de noticias e indicadores macro sugiere que no se esperan anuncios significativos en las próximas 48 horas capaces de romper los strikes de soporte y resistencia institucionales.
-Se recomienda proceder con la apertura de posiciones estructuradas bajo monitoreo regular.`;
-  } else {
-    return `NO. El análisis detallado de los scores agregados de ${ticker} indica que no es viable proceder con un ${strategyInfo} en este momento.
-
-1. **Riesgo de Ruptura Direccional:** El Score Técnico muestra un impulso con alto momentum y aumento súbito del volumen neto comprador. Esto advierte un inminente quiebre direccional alcista que comprometería gravemente la integridad del strike externo de la estrategia.
-2. **Compresión de Primas:** El Score de Opciones advierte de una volatilidad implícita extremadamente deprimida que no compensa el riesgo de cola de la operación.
-3. **Amenazas Macroeconómicas:** Las noticias e indicadores reflejan un elevado estrés institucional ante reportes corporativos inminentes.
-Se aconseja suspender o descartar la operación hasta que el índice de estabilidad de volatilidad supere el 65% de fiabilidad institucional.`;
-  }
+function buildDeterministicFallback(assessment: VolatilityAssessment): string {
+  return buildLocalFallbackNarrative(assessment);
 }
 
 // Helper to simulate follow-up chat replies when Gemini is not enabled
-function simulateFollowUpChat(ticker: string, decision: string, question: string): string {
+function simulateFollowUpChat(result: {
+  ticker: string;
+  decision: string;
+  question: string;
+  recommendedStrategy?: string;
+  popEstimate?: number;
+  riskLevel?: string;
+  warnings?: string[];
+  analysisSummary?: string;
+}): string {
+  const { ticker, decision, question } = result;
   const q = question.toLowerCase();
+  const strategy = result.recommendedStrategy ? result.recommendedStrategy.replaceAll('_', ' ') : 'la estructura actual';
+  const popText = typeof result.popEstimate === 'number' ? `${result.popEstimate}%` : 'no disponible';
+  const riskText = result.riskLevel ?? 'MEDIUM';
+  const warningText = result.warnings && result.warnings.length > 0 ? ` Riesgos detectados: ${result.warnings.join(' ')}` : '';
+
   if (q.includes('por qué') || q.includes('porque') || q.includes('explic')) {
-    return `Elegimos un veredicto de ${decision} para ${ticker} debido a que los scores analizados mostraron un comportamiento de volatilidad ${decision === 'SÍ' ? 'favorable a la consolidación' : 'con riesgos excesivos de rompimiento direccional'}. Específicamente, los indicadores de Opciones y Datos Técnicos arrojaron divergencias críticas respecto a las medias históricas de volatilidad de 30 días.`;
+    return `Elegimos un veredicto de ${decision} para ${ticker} porque el análisis estructurado local sugiere ${strategy} con una POP estimada de ${popText} y un riesgo ${riskText}. ${result.analysisSummary ?? 'La estructura de scores muestra una lectura coherente entre volatilidad y dirección.'}${warningText}`;
   }
   if (q.includes('riesgo') || q.includes('pérdida') || q.includes('perder')) {
-    return `El principal riesgo en una estructura de volatilidad para ${ticker} radica en un repunte brusco del momentum del activo subyacente. Si la volatilidad implícita se dispara y el precio cruza los puntos de equilibrio (break-even), la pérdida máxima podría materializarse. Es vital utilizar stop-loss en delta o un contrato de cobertura externa.`;
+    return `El principal riesgo en una estructura de volatilidad para ${ticker} radica en un repunte brusco del momentum del activo subyacente y en la expansión inesperada del rango. La evaluación actual marca riesgo ${riskText} y POP aproximada de ${popText}. ${warningText}`;
   }
-  return `Como analista senior con 24 años de experiencia, considero que para ${ticker}, ante tu consulta "${question}", la recomendación adecuada es revisar si la volatilidad implícita actual provee un margen de seguridad suficiente (IV Rank > 50%) para justificar la inmovilización de capital.`;
+  return `Como analista senior con 24 años de experiencia, considero que para ${ticker}, ante tu consulta "${question}", la recomendación adecuada es revisar si la estructura ${strategy} mantiene un margen de seguridad suficiente. ${result.analysisSummary ?? ''} POP aproximada: ${popText}.${warningText}`;
 }
 
 // 1. Obtener el prompt actual
@@ -75,37 +80,40 @@ router.post('/analyze-scores', async (req: Request, res: Response) => {
     }
 
     const currentPrompt = mockDb.prompts[0].basePrompt;
-    const fullMessage = `${currentPrompt}\n\nDATOS DEL ANÁLISIS (Ticker: ${ticker}):\n${scores}\n\nEmite tu veredicto (SÍ/NO) y tu justificación.`;
+    const assessment = assessVolatility(ticker, scores);
+    const fullMessage = buildVolatilityGeminiPrompt(currentPrompt, ticker, scores, assessment);
 
     let rawText = '';
+    let analysisSource: 'gemini' | 'fallback' = 'fallback';
     const geminiService = getGeminiService();
     
     // Check if Gemini is configured and enabled
     if (geminiService.isEnabled()) {
       try {
-        const response = await geminiService.generateAgentResponse({
-          role: 'analyzer',
-          userPrompt: fullMessage
+        rawText = await volatilityCircuitBreaker.execute(async () => {
+          const response = await geminiService.generateAgentResponse({
+            role: 'analyzer',
+            userPrompt: fullMessage,
+          });
+
+          return response.text || '';
         });
-        rawText = response.text || '';
+        analysisSource = 'gemini';
       } catch (err) {
-        console.warn('Gemini request failed, falling back to mock generation:', err);
-        rawText = simulateGeminiResponse(ticker, scores);
+        console.warn('Gemini request failed or circuit opened, falling back to deterministic analysis:', err);
+        rawText = buildDeterministicFallback(assessment);
       }
     } else {
-      // Fallback a simulación realista si Gemini no está habilitado (desarrollo local sin API Key)
-      rawText = simulateGeminiResponse(ticker, scores);
+      // Fallback a análisis determinístico cuando Gemini no está habilitado (desarrollo local sin API Key)
+      rawText = buildDeterministicFallback(assessment);
     }
 
-        // Parseo estricto del SÍ/NO de la salida de Gemini
-    const trimmedText = rawText.trim();
-    const isYes = trimmedText.toUpperCase().startsWith('SÍ') || 
-                  trimmedText.toUpperCase().startsWith('SI') ||
-                  trimmedText.toUpperCase().startsWith('YES');
-    const decision: 'SÍ' | 'NO' = isYes ? 'SÍ' : 'NO';
-    
+    // Parseo estricto del SÍ/NO de la salida de Gemini o fallback local
+    const parsedDecision = parseGeminiDecision(rawText);
+    const decision = parsedDecision.decision ?? assessment.decision;
+
     // Limpiamos el texto para que la justificación no repita el "SÍ/NO" al inicio
-    const justification = rawText.replace(/^(SÍ|SI|NO|YES|NO)[\s\.,:-]*/i, '').trim();
+    const justification = parsedDecision.justification || assessment.rationale;
 
     // Guardar en la DB mockeada
     const newResult = {
@@ -115,7 +123,15 @@ router.post('/analyze-scores', async (req: Request, res: Response) => {
       justification,
       date: new Date().toISOString(),
       scores,
-      chatHistory: []
+      chatHistory: [],
+      analysisSummary: assessment.summary,
+      recommendedStrategy: assessment.recommendedStrategy,
+      riskLevel: assessment.riskLevel,
+      popEstimate: assessment.popEstimate,
+      confidence: assessment.confidence,
+      warnings: assessment.warnings,
+      scoreSnapshot: assessment.scoreSnapshot,
+      analysisSource,
     };
     
     mockDb.results.unshift(newResult); // Insertar al inicio
@@ -151,7 +167,16 @@ router.post('/results/:id/chat', async (req: Request, res: Response) => {
 
     if (!geminiService.isEnabled()) {
       // Si no hay API Key en el .env, usamos el simulador realista para que el profesor vea el chat funcionando sin configurar claves
-      replyText = simulateFollowUpChat(result.ticker, result.decision, message);
+      replyText = simulateFollowUpChat({
+        ticker: result.ticker,
+        decision: result.decision,
+        question: message,
+        recommendedStrategy: result.recommendedStrategy,
+        popEstimate: result.popEstimate,
+        riskLevel: result.riskLevel,
+        warnings: result.warnings,
+        analysisSummary: result.analysisSummary,
+      });
     } else {
       try {
         const response = await geminiService.generateAgentResponse({
@@ -161,7 +186,16 @@ router.post('/results/:id/chat', async (req: Request, res: Response) => {
         replyText = response.text || '';
       } catch (err: any) {
         console.warn('Error nativo de Google GenAI en mini-chat, activando fallback interactivo:', err);
-        replyText = simulateFollowUpChat(result.ticker, result.decision, message);
+        replyText = simulateFollowUpChat({
+          ticker: result.ticker,
+          decision: result.decision,
+          question: message,
+          recommendedStrategy: result.recommendedStrategy,
+          popEstimate: result.popEstimate,
+          riskLevel: result.riskLevel,
+          warnings: result.warnings,
+          analysisSummary: result.analysisSummary,
+        });
       }
     }
 
