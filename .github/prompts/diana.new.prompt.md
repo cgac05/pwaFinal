@@ -128,7 +128,8 @@ Manejar `optional` y `enabled` igual que otras acciones Diana/Speckit.
 Flujo sugerido para proyecto nuevo:
 1. `/diana.new project="<project>"`
 2. `/diana.change project="diana-<project>" title="<cambio-inicial>" description="<contexto>"`
-3. `/diana.constitution project="diana-<project>"`
-4. `/diana.skills action="generate" scope="project" project="diana-<project>"`
-5. `/diana.knowledge scope="project" project="diana-<project>"`
-6. `/diana.plan action="generate" scope="project" project="diana-<project>"`
+3. `/diana.integrate action="bootstrap" scope="project" project="diana-<project>" initiative="001-<project-sin-prefijo>" engine="speckit" orchestration="manual" topology="multi_team"`
+4. `/diana.constitution project="diana-<project>"`
+5. `/diana.skills action="generate" scope="project" project="diana-<project>"`
+6. `/diana.knowledge scope="project" project="diana-<project>"`
+7. `/diana.plan action="generate" scope="project" project="diana-<project>"`

@@ -117,6 +117,9 @@ Prioridad para construir el contenido del UCC:
 - Si `create_ticket=true`, crear ticket relacionado con mismo `NNN`.
 - Reportar IDs y rutas creadas.
 
+Recomendacion operativa inmediata (post-create):
+- Ejecutar `/diana.integrate action="bootstrap"` para fijar engine, orquestacion y topologia del nuevo ciclo de cambio.
+
 ## Action=validate
 
 Verificar:

@@ -1,6 +1,6 @@
 version: 1.0.0
 scope: projects-root
-last_updated: 2026-04-29
+last_updated: 2026-04-28
 
 policy:
   always_on_radar:
@@ -9,4 +9,27 @@ policy:
   optional_layers:
     - sdk-shared
 
-projects: []
+projects:
+  - id: diana-inversions
+    alias: inv
+    enabled: true
+    knowledge_index: .drfic/diana-sdk/projects/diana-inversions/knowledge/indexes/master-index.md
+    skills_manifest: .drfic/diana-sdk/projects/diana-inversions/knowledge/indexes/skills-manifest.yaml
+    agent_skill_matrix: .drfic/diana-sdk/projects/diana-inversions/knowledge/indexes/agent-skill-matrix.yaml
+    sdd_engine_matrix: .drfic/diana-sdk/projects/diana-inversions/knowledge/indexes/sdd-engine-matrix.yaml
+
+  - id: diana-sdk-core
+    alias: dianacore
+    enabled: true
+    knowledge_index: .drfic/diana-sdk/projects/diana-sdk-core/knowledge/indexes/master-index.md
+    skills_manifest: null
+    agent_skill_matrix: null
+    sdd_engine_matrix: null
+
+  - id: diana-demoapp
+    alias: demo
+    enabled: true
+    knowledge_index: null
+    skills_manifest: null
+    agent_skill_matrix: null
+    sdd_engine_matrix: null

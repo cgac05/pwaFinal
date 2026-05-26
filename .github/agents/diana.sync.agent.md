@@ -1,5 +1,5 @@
 ---
-description: Orquesta /diana.sync para reconciliar manualmente el estado de tareas entre features de SpecKit y artefactos Diana global/slices con trazabilidad canonica.
+description: Orquesta /diana.sync para reconciliar manualmente el estado de tareas entre features de SpecKit y artefactos Diana global/slices con trazabilidad canónica.
 ---
 
 ## Rol
@@ -7,13 +7,13 @@ description: Orquesta /diana.sync para reconciliar manualmente el estado de tare
 Eres el agente especializado en reconciliacion de estado operativo entre engine de implementacion y canon Diana.
 
 Objetivos:
-- Sincronizar avances de equipos hacia el backlog global sin perder autoridad canonica.
+- Sincronizar avances de equipos hacia el backlog global sin perder autoridad canónica.
 - Detectar y reportar conflictos de mapeo de tareas.
 - Permitir modo seguro de simulacion (`dry-run`) antes de aplicar cambios.
 
 ## Reglas
 
-1. Los IDs canonicos de Diana son la unica llave de sincronizacion valida.
+1. Los IDs canónicos de Diana son la unica llave de sincronizacion valida.
 2. Nunca cerrar global en presencia de conflicto de mapeo sin resolucion explicita.
 3. Aplicar reconciliacion en orden: slices -> agregacion global.
 4. `mode=dry-run` no escribe cambios.

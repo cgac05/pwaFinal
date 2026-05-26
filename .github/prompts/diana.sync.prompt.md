@@ -24,22 +24,22 @@ description: Reconciliacion manual de estados de tareas entre features de SpecKi
 | team | TEAM-XX | null | Filtra reconciliacion por equipo |
 | feature | slug o carpeta specs/* | null | Filtra reconciliacion por feature Speckit |
 | since | fecha ISO8601 | null | Reconciliacion incremental desde fecha |
-| extension_policy | mirror-team | conflict-on-unmapped | mirror-team | Politica para tareas Speckit extendidas no canonicas |
-| global_close_policy | canonical-only | canonical-only | El global solo cierra por IDs canonicos |
+| extension_policy | mirror-team \| conflict-on-unmapped | mirror-team | Politica para tareas Speckit extendidas no canónicas |
+| global_close_policy | canonical-only | canonical-only | El global solo cierra por IDs canónicos |
 
 ## Objetivo
 
 Permitir una accion manual y controlada para actualizar estado de tareas en:
 
-1. Backlog canonico global Diana (`001-*-tasks.md`).
+1. Backlog canónico global Diana (`001-*-tasks.md`).
 2. Slices por equipo (`speckit/team-task-allocation.md` y derivados).
 
 La reconciliacion se basa en estados observados en features de SpecKit, preservando como autoridad de IDs al canon Diana.
 
 ## Reglas Obligatorias
 
-1. Los IDs canonicos (`T001`, `T002`, ...) son la llave de mapeo obligatoria.
-2. Si no existe mapeo canonico, no cerrar tarea global y reportar conflicto.
+1. Los IDs canónicos (`T001`, `T002`, ...) son la llave de mapeo obligatoria.
+2. Si no existe mapeo canónico, no cerrar tarea global y reportar conflicto.
 3. En `mode=dry-run` nunca se escriben cambios.
 4. En `mode=apply` actualizar primero slices, luego recalcular global.
 5. El cierre de una tarea global agregada requiere todas sus subtareas/slices completadas.
@@ -47,9 +47,9 @@ La reconciliacion se basa en estados observados en features de SpecKit, preserva
 ## Regla de Espejo Speckit -> TEAM (obligatoria)
 
 1. Speckit puede optimizar/ampliar y crear tareas adicionales en `specs/*/tasks.md`; esas tareas NO deben eliminarse.
-2. Las tareas extendidas se reflejan en el team mediante mapeo explicito `Speckit Txxx -> Diana Tyyy[, Tzzz]` en `teams/TEAM-XX/tasks.md`.
+2. Las tareas extendidas se reflejan en el team mediante mapeo explícito `Speckit Txxx -> Diana Tyyy[, Tzzz]` en `teams/TEAM-XX/tasks.md`.
 3. El estado del team se sincroniza desde Speckit por mapeo (many-to-one y one-to-many permitidos).
-4. El backlog global solo considera IDs canonicos existentes (`T000-T177` o el rango vigente del canon); nunca se crean IDs canonicos nuevos por sync.
+4. El backlog global solo considera IDs canónicos existentes (`T000-T177` o el rango vigente del canon); nunca se crean IDs canónicos nuevos por sync.
 5. Si una tarea Speckit no tiene mapeo y `extension_policy=mirror-team`, se reporta en `unmapped` sin bloquear la feature; si `extension_policy=conflict-on-unmapped`, se reporta conflicto bloqueante.
 
 ## Ejecucion Operativa Recomendada (local)
@@ -65,7 +65,7 @@ Para sincronizar estado Speckit -> TEAM de forma reproducible:
 `pwsh scripts/diana-sync-team.ps1 -Team TEAM-01 -Feature 002-team-01-dashboard-brokers -Mode apply`
 
 Notas:
-- El script aplica cierre de checkboxes en team tasks solo cuando todas las tareas Speckit mapeadas al ID canonico estan en `[x]`.
+- El script aplica cierre de checkboxes en team tasks solo cuando todas las tareas Speckit mapeadas al ID canónico están en `[x]`.
 - El script no elimina tareas Speckit extendidas.
 
 ## Fuentes Oficiales Obligatorias

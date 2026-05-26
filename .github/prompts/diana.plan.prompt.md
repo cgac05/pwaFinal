@@ -10,10 +10,15 @@ description: Genera, valida o regenera el plan tecnico Diana a partir de constit
 /diana.plan action="generate"
 /diana.plan action="validate"
 /diana.plan action="regenerate"
+/diana.plan action="generate" project="diana-inversions" initiative="001-inversions" team="TEAM-01"
 
 Modo recomendado multi-proyecto:
 
 /diana.plan action="generate" scope="project" project="diana-inversions"
+
+Modo incremental multi-team:
+
+/diana.plan action="generate" scope="project" project="diana-inversions" initiative="001-inversions"
 
 ## Argumentos
 
@@ -23,6 +28,7 @@ Modo recomendado multi-proyecto:
 | scope | project | initiative | sdk | project | Nivel de ejecucion |
 | project | id en projects-knowledge-radar | diana-inversions | Proyecto objetivo |
 | initiative | id de iniciativa | 001-inversions | Iniciativa objetivo cuando aplique |
+| team | TEAM-01..TEAM-99 | null | Equipo objetivo para generacion puntual en topologia multi_team |
 
 ## Comportamiento por default (si omites argumentos)
 
@@ -30,6 +36,7 @@ Modo recomendado multi-proyecto:
 - Si omites `project`, se usa `project="diana-inversions"`.
 - Si omites `initiative`, se usa `initiative="001-inversions"`.
 - Resultado default: plan tecnico Diana del proyecto/initiative activo, listo para alimentar `/speckit.plan`.
+- En `topology: multi_team`, si omites `team`, generar SOLO planes pendientes por equipo (equipos en `scope_primario.md` que aun no tengan `teams/TEAM-XX/plan.md`).
 
 ## Objetivo
 
@@ -40,7 +47,9 @@ Producir un plan tecnico consistente y trazable, subordinado a constitucion + sp
 Para `scope=project`:
 1. `.drfic/diana-sdk/projects/knowledge/indexes/projects-knowledge-radar.yaml`
 2. `.drfic/diana-sdk/projects/<project>/inv-constitution.md`
-3. `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/001-inv-spec.md`
+3. Fuente de spec segun topologia:
+  - `single_person`: `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/001-inv-spec.md`
+  - `multi_team`: `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/teams/TEAM-XX/spec.md`
 4. `specs/001-plataforma-inversiones-ia/spec.md`
 5. `.drfic/diana-sdk/projects/<project>/governance/change-requests/001-inv-ucc.md`
 6. `.drfic/diana-sdk/projects/<project>/governance/tickets/001-inv-tkt.md`
@@ -70,10 +79,19 @@ Antes de generar o validar plan:
 - Degradar con metodologia estandar.
 - Reportar gap y comando recomendado `/diana.knowledge ...`.
 
+## Template Core Obligatoria
+
+1. `.drfic/diana-sdk/sdk/diana/templates/initiative-plan.md`
+
+Regla de uso:
+- En `action=generate` y `action=regenerate`, la salida debe estructurarse con base en esta template.
+- Se permite extender secciones para dominio/proyecto, pero no omitir bloques obligatorios de autoridad, entradas, arquitectura, fases, riesgos, validacion e integracion con Speckit.
+
 ## Salidas Obligatorias
 
-1. Plan tecnico canonico del proyecto:
-- `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/001-inv-plan.md`
+1. Plan tecnico canonico de salida (segun topologia):
+- `single_person`: `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/001-inv-plan.md`
+- `multi_team`: `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/teams/TEAM-XX/plan.md`
 
 2. Evidencia de consistencia plan/spec (en validate):
 - reporte en salida con OK/GAPS + acciones sugeridas.
@@ -107,13 +125,49 @@ Devolver resumen:
 - Reescribir `001-inv-plan.md` manteniendo continuidad semantica cuando sea posible.
 - Reportar cambios significativos vs version previa.
 
+## Conciencia de Topologia (OBLIGATORIO ANTES DE GENERAR)
+
+Antes de generar el plan, leer `meta.md` de la iniciativa para determinar topologia:
+
+- `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/meta.md`
+
+Si `topology: single_person` (o no hay topology registrado):
+- Generar plan unico: `<initiative>/001-inv-plan.md` (comportamiento default)
+
+Si `topology: multi_team`:
+- Leer `scope_primario.md`:
+  `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/scope_primario.md`
+- Resolver fuente base de plan (en orden):
+  1. `teams/TEAM-XX/plan.md` existentes (si aplica para incremental/regenerate)
+  2. `<initiative>/001-inv-plan.md` (si existe)
+  3. `teams/TEAM-XX/spec.md` + constitucion + UCC (si NO existe plan global)
+- Leer la spec por equipo ya generada:
+  - `<initiative>/teams/TEAM-XX/spec.md` — input del plan de ese equipo
+- Si se pasa `team=TEAM-XX`:
+  - Generar SOLO `<initiative>/teams/TEAM-XX/plan.md`
+  - Si el team no existe en `scope_primario.md`, detener con error accionable.
+- Si NO se pasa `team`:
+  - Resolver lista de equipos desde `scope_primario.md`.
+  - Generar SOLO equipos pendientes (`teams/TEAM-XX/plan.md` inexistente).
+  - No regenerar equipos ya existentes en `action=generate`.
+  - Reportar al final: `generados`, `omitidos_por_existencia`, `errores`.
+- Cada plan de equipo cubre SOLO las fases y arquitectura correspondiente al scope_primario del equipo.
+- En `multi_team`, el plan global puede no existir; no debe bloquear la generación por equipo.
+
+Reglas operativas multi-team:
+1. `action=generate` + `team` especifico -> operacion puntual de un equipo.
+2. `action=generate` sin `team` -> operacion incremental sobre pendientes.
+3. `action=regenerate` + `team` especifico -> reescribe solo ese equipo.
+4. `action=regenerate` sin `team` -> reescribe todos los equipos de `scope_primario.md`.
+5. `action=validate` sin `team` -> valida todos los equipos y reporta faltantes.
+
 ## Integracion con Speckit
 
 Flujo recomendado:
 1. `/diana.skills action="validate" scope="project" project="diana-inversions"`
 2. `/diana.knowledge scope="project" project="diana-inversions"`
 3. `/diana.plan action="generate" scope="project" project="diana-inversions"`
-4. `/speckit.plan`
+4. `/speckit.plan` (lee teams/TEAM-XX/plan.md si topology=multi_team)
 
 ## Notas de agente (Diana)
 

@@ -139,6 +139,7 @@ Estas fuentes NO sustituyen la fuente primaria, solo validan consistencia:
 - `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/001-inv-spec.md` (si existe)
 - `specs/001-plataforma-inversiones-ia/spec.md` (si existe)
 - `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/meta.md` (si existe)
+- `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/integrations/integration-profile.md` (si existe)
 
 ## Salidas Obligatorias
 
@@ -204,10 +205,11 @@ Devolver resumen:
 ## Integracion Recomendada
 
 Flujo sugerido:
-1. `/diana.constitution action="generate" --input "<ruta-ucc>.md"`
-2. `/diana.skills action="generate" scope="project" project="<project>"`
-3. `/diana.knowledge scope="project" project="<project>"`
-4. `/diana.plan action="generate" scope="project" project="<project>"`
+1. `/diana.integrate action="bootstrap" scope="project" project="<project>" initiative="<initiative>" engine="speckit" orchestration="manual" topology="multi_team"`
+2. `/diana.constitution action="generate" --input "<ruta-ucc>.md"`
+3. `/diana.skills action="generate" scope="project" project="<project>"`
+4. `/diana.knowledge scope="project" project="<project>"`
+5. `/diana.plan action="generate" scope="project" project="<project>"`
 
 ## Notas de agente (Diana)
 

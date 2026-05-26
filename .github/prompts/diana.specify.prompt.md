@@ -11,6 +11,7 @@ description: Genera, valida o regenera la especificacion canonica de una iniciat
 /diana.specify action="validate"
 /diana.specify action="regenerate"
 /diana.specify project="diana-inversions"
+/diana.specify action="generate" project="diana-inversions" initiative="001-inversions" team="TEAM-03"
 
 Con entrada explicita:
 
@@ -20,6 +21,10 @@ Con iniciativa especifica:
 
 /diana.specify project="diana-inversions" initiative="001-inversions" title="Plataforma de Inversiones con IA"
 
+Modo incremental multi-team:
+
+/diana.specify action="generate" project="diana-inversions" initiative="001-inversions"
+
 ## Argumentos
 
 | Argumento | Valores | Default | Descripcion |
@@ -28,6 +33,7 @@ Con iniciativa especifica:
 | project | id en projects-knowledge-radar | diana-inversions | Proyecto objetivo |
 | alias | string corto lowercase | auto (radar -> derivado) | Alias para nombres de archivo (`NNN-<alias>-spec.md`) |
 | initiative | id de iniciativa | auto-detect | Iniciativa objetivo; se auto-detecta si se omite |
+| team | TEAM-01..TEAM-99 | null | Equipo objetivo para generacion puntual en topologia multi_team |
 | input | ruta de archivo markdown | null | Override de fuente primaria para la spec |
 | title | string | null | Titulo de la spec si no hay fuente disponible |
 | description | string | null | Descripcion base si no hay fuente disponible |
@@ -39,6 +45,7 @@ Con iniciativa especifica:
 - Si omites `alias`, se resuelve desde el radar del proyecto; si no existe en radar, se autoderiva desde `<project-sin-prefijo>` (primeras 3 letras alfanumericas).
 - Si omites `initiative`, se auto-detecta la iniciativa activa leyendo las carpetas en `initiatives/` y seleccionando la de mayor prefijo numerico `NNN-*`.
 - Si no existe ninguna iniciativa, crear directorio `001-<alias>/` y usar `initiative="001-<alias>"`.
+- En `topology: multi_team`, si omites `team`, generar SOLO specs pendientes por equipo (equipos en `scope_primario.md` que aun no tengan `teams/TEAM-XX/spec.md`).
 
 ## Resolucion de Alias por Default
 
@@ -96,8 +103,9 @@ Si falta knowledge o skills, continuar con metodologia estandar y reportar gap.
 
 ## Salidas Obligatorias
 
-1. Spec canonica de la iniciativa:
-   - `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/NNN-<alias>-spec.md`
+1. Spec canonica de salida (segun topologia):
+   - `single_person`: `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/NNN-<alias>-spec.md`
+   - `multi_team`: `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/teams/TEAM-XX/spec.md`
 
 2. Reporte de trazabilidad constitucion/UCC → Spec (en salida):
    - Principios constitucionales reflejados en la spec.
@@ -156,13 +164,48 @@ El resultado debe incluir al menos:
 - UCC de origen: <NNN-alias-ucc.md>
 ```
 
+## Conciencia de Topologia (OBLIGATORIO ANTES DE GENERAR)
+
+Antes de generar la spec, leer `meta.md` de la iniciativa para determinar la topologia:
+
+- `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/meta.md`
+
+Si `topology: single_person` (o no hay topology registrado):
+- Generar spec unica: `<initiative>/<NNN>-<alias>-spec.md` (comportamiento default)
+
+Si `topology: multi_team`:
+- Leer `scope_primario.md` para conocer equipos y sus areas funcionales:
+  `.drfic/diana-sdk/projects/<project>/initiatives/<initiative>/scope_primario.md`
+- Resolver fuente base de division (en orden):
+   1. `teams/TEAM-XX/spec.md` existentes (si aplica para incremental/regenerate)
+   2. `<initiative>/<NNN>-<alias>-spec.md` (si existe)
+   3. constitucion + UCC + scope_primario (si NO existe spec global)
+- Si se pasa `team=TEAM-XX`:
+   - Generar SOLO `<initiative>/teams/TEAM-XX/spec.md`
+   - Si el team no existe en `scope_primario.md`, detener con error accionable.
+- Si NO se pasa `team`:
+   - Resolver lista de equipos desde `scope_primario.md`.
+   - Generar SOLO equipos pendientes (`teams/TEAM-XX/spec.md` inexistente).
+   - No regenerar equipos ya existentes en `action=generate`.
+   - Reportar al final: `generados`, `omitidos_por_existencia`, `errores`.
+- Cada spec de equipo contiene SOLO el alcance funcional de ese equipo.
+- En `multi_team`, la spec global puede no existir; no debe bloquear la generación.
+
+Reglas operativas multi-team:
+1. `action=generate` + `team` especifico -> operacion puntual de un equipo.
+2. `action=generate` sin `team` -> operacion incremental sobre pendientes.
+3. `action=regenerate` + `team` especifico -> reescribe solo ese equipo.
+4. `action=regenerate` sin `team` -> reescribe todos los equipos de `scope_primario.md`.
+5. `action=validate` sin `team` -> valida todos los equipos y reporta faltantes.
+
 ## Flujo de Integracion Diana
 
 ```
 /diana.new       → Bootstrap de estructura del proyecto
 /diana.change    → Crear UCC + ticket relacionado
 /diana.constitution → Generar constitucion desde UCC
-/diana.specify   ← (estas aqui) → Generar spec canonica desde constitucion + UCC
+/diana.teams action="topology" ← DEFINIR topologia ANTES de specify
+/diana.specify   ← (estas aqui) → Genera spec por topologia (single o por equipo)
 /diana.skills    → Generar skills desde constitucion + spec
 /diana.knowledge → Enriquecer knowledge base
 /diana.plan      → Generar plan tecnico desde spec + skills + knowledge
