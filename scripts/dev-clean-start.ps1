@@ -1,4 +1,4 @@
-﻿Param(
+Param(
   [int[]]$PortsToClean = @(3000, 5173, 5174, 5175),
   [bool]$StreamLogs = $false
 )
@@ -121,7 +121,7 @@ if ($StreamLogs) {
   Write-Host "StreamLogs=false: services start in background and only write logs to disk."
 }
 
-$backendCommand = "cd /d $backendDir && npx ts-node src/index.ts"
+$backendCommand = "cd /d $backendDir && npm run dev"
 $frontendCommand = "pwsh -NoProfile -File scripts/dev-frontend-wait-backend.ps1"
 
 if ($StreamLogs) {
@@ -140,7 +140,7 @@ if ($StreamLogs) {
   exit $LASTEXITCODE
 }
 
-$backendProcess = Start-DetachedProcess -WorkingDirectory $backendDir -Command "npx ts-node src/index.ts" -StdOutPath $backendOutLog -StdErrPath $backendErrLog
+$backendProcess = Start-DetachedProcess -WorkingDirectory $backendDir -Command "npm run dev" -StdOutPath $backendOutLog -StdErrPath $backendErrLog
 
 if (-not (Wait-BackendHealth)) {
   Write-Error "Backend health did not become ready. Revisa $backendOutLog y $backendErrLog"
