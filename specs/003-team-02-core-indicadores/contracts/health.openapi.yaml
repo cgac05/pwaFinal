@@ -1,0 +1,65 @@
+# FIC: OpenAPI contract for the indicators-core health endpoint (FR-013 actualizado, CHK006).
+# FIC: Health endpoint con 3 dependencias (OHLC, Anthropic, Supabase). Reemplaza el subset incluido en confluence.openapi.yaml.
+openapi: 3.1.0
+info:
+  title: Indicators Core — Health
+  version: 1.1.0
+  description: >-
+    Health endpoint con chequeo de las 3 dependencias criticas: fuente OHLC (market-data o mock),
+    Anthropic LLM (Claude Opus 4.7), y Supabase. 200 si al menos una dependencia esta up; 503 solo si TODAS down.
+
+paths:
+  /api/indicators/health:
+    get:
+      summary: Reporta disponibilidad de las dependencias criticas del core.
+      responses:
+        "200":
+          description: Al menos una dependencia esta `up` o `degraded`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthReport" }
+        "503":
+          description: Todas las dependencias estan `down` — core no operativo.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthReport" }
+
+components:
+  schemas:
+    DependencyStatus:
+      type: string
+      enum: [up, degraded, down]
+
+    DependencyReport:
+      type: object
+      required: [name, status, latency_ms]
+      properties:
+        name:
+          type: string
+          enum: [ohlc, anthropic, supabase]
+          description: "Identificador canonico de la dependencia."
+        status: { $ref: "#/components/schemas/DependencyStatus" }
+        latency_ms:
+          type: number
+          minimum: 0
+          description: "Latencia medida del chequeo (timeout 1500ms)."
+        detail:
+          type: string
+          description: "Mensaje opcional con causa cuando status != up."
+
+    HealthReport:
+      type: object
+      required: [status, dependencies, timestamp, algorithm_version]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, down]
+          description: >-
+            `ok` si las 3 estan up; `degraded` si al menos 1 up y al menos 1 no up; `down` si TODAS down.
+        dependencies:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items: { $ref: "#/components/schemas/DependencyReport" }
+        timestamp: { type: string, format: date-time }
+        algorithm_version: { type: string }

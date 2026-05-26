@@ -1,0 +1,65 @@
+# FIC: OpenAPI contract for RSI endpoint (Kevin, TEAM-02).
+openapi: 3.1.0
+info:
+  title: Indicators Core - RSI
+  version: 1.0.0
+  description: Endpoint REST para Relative Strength Index (Wilder).
+paths:
+  /api/indicators/rsi:
+    get:
+      summary: Calcula RSI sobre OHLC del simbolo y timeframe indicados.
+      parameters:
+        - { in: query, name: symbol, required: true, schema: { type: string }, example: AAPL }
+        - { in: query, name: timeframe, required: false, schema: { type: string, enum: [1m, 5m, 15m, 1h, 4h, 1d], default: 1h } }
+        - { in: query, name: period, required: false, schema: { type: integer, minimum: 1, maximum: 500, default: 14 } }
+        - { in: query, name: count, required: false, schema: { type: integer, minimum: 1, maximum: 1000, default: 300 } }
+      responses:
+        "200":
+          description: Resultado RSI con serie y valor actual.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RsiResult" }
+        "400": { description: Parametros invalidos, $ref: "#/components/responses/Error" }
+        "404": { description: Symbol sin datos OHLC, $ref: "#/components/responses/Error" }
+        "422": { description: Datos insuficientes para el periodo, $ref: "#/components/responses/Error" }
+components:
+  schemas:
+    RsiSeriesPoint:
+      type: object
+      required: [time, value]
+      properties:
+        time: { type: integer, description: Unix seconds UTC }
+        value: { type: number, nullable: true }
+    RsiResult:
+      type: object
+      required: [symbol, timeframe, indicator, params, algorithm_version, computed_at, source_input_hash, bars_used, current_value, series, zone]
+      properties:
+        symbol: { type: string }
+        timeframe: { type: string }
+        indicator: { type: string, enum: [rsi] }
+        params:
+          type: object
+          properties:
+            period: { type: integer }
+        algorithm_version: { type: string }
+        computed_at: { type: string, format: date-time }
+        source_input_hash: { type: string }
+        bars_used: { type: integer }
+        current_value: { type: number, nullable: true, minimum: 0, maximum: 100 }
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/RsiSeriesPoint" }
+        zone: { type: string, enum: [oversold, neutral, overbought, unknown] }
+    Error:
+      type: object
+      required: [error_code, message]
+      properties:
+        error_code: { type: string }
+        message: { type: string }
+        hint: { type: string }
+  responses:
+    Error:
+      description: Error estructurado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }

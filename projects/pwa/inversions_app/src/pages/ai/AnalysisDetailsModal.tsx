@@ -29,7 +29,33 @@ export function AnalysisDetailsModal({ result, onClose }: AnalysisDetailsModalPr
 
     // Temporarily apply printable styles for exporting
     const originalStyle = element.style.cssText;
-    element.style.color = '#1f2937';
+    
+    // Create a temporary stylesheet to override CSS variables with black text
+    const style = document.createElement('style');
+    style.textContent = `
+      #pdf-content, #pdf-content * {
+        color: #000000 !important;
+        background-color: #ffffff !important;
+      }
+      #pdf-content h3 {
+        color: #1f2937 !important;
+      }
+      #pdf-content pre {
+        color: #1f2937 !important;
+        background-color: #f3f4f6 !important;
+      }
+      #pdf-content hr {
+        border-color: #d1d5db !important;
+      }
+      #pdf-content p {
+        color: #000000 !important;
+      }
+      #pdf-content ul li {
+        color: #000000 !important;
+      }
+    `;
+    document.head.appendChild(style);
+    
     element.style.background = '#ffffff';
     element.style.padding = '20px';
     element.style.fontFamily = 'Arial, sans-serif';
@@ -40,9 +66,12 @@ export function AnalysisDetailsModal({ result, onClose }: AnalysisDetailsModalPr
       .save()
       .then(() => {
         element.style.cssText = originalStyle;
+        document.head.removeChild(style);
       })
       .catch((err: any) => {
         console.error('Error generating PDF:', err);
+        element.style.cssText = originalStyle;
+        document.head.removeChild(style);
       });
   };
 

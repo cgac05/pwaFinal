@@ -47,6 +47,21 @@ export function CoreSelector({ cores, onToggle }: CoreSelectorProps) {
               <strong style={{ color: core.enabled ? "var(--color-text)" : "var(--color-text-muted)", fontSize: "0.875rem" }}>
                 {core.label}
               </strong>
+              {/* FIC: Phase 5 T101 — toggle SI/NO explicito por PDF v1, reemplaza el flag "enabled" implicito. */}
+              <span
+                aria-label={`${core.label} ${core.enabled ? "SI" : "NO"}`}
+                style={{
+                  marginLeft: "auto",
+                  background: core.enabled ? "var(--color-buy, #2ec27e)" : "var(--color-text-muted)",
+                  color: "#000",
+                  fontWeight: 700,
+                  fontSize: "0.65rem",
+                  padding: "0.1rem 0.4rem",
+                  borderRadius: 3
+                }}
+              >
+                {core.enabled ? "SI" : "NO"}
+              </span>
             </div>
             <p style={{ marginTop: "0.3rem", fontSize: "0.75rem", paddingLeft: "1.4rem" }}>{core.description}</p>
           </label>

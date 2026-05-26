@@ -1,0 +1,74 @@
+# FIC: OpenAPI contract for ADX endpoint (Edgar, TEAM-02).
+openapi: 3.1.0
+info:
+  title: Indicators Core - ADX
+  version: 1.0.0
+  description: Endpoint REST para ADX con +DI / -DI y clasificacion de fuerza de tendencia.
+paths:
+  /api/indicators/adx:
+    get:
+      summary: Calcula ADX sobre OHLC del simbolo y timeframe indicados.
+      parameters:
+        - { in: query, name: symbol, required: true, schema: { type: string }, example: AAPL }
+        - { in: query, name: timeframe, required: false, schema: { type: string, enum: [1m, 5m, 15m, 1h, 4h, 1d], default: 1h } }
+        - { in: query, name: period, required: false, schema: { type: integer, minimum: 1, maximum: 500, default: 14 } }
+        - { in: query, name: count, required: false, schema: { type: integer, minimum: 1, maximum: 1000, default: 300 } }
+      responses:
+        "200":
+          description: Resultado ADX con serie, +DI, -DI y fuerza de tendencia.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdxResult" }
+        "400": { description: Parametros invalidos, $ref: "#/components/responses/Error" }
+        "404": { description: Symbol sin datos OHLC, $ref: "#/components/responses/Error" }
+        "422": { description: Datos insuficientes (se requieren 2*period velas), $ref: "#/components/responses/Error" }
+components:
+  schemas:
+    AdxPoint:
+      type: object
+      required: [time, adx, plus_di, minus_di]
+      properties:
+        time: { type: integer }
+        adx: { type: number, nullable: true }
+        plus_di: { type: number, nullable: true }
+        minus_di: { type: number, nullable: true }
+    AdxCurrent:
+      allOf:
+        - $ref: "#/components/schemas/AdxPoint"
+        - type: object
+          required: [strength]
+          properties:
+            strength: { type: string, enum: [sin_tendencia, debil, fuerte, muy_fuerte] }
+    AdxResult:
+      type: object
+      required: [symbol, timeframe, indicator, params, algorithm_version, computed_at, source_input_hash, bars_used, current_value, series, zone]
+      properties:
+        symbol: { type: string }
+        timeframe: { type: string }
+        indicator: { type: string, enum: [adx] }
+        params:
+          type: object
+          properties:
+            period: { type: integer }
+        algorithm_version: { type: string }
+        computed_at: { type: string, format: date-time }
+        source_input_hash: { type: string }
+        bars_used: { type: integer }
+        current_value: { $ref: "#/components/schemas/AdxCurrent" }
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/AdxPoint" }
+        zone: { type: string, enum: [sin_tendencia, debil, fuerte, muy_fuerte] }
+    Error:
+      type: object
+      required: [error_code, message]
+      properties:
+        error_code: { type: string }
+        message: { type: string }
+        hint: { type: string }
+  responses:
+    Error:
+      description: Error estructurado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }

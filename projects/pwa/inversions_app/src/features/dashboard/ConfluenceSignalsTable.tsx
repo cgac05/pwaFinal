@@ -1,179 +1,167 @@
-// FIC: Metadata-driven confluence table synchronized with chart marker selection.
-// FIC: Tabla de confluencia metadata-driven sincronizada con seleccion de marcadores del chart.
+// FIC: Phase 5 T095 — tabla canonica con columnas del PDF "DASBOARD Y TABLA v1".
+// FIC: Reemplaza la tabla v0 (symbol/direction/confidence/timestamp) por el contrato del PDF.
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useSignalStore, type SelectedSignal } from "../../store/signals";
+import {
+  getConfluenceTable,
+  type ConfluenceSignalRow,
+  type ConfluenceTableResponse
+} from "../../services/signals/confluenceTableApi";
+import { ObservationCell } from "./ObservationCell";
+import { OptionGreeksRow } from "./OptionGreeksRow";
 
-interface ColumnConfig {
-  field_key: string;
-  label: string;
-  data_type: "string" | "number" | "boolean" | "timestamp" | "json" | "enum";
-  visible: boolean;
-  order_index: number;
-}
+// FIC: 13 columnas canonicas del PDF v1 (US5).
+const PDF_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "observacion"; label: string }> = [
+  { key: "ticket", label: "TICKET" },
+  { key: "core", label: "CORE" },
+  { key: "subCore", label: "SUBCORE" },
+  { key: "precio", label: "PRECIO" },
+  { key: "tipoSenal", label: "TIPO SEÑAL" },
+  { key: "fecha", label: "FECHA" },
+  { key: "timeframe", label: "TIMEFRAME" },
+  { key: "tendencia", label: "TENDENCIA" },
+  { key: "score", label: "SCORE" },
+  { key: "peso", label: "PESO" },
+  { key: "invertir", label: "INVERTIR" },
+  { key: "estado", label: "ESTADO" },
+  { key: "observacion", label: "OBSERVACION" }
+];
 
-interface SignalRow {
-  id: string;
-  symbol: string;
-  direction: string;
-  confidence: number;
-  timestamp: number;
-  metadata: Record<string, unknown>;
-}
-
-interface ConfluenceSignalsTableProps {
+interface Props {
   symbol?: string;
+  /** FIC: Permite sobrescribir las filas (por ejemplo desde una corrida de simulacion). */
+  rows?: ConfluenceSignalRow[];
 }
 
-function formatCellValue(value: unknown, dataType: ColumnConfig["data_type"]): string {
-  if (value === null || value === undefined) {
-    return "-";
-  }
-
-  if (dataType === "number") {
-    const numberValue = Number(value);
-    if (Number.isNaN(numberValue)) {
-      return "-";
-    }
-    return numberValue.toFixed(2);
-  }
-
-  if (dataType === "boolean") {
-    return value ? "Yes" : "No";
-  }
-
-  if (dataType === "timestamp") {
-    const date = new Date(String(value));
-    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
-  }
-
-  if (dataType === "json") {
-    return JSON.stringify(value);
-  }
-
-  return String(value);
+function colorForTipo(tipo: string): string {
+  if (tipo === "CALL") return "var(--color-buy, #2ec27e)";
+  if (tipo === "PUT") return "var(--color-sell, #f85149)";
+  return "var(--color-text-muted, #8b949e)";
 }
 
-function valueFromRow(row: SignalRow, key: string): unknown {
-  if (key === "symbol") return row.symbol;
-  if (key === "direction") return row.direction;
-  if (key === "confidence") return row.confidence;
-  if (key === "timestamp") return new Date(row.timestamp * 1000).toISOString();
-  return row.metadata[key];
+function colorForEstado(estado: string): string {
+  if (estado === "DEGRADADA") return "var(--color-text-muted, #8b949e)";
+  if (estado === "INVALIDADA") return "var(--color-sell, #f85149)";
+  return "var(--color-buy, #2ec27e)";
 }
 
-export function ConfluenceSignalsTable({ symbol }: ConfluenceSignalsTableProps) {
-  const [columns, setColumns] = useState<ColumnConfig[]>([]);
-  const [rows, setRows] = useState<SignalRow[]>([]);
-  const [filter, setFilter] = useState("");
-  const [directionFilter, setDirectionFilter] = useState<"all" | "buy" | "sell">("all");
-  const { selectedSignal, setSelectedSignal } = useSignalStore();
+export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
+  const [rows, setRows] = useState<ConfluenceSignalRow[]>(rowsProp ?? []);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [meta, setMeta] = useState<Omit<ConfluenceTableResponse, "rows"> | null>(null);
+  const { setSelectedSignal } = useSignalStore();
 
   useEffect(() => {
-    const loadColumns = async () => {
-      const response = await fetch("/api/dashboard/confluence-columns");
-      if (!response.ok) {
-        return;
-      }
-      const data = await response.json();
-      setColumns((data.columns ?? []).filter((column: ColumnConfig) => column.visible));
-    };
-
-    void loadColumns();
-  }, []);
-
-  useEffect(() => {
-    const loadSignals = async () => {
-      const query = new URLSearchParams();
-      if (symbol) {
-        query.set("symbol", symbol);
-      }
-
-      const response = await fetch(`/api/signals/confluence?${query.toString()}`);
-      if (!response.ok) {
-        return;
-      }
-
-      const data = await response.json();
-      setRows(data.signals ?? []);
-    };
-
-    void loadSignals();
-  }, [symbol]);
-
-  const visibleColumns = useMemo(() => {
-    if (columns.length > 0) {
-      return [...columns].sort((a, b) => a.order_index - b.order_index);
+    if (rowsProp) {
+      setRows(rowsProp);
+      return;
     }
+    if (!symbol) return;
+    setLoading(true);
+    setError(null);
+    getConfluenceTable({ ticket: symbol })
+      .then((res) => {
+        setRows(res.rows);
+        setMeta({
+          generated_at: res.generated_at,
+          algorithm_version: res.algorithm_version,
+          ticket: res.ticket,
+          timeframe: res.timeframe
+        });
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "load_failed"))
+      .finally(() => setLoading(false));
+  }, [symbol, rowsProp]);
 
-    return [
-      { field_key: "symbol", label: "Symbol", data_type: "string", visible: true, order_index: 1 },
-      { field_key: "direction", label: "Direction", data_type: "enum", visible: true, order_index: 2 },
-      { field_key: "confidence", label: "Confidence", data_type: "number", visible: true, order_index: 3 },
-      { field_key: "timestamp", label: "Timestamp", data_type: "timestamp", visible: true, order_index: 4 }
-    ] as ColumnConfig[];
-  }, [columns]);
-
-  const filteredRows = useMemo(() => {
-    return rows.filter((row) => {
-      const byDirection = directionFilter === "all" || row.direction === directionFilter;
-      const byText = filter.length === 0 || row.symbol.toLowerCase().includes(filter.toLowerCase());
-      return byDirection && byText;
-    });
-  }, [rows, directionFilter, filter]);
+  const sorted = useMemo(() => {
+    const order = ["A_INDICADORES", "A_FUNDAMENTAL", "A_TECNICO", "A_INSTITUCIONAL", "A_NOTICIAS", "A_IA"];
+    return [...rows].sort((a, b) => order.indexOf(a.core) - order.indexOf(b.core));
+  }, [rows]);
 
   return (
     <section className="card" style={{ overflow: "hidden" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem" }}>
-        <h2>Confluence Signals</h2>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <input
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-            placeholder="Filter symbol"
-            style={{ width: 140 }}
-          />
-          <select value={directionFilter} onChange={(event) => setDirectionFilter(event.target.value as "all" | "buy" | "sell")}> 
-            <option value="all">All</option>
-            <option value="buy">Buy</option>
-            <option value="sell">Sell</option>
-          </select>
-        </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+        <h2 style={{ margin: 0 }}>Tabla de Confluencia de Señales</h2>
+        {meta && (
+          <span style={{ color: "var(--color-text-muted)", fontSize: "0.75rem" }}>
+            {meta.ticket} · {meta.timeframe} · v{meta.algorithm_version}
+          </span>
+        )}
       </div>
 
-      <div style={{ maxHeight: 380, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
-        <table>
+      {error && (
+        <div style={{ color: "var(--color-sell, #f85149)", marginBottom: "0.5rem", fontSize: "0.8rem" }}>
+          Error: {error}
+        </div>
+      )}
+
+      <div style={{ maxHeight: 540, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              {visibleColumns.map((column) => (
-                <th key={column.field_key}>{column.label}</th>
+              {PDF_COLUMNS.map((col) => (
+                <th key={col.key} style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.5rem", textAlign: "left", fontSize: "0.7rem", borderBottom: "1px solid var(--color-border)" }}>
+                  {col.label}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filteredRows.map((row) => {
-              const active = selectedSignal?.id === row.id;
-
-              return (
-                <tr
-                  key={row.id}
-                  onClick={() => setSelectedSignal(row as SelectedSignal)}
-                  style={{
-                    cursor: "pointer",
-                    background: active ? "rgba(255, 212, 59, 0.2)" : undefined
-                  }}
-                >
-                  {visibleColumns.map((column) => {
-                    const value = valueFromRow(row, column.field_key);
-                    return (
-                      <td key={column.field_key} title={typeof value === "string" ? value : undefined}>
-                        {formatCellValue(value, column.data_type)}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
+            {loading && rows.length === 0 ? (
+              <tr><td colSpan={PDF_COLUMNS.length} style={{ padding: "1rem", textAlign: "center" }}>Cargando…</td></tr>
+            ) : sorted.length === 0 ? (
+              <tr><td colSpan={PDF_COLUMNS.length} style={{ padding: "1rem", textAlign: "center", color: "var(--color-text-muted)" }}>Sin datos para mostrar</td></tr>
+            ) : (
+              sorted.flatMap((row, idx) => {
+                const rowKey = `${row.core}-${row.subCore ?? "agg"}-${idx}`;
+                const onClick = () =>
+                  setSelectedSignal({
+                    id: rowKey,
+                    symbol: row.ticket,
+                    metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
+                  } as SelectedSignal);
+                const cells = (
+                  <tr key={rowKey} onClick={onClick} style={{ cursor: "pointer", opacity: row.estado === "DEGRADADA" ? 0.55 : 1 }}>
+                    {PDF_COLUMNS.map((col) => {
+                      let content: React.ReactNode;
+                      if (col.key === "observacion") {
+                        content = <ObservationCell observation={row.observacion} />;
+                      } else if (col.key === "tipoSenal") {
+                        content = <span style={{ color: colorForTipo(row.tipoSenal), fontWeight: 700 }}>{row.tipoSenal}</span>;
+                      } else if (col.key === "estado") {
+                        content = <span style={{ color: colorForEstado(row.estado), fontWeight: 600 }}>{row.estado}</span>;
+                      } else if (col.key === "invertir") {
+                        content = row.invertir ? "SI" : "NO";
+                      } else if (col.key === "score" || col.key === "peso" || col.key === "precio") {
+                        const v = row[col.key] as number;
+                        content = Number.isFinite(v) ? v.toFixed(3) : "-";
+                      } else if (col.key === "core" && row.core === "A_IA") {
+                        content = (
+                          <span>
+                            {row.core}{" "}
+                            <span title={row.disclaimer_id} style={{ background: "var(--color-accent, #ffd43b)", color: "#000", borderRadius: 3, padding: "0 4px", fontSize: "0.6rem", fontWeight: 700 }}>IA</span>
+                          </span>
+                        );
+                      } else {
+                        const v = (row as any)[col.key];
+                        content = v == null ? "-" : String(v);
+                      }
+                      return (
+                        <td key={col.key} style={{ padding: "0.4rem 0.5rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.8rem", verticalAlign: "top" }}>
+                          {content}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+                if (row.optionLeg) {
+                  return [cells, <OptionGreeksRow key={`${rowKey}-greeks`} greeks={row.optionLeg} colSpan={PDF_COLUMNS.length} />];
+                }
+                return [cells];
+              })
+            )}
           </tbody>
         </table>
       </div>
