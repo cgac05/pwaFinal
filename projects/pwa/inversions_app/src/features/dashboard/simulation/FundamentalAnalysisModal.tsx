@@ -31,6 +31,40 @@ interface FundamentalData {
   revenueGrowth?: number;
 }
 
+export interface ProjectionPoint {
+  date: string;
+  basePrice: number;
+  bullishPrice: number;
+  bearishPrice: number;
+  basePnL: number;
+  bullishPnL: number;
+  bearishPnL: number;
+}
+
+export interface FundamentalProjection {
+  ticker: string;
+  strategy: string;
+  verdict: "VIABLE" | "MARGINAL" | "NO_VIABLE";
+  score: number;
+  projectionFrom: string;
+  projectionTo: string;
+  days: number;
+  initialPrice: number;
+  expectedMove: number;
+  expectedMovePercent: number;
+  strike: number;
+  premium: number;
+  breakeven: number;
+  maxLoss: number | "ILIMITADO";
+  maxProfit: number | "ILIMITADO";
+  scenarios: Array<{ label: "ATM" | "+5%" | "-5%"; price: number; profitLoss: number }>;
+  path: ProjectionPoint[];
+  drivers: string[];
+  changeTriggers: string[];
+  calculationSteps: string[];
+  disclaimer: string;
+}
+
 export interface AnalysisResult {
   ticker: string;
   companyName: string;
@@ -41,6 +75,7 @@ export interface AnalysisResult {
   aiAnalysis: string;
   sections: MetricSection[];
   confluenceRows?: unknown[];
+  projection?: FundamentalProjection;
   fundamentalData: FundamentalData;
   timestamp: string;
 }

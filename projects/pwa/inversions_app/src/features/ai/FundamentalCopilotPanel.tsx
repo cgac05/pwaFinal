@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
+import type { FundamentalProjection } from "../dashboard/simulation/FundamentalAnalysisModal";
 
 interface ChatEntry {
   role: "user" | "assistant";
@@ -18,6 +19,7 @@ const PRESET_TICKERS = ["NVDA", "AAPL", "MSFT", "SPY"];
 
 interface Props {
   defaultTicker?: string;
+  simulationContext?: FundamentalProjection;
 }
 
 /**
@@ -25,7 +27,7 @@ interface Props {
  * Llama a POST /api/team-03/ai/fundamental/copilot con ticker + pregunta.
  * Muestra historial de conversación y disclaimer regulatorio.
  */
-export function FundamentalCopilotPanel({ defaultTicker = "AAPL" }: Props) {
+export function FundamentalCopilotPanel({ defaultTicker = "AAPL", simulationContext }: Props) {
   const [ticker, setTicker]     = useState(defaultTicker);
   const [question, setQuestion] = useState("");
   const [history, setHistory]   = useState<ChatEntry[]>([]);
@@ -35,16 +37,20 @@ export function FundamentalCopilotPanel({ defaultTicker = "AAPL" }: Props) {
 
   useEffect(() => {
     setTicker(defaultTicker);
-    setHistory([]);
+    setHistory(simulationContext ? [{
+      role: "assistant",
+      content: `Simulacion cargada para ${simulationContext.ticker}: ${simulationContext.strategy}, veredicto ${simulationContext.verdict} (${simulationContext.score}/100), rango ${simulationContext.projectionFrom} -> ${simulationContext.projectionTo}. Puedes preguntar por viabilidad, razones fundamentales, riesgos, escenarios o calculo.`,
+      disclaimer: simulationContext.disclaimer
+    }] : []);
     setError(null);
-  }, [defaultTicker]);
+  }, [defaultTicker, simulationContext]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [history, loading]);
 
-  async function sendMessage() {
-    const q = question.trim();
+  async function sendMessage(overrideQuestion?: string) {
+    const q = (overrideQuestion ?? question).trim();
     if (!q || loading) return;
 
     setHistory((h) => [...h, { role: "user", content: q }]);
@@ -59,7 +65,8 @@ export function FundamentalCopilotPanel({ defaultTicker = "AAPL" }: Props) {
         body: JSON.stringify({
           ticker: ticker.toUpperCase(),
           question: q,
-          includeStrategyRecommendation: false
+          includeStrategyRecommendation: Boolean(simulationContext),
+          simulationContext
         })
       });
 
@@ -190,6 +197,28 @@ export function FundamentalCopilotPanel({ defaultTicker = "AAPL" }: Props) {
         <p style={{ color: "var(--color-sell)", fontSize: "0.8rem", margin: 0 }}>
           {error}
         </p>
+      )}
+
+      {simulationContext && (
+        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+          {[
+            "Por que es VIABLE / MARGINAL / NO_VIABLE?",
+            "Que riesgos tiene la estrategia?",
+            "Que podria cambiar la opinion?",
+            "Como calculaste la proyeccion?"
+          ].map((prompt) => (
+            <button
+              key={prompt}
+              type="button"
+              className="btn-ghost"
+              onClick={() => void sendMessage(prompt)}
+              disabled={loading}
+              style={{ fontSize: "0.75rem" }}
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
       )}
 
       {/* Input */}

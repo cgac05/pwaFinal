@@ -80,6 +80,7 @@ export function createFundamentalAnalyzeRouter(supabaseClient: SupabaseClient): 
         overallScore: analysis.overallScore,
         verdict: analysis.verdict,
         recommendation: analysis.recommendation,
+        projection: analysis.projection,
         aiAnalysis: analysis.aiAnalysis,
         sections: analysis.sections,
         confluenceRows: analysis.confluenceRows,

@@ -19,6 +19,7 @@ export interface CopilotChatRequest {
   question: string;
   includeStrategyRecommendation?: boolean;
   userId?: string;
+  simulationContext?: CopilotSimulationContext;
 }
 
 export interface CopilotChatResponse {
@@ -46,6 +47,25 @@ interface MarketMetrics {
   priceHigh52Week?: number;
   priceLow52Week?: number;
   revenueGrowth?: number;
+}
+
+export interface CopilotSimulationContext {
+  strategy: string;
+  verdict: "VIABLE" | "MARGINAL" | "NO_VIABLE" | string;
+  score: number;
+  projectionFrom: string;
+  projectionTo: string;
+  initialPrice: number;
+  expectedMove?: number;
+  strike?: number;
+  premium?: number;
+  breakeven?: number;
+  maxLoss?: number | string;
+  maxProfit?: number | string;
+  scenarios?: Array<{ label: string; price: number; profitLoss: number }>;
+  drivers?: string[];
+  changeTriggers?: string[];
+  calculationSteps?: string[];
 }
 
 interface FundamentalContext {
@@ -81,9 +101,14 @@ export class FundamentalCopilotChat {
     if (fundamentalContext.strategySummary) {
       baseContext.push(`Strategy summary available`);
     }
+    if (request.simulationContext) {
+      baseContext.push(`Simulation strategy: ${request.simulationContext.strategy}`);
+      baseContext.push(`Simulation verdict: ${request.simulationContext.verdict} (${request.simulationContext.score}/100)`);
+      baseContext.push(`Simulation range: ${request.simulationContext.projectionFrom} to ${request.simulationContext.projectionTo}`);
+    }
 
     const prompt = this.buildClaudePrompt(request, fundamentalContext);
-    const answer = await this.executeCopilot(prompt, fundamentalContext, reasoningTrace, request.question);
+    const answer = await this.executeCopilot(prompt, fundamentalContext, reasoningTrace, request.question, request.simulationContext);
 
     await this.logChatInteraction(request.userId, ticker, reasoningTrace.length + 1);
 
@@ -133,6 +158,11 @@ export class FundamentalCopilotChat {
     if (context.strategySummary) {
       lines.push(`Strategy summary: ${context.strategySummary}`);
     }
+    if (request.simulationContext) {
+      lines.push("");
+      lines.push("Contexto de simulacion seleccionado por el usuario:");
+      lines.push(this.formatSimulationContext(request.simulationContext));
+    }
     const recentUserAnalysis = context.recentUserAnalysis ?? [];
     if (recentUserAnalysis.length > 0) {
       lines.push("Recent user analysis history:");
@@ -165,20 +195,68 @@ export class FundamentalCopilotChat {
     return lines.join("\n");
   }
 
+  private formatSimulationContext(simulation: CopilotSimulationContext): string {
+    const lines: string[] = [];
+    lines.push(`- Estrategia: ${simulation.strategy}`);
+    lines.push(`- Veredicto: ${simulation.verdict} (${simulation.score}/100)`);
+    lines.push(`- Rango: ${simulation.projectionFrom} -> ${simulation.projectionTo}`);
+    lines.push(`- Precio inicial: $${simulation.initialPrice}`);
+    if (simulation.expectedMove !== undefined) lines.push(`- Movimiento esperado: +/-$${simulation.expectedMove}`);
+    if (simulation.strike !== undefined) lines.push(`- Strike ATM: $${simulation.strike}`);
+    if (simulation.premium !== undefined) lines.push(`- Prima teorica: $${simulation.premium}`);
+    if (simulation.breakeven !== undefined) lines.push(`- Breakeven: $${simulation.breakeven}`);
+    if (simulation.maxLoss !== undefined) lines.push(`- Perdida maxima: ${simulation.maxLoss}`);
+    if (simulation.maxProfit !== undefined) lines.push(`- Ganancia maxima: ${simulation.maxProfit}`);
+    if (simulation.scenarios?.length) {
+      lines.push("- Escenarios:");
+      simulation.scenarios.forEach((scenario) => {
+        lines.push(`  - ${scenario.label}: precio $${scenario.price}, P&L $${scenario.profitLoss}`);
+      });
+    }
+    if (simulation.drivers?.length) {
+      lines.push("- Razones fundamentales:");
+      simulation.drivers.forEach((driver) => lines.push(`  - ${driver}`));
+    }
+    if (simulation.changeTriggers?.length) {
+      lines.push("- Que podria cambiar la opinion:");
+      simulation.changeTriggers.forEach((trigger) => lines.push(`  - ${trigger}`));
+    }
+    if (simulation.calculationSteps?.length) {
+      lines.push("- Pasos de calculo:");
+      simulation.calculationSteps.forEach((step) => lines.push(`  - ${step}`));
+    }
+    return lines.join("\n");
+  }
+
+  private containsForbiddenTradingOrder(answer: string): boolean {
+    const normalized = answer.toLowerCase();
+    return [
+      "compra ahora",
+      "vende inmediatamente",
+      "esta es tu oportunidad",
+      "deberias ejecutar",
+      "deberías ejecutar",
+      "ejecuta esta orden",
+      "compra ya",
+      "vende ya"
+    ].some((phrase) => normalized.includes(phrase));
+  }
+
   private async executeCopilot(
     prompt: string,
     context: FundamentalContext,
     reasoningTrace: string[],
-    originalQuestion: string
+    originalQuestion: string,
+    simulationContext?: CopilotSimulationContext
   ): Promise<string> {
     const claudeAnswer = await this.callClaude(prompt);
-    if (claudeAnswer) {
+    if (claudeAnswer && !this.containsForbiddenTradingOrder(claudeAnswer)) {
       reasoningTrace.push("Used Claude API prompt generation.");
       return claudeAnswer;
     }
 
     reasoningTrace.push("Used local copilot fallback.");
-    return this.localChatResponse(originalQuestion, context, reasoningTrace);
+    return this.localChatResponse(originalQuestion, context, reasoningTrace, simulationContext);
   }
 
   private async callClaude(prompt: string): Promise<string | undefined> {
@@ -216,7 +294,8 @@ export class FundamentalCopilotChat {
   private localChatResponse(
     _prompt: string,
     context: FundamentalContext,
-    reasoningTrace: string[]
+    reasoningTrace: string[],
+    simulationContext?: CopilotSimulationContext
   ): string {
     const m = context.market;
     const q = _prompt.toLowerCase();
@@ -232,9 +311,10 @@ export class FundamentalCopilotChat {
     const isOptionsQ = ["estrategia", "opcion", "call", "put", "long", "short", "prima", "breakeven", "strike"].some((w) => q.includes(w));
     const isBearishQ = explicitDir === "BAJISTA";
     const isBullishQ = explicitDir === "ALCISTA";
-    const isScenarioQ = ["escenario", "qué pasa", "que pasa", "qué puede", "que puede", "riesgo"].some((w) => q.includes(w));
+    const isScenarioQ = ["escenario", "qué pasa", "que pasa", "qué puede", "que puede", "podria cambiar", "podría cambiar", "opinion", "opinión", "riesgo"].some((w) => q.includes(w));
     const isExplainQ = ["por qué", "porque", "explica", "cuando", "cuándo", "conviene", "sirve", "no sirve", "qué significa", "que significa"].some((w) => q.includes(w));
     const isCompareQ = ["vs", "versus", "diferencia", "comparar", "mejor"].some((w) => q.includes(w));
+    const isHowCalculatedQ = ["como calcul", "cómo calcul", "calculo", "cálculo", "formula", "pasos"].some((w) => q.includes(w));
 
     // ── Snapshot de datos ──────────────────────────────────────────────────
     lines.push(`**${company} (${ticker})** — datos en tiempo real`);
@@ -255,6 +335,42 @@ export class FundamentalCopilotChat {
     if (metrics.length) lines.push(metrics.join(" | "));
     lines.push(`Sesgo fundamental: **${fundamentalDir}**`);
     lines.push("");
+
+    if (simulationContext) {
+      lines.push(`**Simulacion seleccionada: ${simulationContext.strategy}**`);
+      lines.push(`Veredicto fundamental: **${simulationContext.verdict}** (${simulationContext.score}/100) | Rango ${simulationContext.projectionFrom} -> ${simulationContext.projectionTo}`);
+      lines.push(`Strike: $${simulationContext.strike ?? "N/D"} | Prima: $${simulationContext.premium ?? "N/D"} | Breakeven: $${simulationContext.breakeven ?? "N/D"}`);
+      lines.push(`Perdida maxima: ${simulationContext.maxLoss ?? "N/D"} | Ganancia maxima: ${simulationContext.maxProfit ?? "N/D"}`);
+      lines.push("");
+
+      if (simulationContext.drivers?.length) {
+        lines.push("**Por que la empresa queda en ese veredicto:**");
+        simulationContext.drivers.slice(0, 5).forEach((driver) => lines.push(`- ${driver}`));
+        lines.push("");
+      }
+
+      if (simulationContext.scenarios?.length) {
+        lines.push("**Riesgos y escenarios de la estrategia:**");
+        simulationContext.scenarios.forEach((scenario) => {
+          lines.push(`- ${scenario.label}: precio $${scenario.price}, P&L estimado $${scenario.profitLoss}`);
+        });
+        lines.push("");
+      }
+
+      if (isScenarioQ && simulationContext.changeTriggers?.length) {
+        lines.push("**Escenarios de mercado a considerar:**");
+        simulationContext.changeTriggers.forEach((trigger) => lines.push(`- ${trigger}`));
+        lines.push("");
+      }
+
+      if (isHowCalculatedQ && simulationContext.calculationSteps?.length) {
+        lines.push("**Como se calculo el resultado:**");
+        simulationContext.calculationSteps.forEach((step) => lines.push(`- ${step}`));
+        lines.push("");
+        lines.push("En resumen: el score de viabilidad sale del promedio de metricas fundamentales y la proyeccion de opciones aplica strike ATM, prima teorica, breakeven y P&L por escenario.");
+        lines.push("");
+      }
+    }
 
     // ── Cuerpo contextual ──────────────────────────────────────────────────
 
@@ -360,11 +476,21 @@ export class FundamentalCopilotChat {
       const p = m.price;
       const v = vol / 100;
       const move30d = Math.round(p * v * Math.sqrt(30 / 252) * 100) / 100;
+      lines.push("Escenarios de mercado a considerar:");
       lines.push(`**Movimiento esperado (1 mes, ±1σ): ±$${move30d} (±${(move30d / p * 100).toFixed(1)}%)**`);
       lines.push(`- Escenario alcista: $${(p + move30d).toFixed(2)}`);
       lines.push(`- Escenario bajista: $${(p - move30d).toFixed(2)}`);
       lines.push(`- Catalizadores positivos: earnings beat, expansión de producto, guía optimista`);
       lines.push(`- Catalizadores negativos: earnings miss, competencia, macro adverso (tasas, dólar)`);
+      lines.push("");
+    }
+
+    if (isHowCalculatedQ && !simulationContext) {
+      lines.push("Cómo se calculó el resultado:");
+      lines.push("- Se cargaron datos fundamentales disponibles del ticker: precio, volatilidad, valuacion, rentabilidad, deuda y crecimiento.");
+      lines.push("- El score de viabilidad se infiere ponderando calidad fundamental, riesgo y posicion del precio dentro del rango reciente.");
+      lines.push("- Para opciones se estima strike ATM, prima teorica, breakeven y P&L bajo escenarios ATM, +5% y -5%.");
+      lines.push("- Si falta algun dato, el chat lo declara y limita la conclusion a la informacion disponible.");
       lines.push("");
     }
 

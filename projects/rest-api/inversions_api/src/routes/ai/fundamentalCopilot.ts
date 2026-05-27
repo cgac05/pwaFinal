@@ -8,7 +8,7 @@ export function createFundamentalCopilotRouter(supabaseClient: SupabaseClient): 
 
   router.post("/fundamental/copilot", async (req: Request, res: Response) => {
     try {
-      const { ticker, question, includeStrategyRecommendation = false } = req.body;
+      const { ticker, question, includeStrategyRecommendation = false, simulationContext } = req.body;
 
       if (!ticker || !question) {
         return res.status(400).json({ error: "ticker and question are required" });
@@ -17,7 +17,8 @@ export function createFundamentalCopilotRouter(supabaseClient: SupabaseClient): 
       const response = await copilot.generateResponse({
         ticker: String(ticker).toUpperCase(),
         question: String(question),
-        includeStrategyRecommendation: Boolean(includeStrategyRecommendation)
+        includeStrategyRecommendation: Boolean(includeStrategyRecommendation),
+        simulationContext: typeof simulationContext === "object" && simulationContext !== null ? simulationContext : undefined
       });
 
       await auditLog(supabaseClient, {

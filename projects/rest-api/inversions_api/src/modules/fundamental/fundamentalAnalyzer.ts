@@ -33,9 +33,50 @@ export interface FundamentalAnalysisResult {
   overallScore: number;     // 0-100
   verdict: "VIABLE" | "NEUTRAL" | "NOT_VIABLE";
   recommendation: string;
+  projection: FundamentalProjection;
   confluenceRows: FundamentalConfluenceRow[];
   sourceId: string;
   timestamp: string;
+}
+
+export interface ProjectionPoint {
+  date: string;
+  basePrice: number;
+  bullishPrice: number;
+  bearishPrice: number;
+  basePnL: number;
+  bullishPnL: number;
+  bearishPnL: number;
+}
+
+export interface StrategyScenario {
+  label: "ATM" | "+5%" | "-5%";
+  price: number;
+  profitLoss: number;
+}
+
+export interface FundamentalProjection {
+  ticker: string;
+  strategy: string;
+  verdict: "VIABLE" | "MARGINAL" | "NO_VIABLE";
+  score: number;
+  projectionFrom: string;
+  projectionTo: string;
+  days: number;
+  initialPrice: number;
+  expectedMove: number;
+  expectedMovePercent: number;
+  strike: number;
+  premium: number;
+  breakeven: number;
+  maxLoss: number | "ILIMITADO";
+  maxProfit: number | "ILIMITADO";
+  scenarios: StrategyScenario[];
+  path: ProjectionPoint[];
+  drivers: string[];
+  changeTriggers: string[];
+  calculationSteps: string[];
+  disclaimer: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -483,6 +524,192 @@ function localFallbackAnalysis(
 }
 
 // ---------------------------------------------------------------------------
+// Deterministic projection builder
+// ---------------------------------------------------------------------------
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function clampPrice(value: number): number {
+  return Math.max(0.01, roundMoney(value));
+}
+
+function daysBetween(from: string, to: string): number {
+  const ms = new Date(to).getTime() - new Date(from).getTime();
+  if (!Number.isFinite(ms)) return 30;
+  return Math.max(1, Math.round(ms / 86_400_000));
+}
+
+function addDaysIso(from: string, days: number): string {
+  const base = new Date(from);
+  if (!Number.isFinite(base.getTime())) {
+    return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+  }
+  return new Date(base.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+function projectionVerdict(verdict: FundamentalAnalysisResult["verdict"]): FundamentalProjection["verdict"] {
+  if (verdict === "VIABLE") return "VIABLE";
+  if (verdict === "NEUTRAL") return "MARGINAL";
+  return "NO_VIABLE";
+}
+
+function strategyParts(strategy: string): { direction: "LONG" | "SHORT"; optionType: "CALL" | "PUT"; label: string } {
+  const normalized = strategy.trim().toUpperCase().replace(/[_-]+/g, " ");
+  if (normalized.includes("SHORT") && normalized.includes("PUT")) {
+    return { direction: "SHORT", optionType: "PUT", label: "Short Put" };
+  }
+  if (normalized.includes("SHORT") && normalized.includes("CALL")) {
+    return { direction: "SHORT", optionType: "CALL", label: "Short Call" };
+  }
+  if (normalized.includes("LONG") && normalized.includes("PUT")) {
+    return { direction: "LONG", optionType: "PUT", label: "Long Put" };
+  }
+  return { direction: "LONG", optionType: "CALL", label: "Long Call" };
+}
+
+function optionPnL(
+  price: number,
+  strike: number,
+  premium: number,
+  direction: "LONG" | "SHORT",
+  optionType: "CALL" | "PUT"
+): number {
+  const intrinsic = optionType === "CALL"
+    ? Math.max(price - strike, 0)
+    : Math.max(strike - price, 0);
+  const perShare = direction === "LONG" ? intrinsic - premium : premium - intrinsic;
+  return roundMoney(perShare * 100);
+}
+
+function strategyRisk(
+  strike: number,
+  premium: number,
+  direction: "LONG" | "SHORT",
+  optionType: "CALL" | "PUT"
+): Pick<FundamentalProjection, "breakeven" | "maxLoss" | "maxProfit"> {
+  if (direction === "LONG" && optionType === "CALL") {
+    return {
+      breakeven: roundMoney(strike + premium),
+      maxLoss: roundMoney(premium * 100),
+      maxProfit: "ILIMITADO"
+    };
+  }
+  if (direction === "LONG" && optionType === "PUT") {
+    return {
+      breakeven: roundMoney(strike - premium),
+      maxLoss: roundMoney(premium * 100),
+      maxProfit: roundMoney(Math.max(0, strike - premium) * 100)
+    };
+  }
+  if (direction === "SHORT" && optionType === "CALL") {
+    return {
+      breakeven: roundMoney(strike + premium),
+      maxLoss: "ILIMITADO",
+      maxProfit: roundMoney(premium * 100)
+    };
+  }
+  return {
+    breakeven: roundMoney(strike - premium),
+    maxLoss: roundMoney(Math.max(0, strike - premium) * 100),
+    maxProfit: roundMoney(premium * 100)
+  };
+}
+
+function buildProjectionDrivers(sections: MetricSection[]): string[] {
+  return [...sections]
+    .sort((a, b) => Math.abs(b.score - 50) - Math.abs(a.score - 50))
+    .slice(0, 5)
+    .map((section) => `${section.metric}: ${section.finding} (score ${section.score}/100, ${section.tendencia})`);
+}
+
+function buildFundamentalProjection(
+  ticker: string,
+  data: FundamentalAnalysisData,
+  opts: AnalysisOptions,
+  sections: MetricSection[],
+  overallScore: number,
+  verdict: FundamentalAnalysisResult["verdict"]
+): FundamentalProjection {
+  const projectionFrom = opts.projectionFrom ?? new Date().toISOString().slice(0, 10);
+  const projectionTo = opts.projectionTo ?? addDaysIso(projectionFrom, 30);
+  const days = daysBetween(projectionFrom, projectionTo);
+  const initialPrice = clampPrice(data.metrics.priceHistory?.currentPrice ?? 100);
+  const vol = Math.max(5, data.metrics.volatility?.annualizedVolatility ?? 25);
+  const expectedMove = roundMoney(initialPrice * (vol / 100) * Math.sqrt(days / 252));
+  const expectedMovePercent = roundMoney((expectedMove / initialPrice) * 100);
+  const drift = initialPrice * ((overallScore - 50) / 100) * Math.min(days / 365, 1);
+  const baseFinal = clampPrice(initialPrice + drift);
+  const bullishFinal = clampPrice(baseFinal + expectedMove);
+  const bearishFinal = clampPrice(baseFinal - expectedMove);
+  const parts = strategyParts(opts.strategy);
+  const strike = Math.max(1, Math.round(initialPrice / 5) * 5);
+  const premium = roundMoney(Math.max(0.25, initialPrice * (vol / 100) * Math.sqrt(days / 252) * 0.28));
+  const risk = strategyRisk(strike, premium, parts.direction, parts.optionType);
+
+  const pointCount = Math.max(2, Math.min(60, days + 1));
+  const path: ProjectionPoint[] = [];
+  for (let index = 0; index < pointCount; index++) {
+    const ratio = pointCount === 1 ? 1 : index / (pointCount - 1);
+    const day = Math.round(ratio * days);
+    const wave = Math.sin(ratio * Math.PI) * expectedMove * 0.12;
+    const basePrice = clampPrice(initialPrice + (baseFinal - initialPrice) * ratio + wave);
+    const bullishPrice = clampPrice(initialPrice + (bullishFinal - initialPrice) * ratio + wave);
+    const bearishPrice = clampPrice(initialPrice + (bearishFinal - initialPrice) * ratio - wave);
+    path.push({
+      date: addDaysIso(projectionFrom, day),
+      basePrice,
+      bullishPrice,
+      bearishPrice,
+      basePnL: optionPnL(basePrice, strike, premium, parts.direction, parts.optionType),
+      bullishPnL: optionPnL(bullishPrice, strike, premium, parts.direction, parts.optionType),
+      bearishPnL: optionPnL(bearishPrice, strike, premium, parts.direction, parts.optionType)
+    });
+  }
+
+  const scenarios: StrategyScenario[] = [
+    { label: "ATM", price: initialPrice, profitLoss: optionPnL(initialPrice, strike, premium, parts.direction, parts.optionType) },
+    { label: "+5%", price: roundMoney(initialPrice * 1.05), profitLoss: optionPnL(initialPrice * 1.05, strike, premium, parts.direction, parts.optionType) },
+    { label: "-5%", price: roundMoney(initialPrice * 0.95), profitLoss: optionPnL(initialPrice * 0.95, strike, premium, parts.direction, parts.optionType) }
+  ];
+
+  return {
+    ticker,
+    strategy: parts.label,
+    verdict: projectionVerdict(verdict),
+    score: overallScore,
+    projectionFrom,
+    projectionTo,
+    days,
+    initialPrice,
+    expectedMove,
+    expectedMovePercent,
+    strike,
+    premium,
+    ...risk,
+    scenarios,
+    path,
+    drivers: buildProjectionDrivers(sections),
+    changeTriggers: [
+      "Earnings miss o guidance por debajo de expectativas.",
+      "Sector rotation que cambie el apetito por growth/value.",
+      "Volatilidad implicita o realizada +50% frente al nivel actual.",
+      "Caida fuerte bajo el escenario bajista proyectado.",
+      "Subida fuerte sobre el breakeven de la estrategia."
+    ],
+    calculationSteps: [
+      `1. Se calcula score fundamental promedio: ${overallScore}/100 => ${projectionVerdict(verdict)}.`,
+      `2. Se usa volatilidad anualizada ${vol.toFixed(1)}% para estimar movimiento esperado de +/-$${expectedMove}.`,
+      `3. Se define strike ATM aproximado en $${strike} y prima teorica de $${premium} por accion.`,
+      `4. Se evalua ${parts.label} contra escenarios ATM, +5% y -5%, mas trayectoria base/alcista/bajista.`,
+      "5. La simulacion es explicativa: no ejecuta ni recomienda operar automaticamente."
+    ],
+    disclaimer: "Este analisis es informativo y no constituye recomendacion de inversion ni orden de operacion. Consulta a un profesional antes de tomar decisiones financieras."
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Main analyzer export
 // ---------------------------------------------------------------------------
 
@@ -501,6 +728,8 @@ export async function analyzeFundamental(
 
   const verdict: "VIABLE" | "NEUTRAL" | "NOT_VIABLE" =
     overallScore >= 65 ? "VIABLE" : overallScore >= 40 ? "NEUTRAL" : "NOT_VIABLE";
+
+  const projection = buildFundamentalProjection(ticker, data, opts, sections, overallScore, verdict);
 
   const prompt = buildPrompt(ticker, data, opts);
   const aiText = await callClaude(prompt);
@@ -525,6 +754,7 @@ export async function analyzeFundamental(
     overallScore,
     verdict,
     recommendation,
+    projection,
     confluenceRows,
     sourceId: data.metadata.sourceId,
     timestamp

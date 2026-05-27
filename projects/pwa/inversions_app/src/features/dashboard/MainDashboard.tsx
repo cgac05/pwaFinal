@@ -15,6 +15,8 @@ import { IndicatorsMenu } from "./IndicatorsMenu";
 import { RuntimeModeSwitches } from "./RuntimeModeSwitches";
 import { ConfluenceSignalsTable } from "./ConfluenceSignalsTable";
 import { SimulationControlPanel } from "./simulation/SimulationControlPanel";
+import { ProjectionSimulationPanel } from "./simulation/ProjectionSimulationPanel";
+import type { AnalysisResult } from "./simulation/FundamentalAnalysisModal";
 import type { ConfluenceSignalRow, SimulationResponse } from "../../services/signals/confluenceTableApi";
 import { useSignalStore } from "../../store/signals";
 import { FundamentalCopilotPanel } from "../ai/FundamentalCopilotPanel";
@@ -47,6 +49,7 @@ export function MainDashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [simulationRows, setSimulationRows] = useState<ConfluenceSignalRow[] | undefined>(undefined);
   const [simulationVerdict, setSimulationVerdict] = useState<any | null>(null);
+  const [fundamentalSimulation, setFundamentalSimulation] = useState<AnalysisResult | null>(null);
   const [chartSymbol, setChartSymbol] = useState("SPY");
   const [chartSymbolInput, setChartSymbolInput] = useState("");
   const { selectedInstrument, selectedSignal: storeSelectedRow } = useSignalStore();
@@ -62,6 +65,11 @@ export function MainDashboard() {
       const withoutFundamental = existing.filter((r) => r.core !== "A_FUNDAMENTAL");
       return [...withoutFundamental, ...rows];
     });
+  }, []);
+
+  const handleProjectionResult = useCallback((result: AnalysisResult) => {
+    setFundamentalSimulation(result);
+    setChartSymbol(result.ticker);
   }, []);
 
   // Sync chart symbol when user clicks instrument in WatchlistTree
@@ -303,7 +311,12 @@ export function MainDashboard() {
                       />
                     </div>
                   </div>
-                  <SimulationControlPanel ticket={chartSymbol} onResult={handleSimulationResult} onFundamentalRows={handleFundamentalRows} />
+                  <SimulationControlPanel
+                    ticket={chartSymbol}
+                    onResult={handleSimulationResult}
+                    onFundamentalRows={handleFundamentalRows}
+                    onProjectionResult={handleProjectionResult}
+                  />
                   {simulationVerdict && (
                     <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
                       <strong>Verdict derivado:</strong>
@@ -314,6 +327,15 @@ export function MainDashboard() {
                     </div>
                   )}
                   <ConfluenceSignalsTable symbol={chartSymbol} rows={simulationRows} />
+                  {fundamentalSimulation?.projection && (
+                    <>
+                      <ProjectionSimulationPanel projection={fundamentalSimulation.projection} />
+                      <FundamentalCopilotPanel
+                        defaultTicker={fundamentalSimulation.ticker}
+                        simulationContext={fundamentalSimulation.projection}
+                      />
+                    </>
+                  )}
                 </div>
               </div>
             ) : null}
@@ -350,9 +372,6 @@ export function MainDashboard() {
                 </div>
               )}
             </div>
-
-            {/* ── Copilot Fundamental IA ───────────────────────── */}
-            <FundamentalCopilotPanel defaultTicker={chartSymbol} />
           </div>
         ) : !loading ? (
           <div style={{

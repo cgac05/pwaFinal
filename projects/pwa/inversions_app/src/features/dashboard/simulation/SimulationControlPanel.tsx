@@ -20,6 +20,7 @@ interface Props {
   ticket: string;
   onResult: (result: SimulationResponse) => void;
   onFundamentalRows?: (rows: ConfluenceSignalRow[]) => void;
+  onProjectionResult?: (result: AnalysisResult) => void;
 }
 
 type Preset = "2A" | "1A" | "6M" | "3M" | "1M";
@@ -134,7 +135,7 @@ const toggleKnobStyle = (active: boolean): React.CSSProperties => ({
   transition: "left 0.2s"
 });
 
-export function SimulationControlPanel({ ticket, onResult, onFundamentalRows }: Props) {
+export function SimulationControlPanel({ ticket, onResult, onFundamentalRows, onProjectionResult }: Props) {
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("A_TECNICO");
 
   // Technical mode state
@@ -234,9 +235,13 @@ export function SimulationControlPanel({ ticket, onResult, onFundamentalRows }: 
         const err = await res.json().catch(() => ({ message: res.statusText }));
         throw new Error(err.message ?? "fundamental_failed");
       }
-      const data = await res.json();
-      setModalResult(data as AnalysisResult);
-      setShowModal(true);
+      const data = (await res.json()) as AnalysisResult;
+      setModalResult(data);
+      setShowModal(false);
+      if (data.confluenceRows && onFundamentalRows) {
+        onFundamentalRows(data.confluenceRows as unknown as ConfluenceSignalRow[]);
+      }
+      onProjectionResult?.(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "fundamental_failed");
     } finally {
@@ -607,7 +612,7 @@ export function SimulationControlPanel({ ticket, onResult, onFundamentalRows }: 
               boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
             }}
           >
-            {loading ? "Analizando…" : "▶ Analizar Empresa"}
+            {loading ? "Ejecutando…" : "▶ Ejecutar Simulacion"}
           </button>
         ) : (
           <ExecuteSimulationButton loading={loading} onClick={run} />
