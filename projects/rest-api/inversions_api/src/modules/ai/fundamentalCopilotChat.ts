@@ -1,25 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { FundamentalDataService } from "../fundamental/fundamentalDataService";
-import { buildOptionStrategyCandidates } from "../strategies/optionsStrategyService";
-import type { OptionStrategyResult } from "../strategies/optionsStrategyContract";
-
-export interface ChatMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
-  timestamp: string;
-  metadata: {
-    ticker: string;
-    context_type: "fundamental" | "strategy";
-    reasoning_trace?: string[];
-  };
-}
+import { analyzeFundamental } from "../fundamental/fundamentalAnalyzer";
+import type { FundamentalAnalysisResult, MetricSection } from "../fundamental/fundamentalAnalyzer";
+import type { FundamentalAnalysisData } from "../fundamental/fundamentalSourceContract";
 
 export interface CopilotChatRequest {
   ticker: string;
   question: string;
-  includeStrategyRecommendation?: boolean;
   userId?: string;
   simulationContext?: CopilotSimulationContext;
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
 }
 
 export interface CopilotChatResponse {
@@ -27,26 +17,6 @@ export interface CopilotChatResponse {
   sourceContext: string[];
   disclaimer: string;
   reasoningTrace: string[];
-}
-
-interface MarketMetrics {
-  price?: number;
-  marketCap?: number;
-  peRatio?: number;
-  pbRatio?: number;
-  psRatio?: number;
-  roe?: number;
-  debtToEquity?: number;
-  dividendYield?: number;
-  annualizedVolatility?: number;
-  eps?: number;
-  grossMargin?: number;
-  sector?: string;
-  industry?: string;
-  companyName?: string;
-  priceHigh52Week?: number;
-  priceLow52Week?: number;
-  revenueGrowth?: number;
 }
 
 export interface CopilotSimulationContext {
@@ -68,15 +38,9 @@ export interface CopilotSimulationContext {
   calculationSteps?: string[];
 }
 
-interface FundamentalContext {
-  ticker: string;
-  viabilityScore?: number;
-  viabilityJustification?: string;
-  strategySummary?: string;
-  recentUserAnalysis?: string[];
-  contextDescriptions: string[];
-  market?: MarketMetrics;
-}
+const DISCLAIMER = "Este análisis es informativo y educativo. No constituye asesoramiento financiero ni recomendación de inversión. Consulta a un profesional antes de tomar decisiones financieras.";
+
+const ALL_METRICS = ["Valoración", "Crecimiento", "Rentabilidad", "Salud Financiera", "Flujo de Caja", "Riesgo", "Ventaja Competitiva"];
 
 export class FundamentalCopilotChat {
   private readonly fundamentalService: FundamentalDataService;
@@ -88,651 +52,678 @@ export class FundamentalCopilotChat {
   async generateResponse(request: CopilotChatRequest): Promise<CopilotChatResponse> {
     const ticker = request.ticker.toUpperCase();
     const reasoningTrace: string[] = [];
-    const baseContext = [`Ticker: ${ticker}`, `Question: ${request.question}`];
 
-    const fundamentalContext = await this.buildFundamentalContext(ticker, request.userId);
+    let result: FundamentalAnalysisResult | null = null;
+    let rawData: FundamentalAnalysisData | null = null;
 
-    if (fundamentalContext.market?.price) {
-      baseContext.push(`Precio actual: $${fundamentalContext.market.price}`);
-    }
-    if (fundamentalContext.viabilityScore !== undefined) {
-      baseContext.push(`Viability score: ${fundamentalContext.viabilityScore}`);
-    }
-    if (fundamentalContext.strategySummary) {
-      baseContext.push(`Strategy summary available`);
-    }
-    if (request.simulationContext) {
-      baseContext.push(`Simulation strategy: ${request.simulationContext.strategy}`);
-      baseContext.push(`Simulation verdict: ${request.simulationContext.verdict} (${request.simulationContext.score}/100)`);
-      baseContext.push(`Simulation range: ${request.simulationContext.projectionFrom} to ${request.simulationContext.projectionTo}`);
+    try {
+      const fetched = await this.fundamentalService.fetch(ticker, 252);
+      if (fetched.success && fetched.data) {
+        rawData = fetched.data;
+        result = await analyzeFundamental(fetched.data, {
+          investmentProfile: "Quality",
+          horizon: "Mediano plazo",
+          selectedMetrics: ALL_METRICS,
+          strategy: request.simulationContext?.strategy ?? "Long Call",
+          comparisons: [],
+          projectionFrom: request.simulationContext?.projectionFrom,
+          projectionTo: request.simulationContext?.projectionTo
+        });
+        reasoningTrace.push(`Datos obtenidos de ${fetched.data.metadata.sourceId.toUpperCase()}`);
+        reasoningTrace.push(`Score calculado: ${result.overallScore}/100 → ${result.verdict}`);
+        reasoningTrace.push(`Métricas analizadas: ${result.sections.map((s) => s.metric).join(", ")}`);
+      }
+    } catch (err) {
+      reasoningTrace.push(`Error al obtener datos: ${String(err)}`);
     }
 
-    const prompt = this.buildClaudePrompt(request, fundamentalContext);
-    const answer = await this.executeCopilot(prompt, fundamentalContext, reasoningTrace, request.question, request.simulationContext);
+    if (!result || !rawData) {
+      const answer = `No se pudieron obtener datos de mercado para **${ticker}**. Verifica que el símbolo sea correcto (ej: AAPL, MSFT, NVDA) e intenta de nuevo.\n\n*${DISCLAIMER}*`;
+      return { answer, sourceContext: [], disclaimer: DISCLAIMER, reasoningTrace };
+    }
 
-    await this.logChatInteraction(request.userId, ticker, reasoningTrace.length + 1);
+    const answer = this.buildAnswer(request.question, result, rawData, request.conversationHistory ?? []);
+
+    await this.saveInteractionSummary(request.userId, ticker, request.question, answer);
 
     return {
       answer,
-      sourceContext: baseContext.concat(fundamentalContext.contextDescriptions),
-      disclaimer: this.buildDisclaimer(),
+      sourceContext: [
+        `${result.ticker} — ${result.verdict} (${result.overallScore}/100)`,
+        `Fuente: ${result.sourceId.toUpperCase()}`,
+        `Estrategia: ${result.projection.strategy}`,
+        `Métricas: ${result.sections.length} analizadas`
+      ],
+      disclaimer: DISCLAIMER,
       reasoningTrace
     };
   }
 
-  private buildClaudePrompt(request: CopilotChatRequest, context: FundamentalContext): string {
+  // ---------------------------------------------------------------------------
+  // Generador de respuesta conversacional
+  // ---------------------------------------------------------------------------
+
+  private buildAnswer(
+    question: string,
+    result: FundamentalAnalysisResult,
+    rawData: FundamentalAnalysisData,
+    history: Array<{ role: string; content: string }>
+  ): string {
+    const proj = result.projection;
+    const ticker = result.ticker;
+    const sections = result.sections;
+    const q = question.trim();
+    const m = rawData.metrics;
+
+    // ── Datos base del análisis ────────────────────────────────────────────
+    const vol        = sections.find((s) => s.metric === "Riesgo")?.score ?? 50;
+    const volPct     = (m.volatility?.annualizedVolatility ?? 0).toFixed(1) + "%";
+    const isHighVol  = vol < 40;
+    const isViable   = result.overallScore >= 65;
+    const isNeutral  = result.overallScore >= 40 && result.overallScore < 65;
+    const isBearish  = result.overallScore < 40;
+
+    const topMetrics    = [...sections].sort((a, b) => Math.abs(b.score - 50) - Math.abs(a.score - 50)).slice(0, 3);
+    const weakMetrics   = sections.filter((s) => s.score < 40);
+    const strongMetrics = sections.filter((s) => s.score >= 65);
+
+    const strategyName  = proj.strategy;
+    const strategyLower = strategyName.toLowerCase();
+
+    // ── Detección de tipo de pregunta ─────────────────────────────────────
+    const isFundamentalAnalysis = /an[aá]li[sz]|dame (el|un)|mu[eé]strame|overview|resumen ejecutivo|c[oó]mo est[aá]|qu[eé] tal (est[aá]|es)|cu[eé]ntame (sobre|de)|eval[uú][ao]|valoraci[oó]n general|informe|reporte|diagnos/i.test(q)
+      || /^(an[aá]li[sz]a|evalú[ao]|rev[ií]sa|estudia)\b/i.test(q)
+      || (q.length < 25 && /^(AAPL|MSFT|NVDA|TSLA|AMZN|SPY|GOOG|META|NFLX|[A-Z]{1,5})(\s+(pls|please|favor))?$/i.test(q));
+
+    const isYesNoAboutStrategy  = !isFundamentalAnalysis && /recomend|conviene|deber[íi]a|vale la pena|sirve|usar (short|long|call|put)|mejor usar|qu[eé] (short|long|call|put)/i.test(q);
+    const isYesNoShortCall      = isYesNoAboutStrategy && /short call/i.test(q);
+    const isYesNoLongCall       = isYesNoAboutStrategy && /long call/i.test(q);
+    const isYesNoShortPut       = isYesNoAboutStrategy && /short put/i.test(q);
+    const isYesNoLongPut        = isYesNoAboutStrategy && /long put/i.test(q);
+    const isConfirmation        = !isFundamentalAnalysis && /^(entonces|o sea|es decir|quer[eé]s? decir|entonces no|entonces s[íi]|no\?|s[íi]\?|correcto\?|ok\?|y\s+eso|y\s+si|pero)/i.test(q);
+    const isWhy                 = !isFundamentalAnalysis && /por\s?qu[eé]|razones?|motivo|qu[eé] lo hace|c[oó]mo lleg/i.test(q);
+    const isRisks               = !isFundamentalAnalysis && /riesgo|p[eé]rdida|escenario|perder|pierde|atm|\+5|[\-−]5|breakeven/i.test(q);
+    const isChanges             = !isFundamentalAnalysis && /cambiar[íi]a|cambio|ca[íi]da fuerte|subida fuerte|earnings|miss|beat|volatilidad.*sube|rotar|cu[aá]ndo cambia/i.test(q);
+    const isCalc                = !isFundamentalAnalysis && /c[oó]mo.*calcul|formula|pasos|c[aá]lculo/i.test(q);
+    const isMetricDetail        = !isFundamentalAnalysis && /p\/e|roe|deuda|beta|eps|ventas|crecimiento|rentabilidad|flujo|valoraci/i.test(q);
+    const isComparison          = !isFundamentalAnalysis && /diferencia|comparar|mejor.*entre|long.*vs.*short|call.*vs.*put|cu[aá]l es mejor/i.test(q);
+
     const lines: string[] = [];
-    lines.push("Eres un asesor de inversiones explicativo. Tu rol es EXPLICAR análisis fundamental y estrategias de opciones sin ejecutar operaciones ni dar asesoramiento financiero.");
-    lines.push("Responde con claridad, estructura la explicación en secciones, incluye supuestos y limitaciones y siempre añade un disclaimer.");
-    lines.push("No uses lenguaje que parezca una orden de trading ni indiques que el usuario debe comprar o vender.");
-    lines.push("");
-    lines.push(`Ticker: ${context.ticker}`);
-    if (context.market?.companyName) lines.push(`Empresa: ${context.market.companyName}`);
-    if (context.market?.sector)      lines.push(`Sector: ${context.market.sector} / ${context.market.industry ?? ""}`);
 
-    if (context.market) {
-      const m = context.market;
-      lines.push("");
-      lines.push("Datos de mercado actuales:");
-      if (m.price)               lines.push(`  Precio: $${m.price}`);
-      if (m.priceHigh52Week)     lines.push(`  Máximo 52 semanas: $${m.priceHigh52Week}`);
-      if (m.priceLow52Week)      lines.push(`  Mínimo 52 semanas: $${m.priceLow52Week}`);
-      if (m.marketCap)           lines.push(`  Market Cap: $${(m.marketCap / 1e9).toFixed(2)}B`);
-      if (m.peRatio)             lines.push(`  P/E: ${m.peRatio}`);
-      if (m.pbRatio)             lines.push(`  P/B: ${m.pbRatio}`);
-      if (m.psRatio)             lines.push(`  P/S: ${m.psRatio}`);
-      if (m.roe)                 lines.push(`  ROE: ${m.roe}%`);
-      if (m.debtToEquity)        lines.push(`  Deuda/Patrimonio: ${m.debtToEquity}`);
-      if (m.dividendYield)       lines.push(`  Dividend Yield: ${m.dividendYield}%`);
-      if (m.eps)                 lines.push(`  EPS: $${m.eps}`);
-      if (m.annualizedVolatility) lines.push(`  Volatilidad anualizada: ${m.annualizedVolatility}%`);
-      if (m.revenueGrowth)       lines.push(`  Crecimiento de ventas 5Y: ${m.revenueGrowth}%`);
+    // ══════════════════════════════════════════════════════════════════════
+    // 0. ANÁLISIS FUNDAMENTAL COMPLETO — Bloomberg / Morningstar style
+    // ══════════════════════════════════════════════════════════════════════
+    if (isFundamentalAnalysis) {
+      return this.buildFullFundamentalAnalysis(result, rawData);
     }
 
-    if (context.viabilityScore !== undefined) {
-      lines.push(`Viability score: ${context.viabilityScore}`);
-    }
-    if (context.viabilityJustification) {
-      lines.push(`Justification: ${context.viabilityJustification}`);
-    }
-    if (context.strategySummary) {
-      lines.push(`Strategy summary: ${context.strategySummary}`);
-    }
-    if (request.simulationContext) {
-      lines.push("");
-      lines.push("Contexto de simulacion seleccionado por el usuario:");
-      lines.push(this.formatSimulationContext(request.simulationContext));
-    }
-    const recentUserAnalysis = context.recentUserAnalysis ?? [];
-    if (recentUserAnalysis.length > 0) {
-      lines.push("Recent user analysis history:");
-      recentUserAnalysis.forEach((entry) => lines.push(`- ${entry}`));
-    }
+    // ══════════════════════════════════════════════════════════════════════
+    // 1. Pregunta directa sobre una estrategia específica → YES/NO + razón
+    // ══════════════════════════════════════════════════════════════════════
+    if (isYesNoAboutStrategy) {
 
-    const q = request.question.toLowerCase();
-    if (q.includes("estrategia") || q.includes("opcion") || q.includes("call") || q.includes("put") || q.includes("long") || q.includes("short") || q.includes("prima") || q.includes("bajista") || q.includes("alcista") || q.includes("caída") || q.includes("cae") || q.includes("sube")) {
-      if (context.market?.price) {
-        const explicitDir = this.extractExplicitDirection(q);
-        const direction = explicitDir ?? this.deriveDirection(context.market);
-        const candidates = this.buildOptionsAnalysis(context.market, context.ticker);
-        const optText = this.formatOptionsSection(candidates, direction, context.market);
-        if (optText) {
+      if (isYesNoShortCall) {
+        const recommend = !isViable && isHighVol;
+        lines.push(recommend
+          ? `Con ${ticker} en ${result.verdict} (${result.overallScore}/100) y volatilidad ${isHighVol ? "alta" : "baja"}, una **Short Call** podría tener sentido para cobrar prima.`
+          : `**No es la estrategia más recomendada** para ${ticker} en este momento.`
+        );
+        lines.push("");
+        if (!recommend) {
+          lines.push(`Razones por las que el Short Call tiene desventajas aquí:`);
+          if (!isHighVol) lines.push(`- Volatilidad baja (${volPct}) → prima cobrada es pequeña, no justifica el riesgo de pérdida ilimitada si el precio sube.`);
+          if (isViable || isNeutral) lines.push(`- Score ${result.overallScore}/100 (${result.verdict}) → los fundamentales no descartan alza. Short Call tiene pérdida ilimitada si el precio supera $${proj.breakeven}.`);
+          lines.push(`- ${ticker} cotiza a $${proj.initialPrice}. Si sube a $${proj.breakeven} (breakeven), la pérdida por contrato empieza a crecer sin límite.`);
+        } else {
+          lines.push(`Aplica si crees que el precio se mantiene por debajo de $${proj.breakeven} hasta ${proj.projectionTo}.`);
+          lines.push(`Prima cobrada: $${proj.premium}/acción ($${(proj.premium * 100).toFixed(0)}/contrato).`);
+          lines.push(`Riesgo: pérdida ilimitada si el precio supera $${proj.breakeven}.`);
+        }
+
+      } else if (isYesNoLongCall) {
+        const recommend = isViable || isNeutral;
+        lines.push(recommend
+          ? `**Long Call es razonable** para ${ticker} con score ${result.overallScore}/100 (${result.verdict}).`
+          : `**Long Call tiene desventajas** en el contexto actual de ${ticker} (${result.verdict}, ${result.overallScore}/100).`
+        );
+        lines.push("");
+        lines.push(`Strike: $${proj.strike} | Prima: $${proj.premium}/acc | Breakeven: $${proj.breakeven}`);
+        lines.push(`Para ser rentable, el precio debe superar **$${proj.breakeven}** antes del ${proj.projectionTo}.`);
+        lines.push(`Movimiento esperado según volatilidad: ±$${proj.expectedMove} (±${proj.expectedMovePercent}%)`);
+        if (!recommend) {
           lines.push("");
-          lines.push("Análisis de opciones pre-calculado (úsalo en tu respuesta):");
-          lines.push(optText);
+          lines.push(`Con score ${result.overallScore}/100 los fundamentales sugieren cautela. El riesgo es perder toda la prima ($${(proj.premium * 100).toFixed(0)}/contrato) si el precio no alcanza el breakeven.`);
+        }
+
+      } else if (isYesNoShortPut) {
+        const recommend = isViable || isNeutral;
+        lines.push(recommend
+          ? `**Short Put puede tener sentido** si estás dispuesto a comprar ${ticker} al precio de asignación.`
+          : `**Short Put tiene riesgo elevado** con ${ticker} en ${result.verdict}.`
+        );
+        lines.push("");
+        lines.push(`Cobras: $${proj.premium}/acc ($${(proj.premium * 100).toFixed(0)}/contrato)`);
+        lines.push(`Breakeven: $${proj.breakeven} | Pérdida máxima: $${typeof proj.maxLoss === "number" ? proj.maxLoss : "calculada al vencimiento"}`);
+        lines.push(recommend
+          ? `Si el precio cae bajo $${proj.breakeven}, recibirías las acciones a ese precio efectivo. Útil si quieres entrar a ${ticker} con descuento.`
+          : `Con fundamentales débiles, recibir las acciones podría no ser deseable si el precio sigue cayendo.`
+        );
+
+      } else if (isYesNoLongPut) {
+        const recommend = isBearish || weakMetrics.length >= 2;
+        lines.push(recommend
+          ? `**Long Put aplica** si hay catalizadores bajistas concretos para ${ticker}.`
+          : `**Long Put va contra el sesgo actual** de ${ticker} (${result.verdict}, ${result.overallScore}/100).`
+        );
+        lines.push("");
+        lines.push(`Costo: $${proj.premium}/acc ($${(proj.premium * 100).toFixed(0)}/contrato)`);
+        lines.push(`Breakeven: $${proj.breakeven} | Ganancia máxima si el precio cae a $0: $${typeof proj.maxProfit === "number" ? proj.maxProfit : "ilimitada"}`);
+        if (!recommend) {
+          lines.push(`Con ${strongMetrics.length} métricas fuertes (${strongMetrics.map((s) => s.metric).join(", ")}), una caída fuerte no está respaldada por los fundamentales actuales.`);
+        }
+
+      } else {
+        lines.push(`Con ${ticker} en **${result.verdict} (${result.overallScore}/100)** y volatilidad ${isHighVol ? "alta" : "baja"}:`);
+        lines.push("");
+        if (isViable) {
+          lines.push(`- **Long Call**: alineada con los fundamentales alcistas. Breakeven: $${proj.breakeven}, costo: $${(proj.premium * 100).toFixed(0)}/contrato.`);
+          lines.push(`- **Short Put**: cobras prima ($${(proj.premium * 100).toFixed(0)}/contrato) y entras a las acciones si cae al strike.`);
+        } else if (isNeutral) {
+          lines.push(`- **Short Put o Short Call**: vol ${isHighVol ? "alta" : "moderada"} permite cobrar prima mientras el mercado decide dirección.`);
+          lines.push(`- **Long Call**: solo si hay catalizador alcista claro próximo (earnings, lanzamiento de producto).`);
+        } else {
+          lines.push(`- **Long Put**: alineada con fundamentales débiles. Breakeven: $${proj.breakeven}.`);
+          lines.push(`- **Short Call**: cobra prima si el precio se mantiene estancado o baja.`);
         }
       }
-    }
 
-    lines.push("");
-    lines.push(`Pregunta del usuario: ${request.question}`);
-    lines.push("");
+    // ══════════════════════════════════════════════════════════════════════
+    // 2. Confirmación / follow-up conversacional
+    // ══════════════════════════════════════════════════════════════════════
+    } else if (isConfirmation) {
+      const lastBot = [...history].reverse().find((h) => h.role === "assistant");
+      const lastWasAboutShortCall = lastBot?.content.toLowerCase().includes("short call");
+      const lastWasAboutLongCall  = lastBot?.content.toLowerCase().includes("long call");
 
-    if (request.includeStrategyRecommendation) {
-      lines.push("Incluye una recomendación de estrategia basada en el análisis fundamental y las posibilidades de opciones descritas.");
-    }
+      if (lastWasAboutShortCall) {
+        lines.push(`Exacto. El **Short Call** tiene riesgo de pérdida ilimitada si ${ticker} sube por encima de $${proj.breakeven}.`);
+        lines.push(`Con score ${result.overallScore}/100 (${result.verdict}) y precio en $${proj.initialPrice}, los fundamentales no descartan ese movimiento alcista, lo que hace el Short Call especialmente arriesgado aquí.`);
+        lines.push("");
+        lines.push(`La alternativa más conservadora sería **Short Put** (pérdida máxima conocida: $${typeof proj.maxLoss === "number" ? proj.maxLoss : "calculada"}) si quieres vender prima con riesgo acotado.`);
+      } else if (lastWasAboutLongCall) {
+        lines.push(`Sí. El **Long Call** es viable si estás dispuesto a pagar la prima ($${(proj.premium * 100).toFixed(0)}/contrato) y el precio supera $${proj.breakeven} antes del ${proj.projectionTo}.`);
+        lines.push(`El riesgo máximo está limitado a lo que pagas: $${(proj.premium * 100).toFixed(0)} por contrato.`);
+      } else {
+        lines.push(`Correcto. Con ${ticker} en **${result.verdict} (${result.overallScore}/100)**, el análisis apunta a:`);
+        lines.push(`- ${topMetrics[0]?.metric}: ${topMetrics[0]?.finding} (score ${topMetrics[0]?.score}/100)`);
+        if (topMetrics[1]) lines.push(`- ${topMetrics[1]?.metric}: ${topMetrics[1]?.finding} (score ${topMetrics[1]?.score}/100)`);
+        lines.push(`¿Quieres profundizar en algún aspecto específico?`);
+      }
 
-    return lines.join("\n");
-  }
+    // ══════════════════════════════════════════════════════════════════════
+    // 3. Por qué el veredicto
+    // ══════════════════════════════════════════════════════════════════════
+    } else if (isWhy) {
+      const thresholdText = isViable
+        ? `supera el umbral de VIABLE (≥65)`
+        : isNeutral
+          ? `está en zona neutral (40–64), clasificado como NEUTRAL`
+          : `no alcanza el mínimo de viabilidad (40), clasificado como NO VIABLE`;
 
-  private formatSimulationContext(simulation: CopilotSimulationContext): string {
-    const lines: string[] = [];
-    lines.push(`- Estrategia: ${simulation.strategy}`);
-    lines.push(`- Veredicto: ${simulation.verdict} (${simulation.score}/100)`);
-    lines.push(`- Rango: ${simulation.projectionFrom} -> ${simulation.projectionTo}`);
-    lines.push(`- Precio inicial: $${simulation.initialPrice}`);
-    if (simulation.expectedMove !== undefined) lines.push(`- Movimiento esperado: +/-$${simulation.expectedMove}`);
-    if (simulation.strike !== undefined) lines.push(`- Strike ATM: $${simulation.strike}`);
-    if (simulation.premium !== undefined) lines.push(`- Prima teorica: $${simulation.premium}`);
-    if (simulation.breakeven !== undefined) lines.push(`- Breakeven: $${simulation.breakeven}`);
-    if (simulation.maxLoss !== undefined) lines.push(`- Perdida maxima: ${simulation.maxLoss}`);
-    if (simulation.maxProfit !== undefined) lines.push(`- Ganancia maxima: ${simulation.maxProfit}`);
-    if (simulation.scenarios?.length) {
-      lines.push("- Escenarios:");
-      simulation.scenarios.forEach((scenario) => {
-        lines.push(`  - ${scenario.label}: precio $${scenario.price}, P&L $${scenario.profitLoss}`);
+      lines.push(`**${ticker} es ${result.verdict} con ${result.overallScore}/100** — ${thresholdText}.`);
+      lines.push("");
+      lines.push("Métricas con mayor peso en este resultado:");
+      topMetrics.forEach((s) => {
+        const delta = s.score - 50;
+        const impact = delta > 0 ? `empuja el score hacia arriba (+${delta}pts)` : `arrastra el score hacia abajo (${delta}pts)`;
+        lines.push(`- **${s.metric}** (${s.score}/100): ${s.finding} — ${impact}`);
       });
-    }
-    if (simulation.drivers?.length) {
-      lines.push("- Razones fundamentales:");
-      simulation.drivers.forEach((driver) => lines.push(`  - ${driver}`));
-    }
-    if (simulation.changeTriggers?.length) {
-      lines.push("- Que podria cambiar la opinion:");
-      simulation.changeTriggers.forEach((trigger) => lines.push(`  - ${trigger}`));
-    }
-    if (simulation.calculationSteps?.length) {
-      lines.push("- Pasos de calculo:");
-      simulation.calculationSteps.forEach((step) => lines.push(`  - ${step}`));
-    }
-    return lines.join("\n");
-  }
+      lines.push("");
+      lines.push("Razones fundamentales clave:");
+      proj.drivers.forEach((d) => lines.push(`- ${d}`));
 
-  private containsForbiddenTradingOrder(answer: string): boolean {
-    const normalized = answer.toLowerCase();
-    return [
-      "compra ahora",
-      "vende inmediatamente",
-      "esta es tu oportunidad",
-      "deberias ejecutar",
-      "deberías ejecutar",
-      "ejecuta esta orden",
-      "compra ya",
-      "vende ya"
-    ].some((phrase) => normalized.includes(phrase));
-  }
-
-  private async executeCopilot(
-    prompt: string,
-    context: FundamentalContext,
-    reasoningTrace: string[],
-    originalQuestion: string,
-    simulationContext?: CopilotSimulationContext
-  ): Promise<string> {
-    const claudeAnswer = await this.callClaude(prompt);
-    if (claudeAnswer && !this.containsForbiddenTradingOrder(claudeAnswer)) {
-      reasoningTrace.push("Used Claude API prompt generation.");
-      return claudeAnswer;
-    }
-
-    reasoningTrace.push("Used local copilot fallback.");
-    return this.localChatResponse(originalQuestion, context, reasoningTrace, simulationContext);
-  }
-
-  private async callClaude(prompt: string): Promise<string | undefined> {
-    const apiKey = process.env.CLAUDE_API_KEY ?? process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) return undefined;
-
-    try {
-      const model = process.env.CLAUDE_MODEL ?? "claude-haiku-4-5-20251001";
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01"
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 1024,
-          messages: [{ role: "user", content: prompt }]
-        }),
-        signal: AbortSignal.timeout(Number(process.env.CLAUDE_TIMEOUT_MS ?? 8000))
+    // ══════════════════════════════════════════════════════════════════════
+    // 4. Riesgos y escenarios
+    // ══════════════════════════════════════════════════════════════════════
+    } else if (isRisks) {
+      lines.push(`**Riesgos de ${strategyName} en ${ticker}:**`);
+      lines.push("");
+      lines.push(`Strike: $${proj.strike} | Prima: $${proj.premium}/acc | Breakeven: $${proj.breakeven}`);
+      lines.push(`Pérdida máxima: ${typeof proj.maxLoss === "number" ? `$${proj.maxLoss}` : proj.maxLoss}`);
+      lines.push(`Ganancia máxima: ${typeof proj.maxProfit === "number" ? `$${proj.maxProfit}` : proj.maxProfit}`);
+      lines.push("");
+      lines.push("Escenarios:");
+      proj.scenarios.forEach((s) => {
+        const sign = s.profitLoss >= 0 ? "+" : "";
+        lines.push(`- **${s.label}** (precio $${s.price}): P&L ${sign}$${s.profitLoss}`);
       });
 
-      if (!response.ok) return undefined;
-
-      const payload = (await response.json()) as {
-        content?: Array<{ type: string; text: string }>;
-      };
-      return payload?.content?.find((b) => b.type === "text")?.text?.trim();
-    } catch {
-      return undefined;
-    }
-  }
-
-  private localChatResponse(
-    _prompt: string,
-    context: FundamentalContext,
-    reasoningTrace: string[],
-    simulationContext?: CopilotSimulationContext
-  ): string {
-    const m = context.market;
-    const q = _prompt.toLowerCase();
-    const lines: string[] = [];
-
-    const ticker = context.ticker;
-    const company = m?.companyName ?? ticker;
-    const fundamentalDir = m ? this.deriveDirection(m) : "NEUTRAL";
-    const explicitDir = this.extractExplicitDirection(q);
-    const vol = m?.annualizedVolatility ?? 0;
-    const volLabel = vol > 40 ? "alta" : vol > 25 ? "moderada" : "baja";
-
-    const isOptionsQ = ["estrategia", "opcion", "call", "put", "long", "short", "prima", "breakeven", "strike"].some((w) => q.includes(w));
-    const isBearishQ = explicitDir === "BAJISTA";
-    const isBullishQ = explicitDir === "ALCISTA";
-    const isScenarioQ = ["escenario", "qué pasa", "que pasa", "qué puede", "que puede", "podria cambiar", "podría cambiar", "opinion", "opinión", "riesgo"].some((w) => q.includes(w));
-    const isExplainQ = ["por qué", "porque", "explica", "cuando", "cuándo", "conviene", "sirve", "no sirve", "qué significa", "que significa"].some((w) => q.includes(w));
-    const isCompareQ = ["vs", "versus", "diferencia", "comparar", "mejor"].some((w) => q.includes(w));
-    const isHowCalculatedQ = ["como calcul", "cómo calcul", "calculo", "cálculo", "formula", "pasos"].some((w) => q.includes(w));
-
-    // ── Snapshot de datos ──────────────────────────────────────────────────
-    lines.push(`**${company} (${ticker})** — datos en tiempo real`);
-    lines.push("");
-
-    if (m?.price) {
-      const pos = (m.priceHigh52Week && m.priceLow52Week && m.priceHigh52Week > m.priceLow52Week)
-        ? Math.round(((m.price - m.priceLow52Week) / (m.priceHigh52Week - m.priceLow52Week)) * 100)
-        : null;
-      lines.push(`Precio: **$${m.price}** ${pos !== null ? `| Rango 52w: $${m.priceLow52Week?.toFixed(2)} – $${m.priceHigh52Week?.toFixed(2)} (posición ${pos}%)` : ""}`);
-    }
-    const metrics: string[] = [];
-    if (m?.peRatio)  metrics.push(`P/E ${m.peRatio}x`);
-    if (m?.roe)      metrics.push(`ROE ${m.roe}%`);
-    if (m?.debtToEquity !== undefined) metrics.push(`D/E ${m.debtToEquity}`);
-    if (m?.revenueGrowth) metrics.push(`Crec. ventas 5Y ${m.revenueGrowth}%`);
-    if (vol > 0)     metrics.push(`Vol ${vol}% (${volLabel})`);
-    if (metrics.length) lines.push(metrics.join(" | "));
-    lines.push(`Sesgo fundamental: **${fundamentalDir}**`);
-    lines.push("");
-
-    if (simulationContext) {
-      lines.push(`**Simulacion seleccionada: ${simulationContext.strategy}**`);
-      lines.push(`Veredicto fundamental: **${simulationContext.verdict}** (${simulationContext.score}/100) | Rango ${simulationContext.projectionFrom} -> ${simulationContext.projectionTo}`);
-      lines.push(`Strike: $${simulationContext.strike ?? "N/D"} | Prima: $${simulationContext.premium ?? "N/D"} | Breakeven: $${simulationContext.breakeven ?? "N/D"}`);
-      lines.push(`Perdida maxima: ${simulationContext.maxLoss ?? "N/D"} | Ganancia maxima: ${simulationContext.maxProfit ?? "N/D"}`);
+    // ══════════════════════════════════════════════════════════════════════
+    // 5. Qué cambiaría la opinión
+    // ══════════════════════════════════════════════════════════════════════
+    } else if (isChanges) {
+      lines.push(`**Qué podría cambiar el veredicto de ${result.verdict}:**`);
+      proj.changeTriggers.forEach((t) => lines.push(`- ${t}`));
       lines.push("");
-
-      if (simulationContext.drivers?.length) {
-        lines.push("**Por que la empresa queda en ese veredicto:**");
-        simulationContext.drivers.slice(0, 5).forEach((driver) => lines.push(`- ${driver}`));
-        lines.push("");
+      if (weakMetrics.length > 0) {
+        lines.push(`Métricas ya en zona débil (riesgo de bajar el score): ${weakMetrics.map((s) => `${s.metric} (${s.score}/100)`).join(", ")}`);
+      }
+      if (strongMetrics.length > 0) {
+        lines.push(`Métricas que sostienen el score actual: ${strongMetrics.map((s) => `${s.metric} (${s.score}/100)`).join(", ")}`);
       }
 
-      if (simulationContext.scenarios?.length) {
-        lines.push("**Riesgos y escenarios de la estrategia:**");
-        simulationContext.scenarios.forEach((scenario) => {
-          lines.push(`- ${scenario.label}: precio $${scenario.price}, P&L estimado $${scenario.profitLoss}`);
-        });
-        lines.push("");
-      }
-
-      if (isScenarioQ && simulationContext.changeTriggers?.length) {
-        lines.push("**Escenarios de mercado a considerar:**");
-        simulationContext.changeTriggers.forEach((trigger) => lines.push(`- ${trigger}`));
-        lines.push("");
-      }
-
-      if (isHowCalculatedQ && simulationContext.calculationSteps?.length) {
-        lines.push("**Como se calculo el resultado:**");
-        simulationContext.calculationSteps.forEach((step) => lines.push(`- ${step}`));
-        lines.push("");
-        lines.push("En resumen: el score de viabilidad sale del promedio de metricas fundamentales y la proyeccion de opciones aplica strike ATM, prima teorica, breakeven y P&L por escenario.");
-        lines.push("");
-      }
-    }
-
-    // ── Cuerpo contextual ──────────────────────────────────────────────────
-
-    if (isBearishQ && (isOptionsQ || isScenarioQ || isExplainQ)) {
-      // Usuario pide escenario/estrategia bajista
-      if (fundamentalDir === "ALCISTA") {
-        lines.push(`**¿Por qué es difícil el escenario bajista para ${ticker}?**`);
-        lines.push("");
-        lines.push(`Los fundamentales apuntan en dirección contraria:`);
-        if (m?.roe && m.roe > 20)         lines.push(`- ROE de ${m.roe}% indica que la empresa genera rendimiento excepcional sobre su capital`);
-        if (m?.revenueGrowth && m.revenueGrowth > 10) lines.push(`- Crecimiento de ventas del ${m.revenueGrowth}% anual — raramente compatible con una tesis bajista estructural`);
-        if (m?.debtToEquity !== undefined && m.debtToEquity < 0.5) lines.push(`- Deuda conservadora (D/E ${m.debtToEquity}): baja probabilidad de estrés financiero`);
-        if (m?.peRatio && m.peRatio > 30) lines.push(`- P/E de ${m.peRatio}x sí representa una valuación elevada que PODRÍA comprimirse si el crecimiento decepciona`);
-        lines.push("");
-        lines.push(`**¿Cuándo tendría sentido una posición bajista de todas formas?**`);
-        lines.push(`- Guía de resultados por debajo de expectativas (guidance miss)`);
-        lines.push(`- Compresión de márgenes por competencia o costos`);
-        lines.push(`- Rotación sectorial: salida de growth → value en entorno de tasas altas`);
-        lines.push(`- El precio está en el ${Math.round(((m?.price ?? 0) - (m?.priceLow52Week ?? 0)) / Math.max((m?.priceHigh52Week ?? 1) - (m?.priceLow52Week ?? 0), 1) * 100)}% del rango 52w — corrección técnica posible`);
-        lines.push("");
-        lines.push(`**Uso recomendado del bajista: HEDGE, no especulación directional**`);
-        lines.push(`Un Long Put sirve para proteger una posición larga existente en ${ticker}, no como apuesta principal contra la empresa.`);
-      } else if (fundamentalDir === "BAJISTA") {
-        lines.push(`**Escenario bajista para ${ticker} — alineado con fundamentales**`);
-        lines.push("");
-        lines.push(`Los datos respaldan esta tesis:`);
-        if (m?.peRatio && m.peRatio > 35) lines.push(`- Valuación elevada (P/E ${m.peRatio}x) vulnerable a corrección`);
-        if (m?.roe && m.roe < 10)         lines.push(`- ROE bajo (${m.roe}%) sugiere ineficiencia en uso de capital`);
-        if (m?.debtToEquity && m.debtToEquity > 1) lines.push(`- Apalancamiento elevado (D/E ${m.debtToEquity}) aumenta riesgo`);
-        lines.push("");
-      } else {
-        lines.push(`**Escenario bajista para ${ticker} — fundamentales neutros**`);
-        lines.push(`Los datos no confirman ni contradicen fuertemente una tesis bajista. El riesgo principal sería una decepción de resultados o macro adverso.`);
-        lines.push("");
-      }
-    } else if (isBullishQ && (isOptionsQ || isScenarioQ || isExplainQ)) {
-      if (fundamentalDir === "BAJISTA") {
-        lines.push(`**¿Por qué es difícil el escenario alcista para ${ticker}?**`);
-        lines.push("");
-        lines.push(`Los fundamentales sugieren presión a la baja:`);
-        if (m?.peRatio && m.peRatio > 40) lines.push(`- P/E de ${m.peRatio}x ya incorpora expectativas muy optimistas — poco margen de expansión`);
-        if (m?.roe && m.roe < 10)         lines.push(`- ROE de ${m.roe}% indica rentabilidad débil`);
-        lines.push("");
-        lines.push(`Un Long Call en este contexto requiere que el precio supere el breakeven antes del vencimiento. Con vol ${volLabel} y fundamentales débiles, esa probabilidad es reducida.`);
-        lines.push("");
-      } else {
-        lines.push(`**Escenario alcista para ${ticker} — ${fundamentalDir === "ALCISTA" ? "respaldado por fundamentales" : "fundamentales neutrales"}**`);
-        lines.push("");
-        if (fundamentalDir === "ALCISTA") {
-          if (m?.roe && m.roe > 20) lines.push(`- ROE ${m.roe}%: empresa genera rendimiento excepcional — catalizador para alza`);
-          if (m?.revenueGrowth && m.revenueGrowth > 10) lines.push(`- Crecimiento ventas ${m.revenueGrowth}% anual sostiene la expansión de múltiplos`);
-        }
-        lines.push("");
-      }
-    } else if (isCompareQ && isOptionsQ) {
-      lines.push(`**Comparativa de estrategias para ${ticker}:**`);
+    // ══════════════════════════════════════════════════════════════════════
+    // 6. Cómo se calculó
+    // ══════════════════════════════════════════════════════════════════════
+    } else if (isCalc) {
+      lines.push("**Cómo se calculó el score y la proyección:**");
+      proj.calculationSteps.forEach((s) => lines.push(`- ${s}`));
       lines.push("");
-      lines.push(`| Estrategia | Riesgo | Potencial | Cuándo usarla |`);
-      lines.push(`|-----------|--------|-----------|---------------|`);
-      lines.push(`| Long Call | Limitado (prima) | Ilimitado | Esperas alza fuerte antes de vencimiento |`);
-      lines.push(`| Long Put | Limitado (prima) | Alto | Esperas caída; también como hedge |`);
-      lines.push(`| Short Call | Ilimitado ⚠️ | Prima cobrada | Vol alta + mercado lateral/bajista |`);
-      lines.push(`| Short Put | Alto (asignación) | Prima cobrada | Vol alta + dispuesto a comprar acciones |`);
+      const avg = sections.reduce((a, s) => a + s.score, 0) / sections.length;
+      lines.push(`Desglose de scores: ${sections.map((s) => `${s.metric} ${s.score}`).join(" | ")}`);
+      lines.push(`Promedio: ${avg.toFixed(1)} → **${result.overallScore}/100**`);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 7. Métrica específica
+    // ══════════════════════════════════════════════════════════════════════
+    } else if (isMetricDetail) {
+      lines.push(`**Métricas de ${ticker}:**`);
+      sections.forEach((s) => {
+        const arrow = s.tipoSenal === "CALL" ? "↑" : s.tipoSenal === "PUT" ? "↓" : "→";
+        lines.push(`- **${s.metric}** ${arrow} ${s.score}/100: ${s.finding}`);
+      });
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 8. Comparación entre estrategias
+    // ══════════════════════════════════════════════════════════════════════
+    } else if (isComparison) {
+      lines.push(`Comparativa para ${ticker} (${result.verdict}, ${result.overallScore}/100, vol ${volPct}):`);
       lines.push("");
-      lines.push(`Con vol ${volLabel} (${vol}%) para ${ticker}:`);
-      if (vol > 35) {
-        lines.push(`- Vol alta → primas caras → VENDER prima (Short Call / Short Put) es más atractivo`);
-        lines.push(`- Short Put es preferible a Short Call porque el riesgo es conocido ($0 como límite inferior)`);
-      } else {
-        lines.push(`- Vol baja → primas baratas → COMPRAR opciones (Long Call / Long Put) es eficiente`);
-        lines.push(`- Long Call si sesgo alcista; Long Put si bajista o como hedge`);
-      }
+      lines.push(`| Estrategia | Costo/Beneficio | Riesgo máx | Breakeven | Cuándo aplica |`);
+      lines.push(`|------------|-----------------|-----------|-----------|---------------|`);
+      lines.push(`| Long Call  | Paga $${(proj.premium * 100).toFixed(0)}/contrato | $${(proj.premium * 100).toFixed(0)} | $${proj.breakeven} | Alza fuerte esperada |`);
+      lines.push(`| Long Put   | Paga $${(proj.premium * 100).toFixed(0)}/contrato | $${(proj.premium * 100).toFixed(0)} | $${proj.breakeven} | Caída fuerte esperada |`);
+      lines.push(`| Short Call | Cobra $${(proj.premium * 100).toFixed(0)}/contrato | Ilimitado ⚠ | $${proj.breakeven} | Precio estancado o baja |`);
+      lines.push(`| Short Put  | Cobra $${(proj.premium * 100).toFixed(0)}/contrato | $${typeof proj.maxLoss === "number" ? proj.maxLoss : "alto"} | $${proj.breakeven} | Vol alta; acepta asignación |`);
       lines.push("");
-    } else if (!isOptionsQ && !isScenarioQ) {
-      // Pregunta general fundamental
-      lines.push(`**Análisis fundamental de ${company}:**`);
-      lines.push("");
-      if (m?.peRatio) {
-        const peCtx = m.peRatio > 35 ? `valuación premium — el mercado espera crecimiento sostenido` : m.peRatio < 15 ? `valuación de descuento — posible oportunidad o señal de debilidad` : `valuación en línea con el mercado`;
-        lines.push(`**Valuación:** P/E ${m.peRatio}x — ${peCtx}`);
-      }
-      if (m?.roe) {
-        lines.push(`**Eficiencia:** ROE ${m.roe}% — ${m.roe > 20 ? "por encima del promedio S&P 500 (~15%), indica ventaja competitiva" : m.roe < 10 ? "por debajo del promedio, posible ineficiencia operativa" : "dentro del rango normal"}`);
-      }
-      if (m?.revenueGrowth) {
-        lines.push(`**Crecimiento:** ventas +${m.revenueGrowth}% (5 años) — ${m.revenueGrowth > 20 ? "crecimiento acelerado, típico de empresas growth" : m.revenueGrowth > 5 ? "crecimiento saludable" : "crecimiento lento, posible empresa madura"}`);
-      }
-      if (m?.debtToEquity !== undefined) {
-        lines.push(`**Deuda:** D/E ${m.debtToEquity} — ${m.debtToEquity < 0.5 ? "balance sólido, baja dependencia de deuda" : m.debtToEquity > 1.5 ? "apalancamiento elevado, monitorear cobertura de intereses" : "nivel moderado"}`);
-      }
-      lines.push("");
-    }
+      lines.push(`Con score ${result.overallScore}/100 (${result.verdict}) y vol ${isHighVol ? "alta → favorece vender prima (Short)" : "baja → favorece comprar opciones (Long)"}:`);
+      if (isViable)   lines.push(`→ Long Call o Short Put son las más alineadas con los fundamentales.`);
+      if (isNeutral)  lines.push(`→ Short Put o Short Call dan prima cobrada mientras el mercado decide.`);
+      if (isBearish)  lines.push(`→ Long Put o Short Call están más alineadas con la debilidad fundamental.`);
 
-    // ── Tabla de opciones (siempre que haya keywords de opciones) ──────────
-    if ((isOptionsQ || isBearishQ || isBullishQ) && m?.price) {
-      const direction = explicitDir ?? fundamentalDir;
-      const candidates = this.buildOptionsAnalysis(m, ticker);
-      lines.push(this.formatOptionsSection(candidates, direction, m));
-    }
-
-    // ── Escenarios numéricos ───────────────────────────────────────────────
-    if (isScenarioQ && m?.price) {
-      const p = m.price;
-      const v = vol / 100;
-      const move30d = Math.round(p * v * Math.sqrt(30 / 252) * 100) / 100;
-      lines.push("Escenarios de mercado a considerar:");
-      lines.push(`**Movimiento esperado (1 mes, ±1σ): ±$${move30d} (±${(move30d / p * 100).toFixed(1)}%)**`);
-      lines.push(`- Escenario alcista: $${(p + move30d).toFixed(2)}`);
-      lines.push(`- Escenario bajista: $${(p - move30d).toFixed(2)}`);
-      lines.push(`- Catalizadores positivos: earnings beat, expansión de producto, guía optimista`);
-      lines.push(`- Catalizadores negativos: earnings miss, competencia, macro adverso (tasas, dólar)`);
-      lines.push("");
-    }
-
-    if (isHowCalculatedQ && !simulationContext) {
-      lines.push("Cómo se calculó el resultado:");
-      lines.push("- Se cargaron datos fundamentales disponibles del ticker: precio, volatilidad, valuacion, rentabilidad, deuda y crecimiento.");
-      lines.push("- El score de viabilidad se infiere ponderando calidad fundamental, riesgo y posicion del precio dentro del rango reciente.");
-      lines.push("- Para opciones se estima strike ATM, prima teorica, breakeven y P&L bajo escenarios ATM, +5% y -5%.");
-      lines.push("- Si falta algun dato, el chat lo declara y limita la conclusion a la informacion disponible.");
-      lines.push("");
-    }
-
-    if (!m?.price && !m?.peRatio) {
-      lines.push("No se encontraron datos de mercado. Verifica el ticker e intenta de nuevo.");
-    }
-
-    lines.push(this.buildDisclaimer());
-    reasoningTrace.push("Local fallback con datos Finviz.");
-    return lines.join("\n");
-  }
-
-  private extractExplicitDirection(question: string): "ALCISTA" | "BAJISTA" | null {
-    const q = question.toLowerCase();
-    const bearish = ["bajista", "caída", "cae", "baja", "short put", "long put", "si cae", "si baja", "escenario negativo", "bearish"];
-    const bullish = ["alcista", "sube", "alza", "long call", "si sube", "escenario positivo", "bullish"];
-    if (bearish.some((w) => q.includes(w))) return "BAJISTA";
-    if (bullish.some((w) => q.includes(w))) return "ALCISTA";
-    return null;
-  }
-
-  private deriveDirection(market: MarketMetrics): "ALCISTA" | "BAJISTA" | "NEUTRAL" {
-    if (!market.price || !market.priceHigh52Week || !market.priceLow52Week) return "NEUTRAL";
-    const range = market.priceHigh52Week - market.priceLow52Week;
-    if (range <= 0) return "NEUTRAL";
-    const position = (market.price - market.priceLow52Week) / range;
-    const overvalued = market.peRatio !== undefined && market.peRatio > 40;
-    const qualityROE = market.roe !== undefined && market.roe > 15;
-    if (position > 0.6 && !overvalued) return qualityROE ? "ALCISTA" : "NEUTRAL";
-    if (position < 0.35) return "BAJISTA";
-    return "NEUTRAL";
-  }
-
-  private buildOptionsAnalysis(market: MarketMetrics, ticker: string): OptionStrategyResult[] {
-    if (!market.price || market.price <= 0) return [];
-    const price = market.price;
-    const vol = market.annualizedVolatility ?? 25;
-    const DTE = 30;
-    const strikePrice = Math.round(price / 5) * 5;
-    // Simplified ATM premium: price × daily_vol × sqrt(DTE) × 0.4
-    const dailyVol = vol / 100 / Math.sqrt(252);
-    const premium = Math.max(0.01, Math.round(price * dailyVol * Math.sqrt(DTE) * 0.4 * 100) / 100);
-    const expirationDate = new Date(Date.now() + DTE * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-
-    try {
-      return buildOptionStrategyCandidates({
-        ticker,
-        optionType: "call",
-        direction: "long",
-        strikePrice,
-        currentPrice: price,
-        expirationDate,
-        daysToExpiration: DTE,
-        premium,
-        quantity: 1,
-        capitalAvailable: price * 100,
-        riskTolerance: "medium",
-        assumptions: { impliedVolatility: vol, interestRate: 4.5 }
-      } as any);
-    } catch {
-      return [];
-    }
-  }
-
-  private formatOptionsSection(
-    candidates: OptionStrategyResult[],
-    direction: "ALCISTA" | "BAJISTA" | "NEUTRAL",
-    market: MarketMetrics
-  ): string {
-    if (candidates.length === 0) return "";
-    const vol = market.annualizedVolatility ?? 25;
-    const price = market.price ?? 0;
-    const strike = Math.round(price / 5) * 5;
-    const DTE = 30;
-
-    // Pick recommended strategy based on direction + vol
-    let recommended: OptionStrategyResult | undefined;
-    if (direction === "ALCISTA") {
-      recommended = vol > 35
-        ? candidates.find((c) => c.optionType === "PUT" && String(c.direction).toUpperCase() === "SHORT")
-        : candidates.find((c) => c.optionType === "CALL" && String(c.direction).toUpperCase() === "LONG");
-    } else if (direction === "BAJISTA") {
-      recommended = vol > 35
-        ? candidates.find((c) => c.optionType === "CALL" && String(c.direction).toUpperCase() === "SHORT")
-        : candidates.find((c) => c.optionType === "PUT" && String(c.direction).toUpperCase() === "LONG");
+    // ══════════════════════════════════════════════════════════════════════
+    // 9. Pregunta general → resumen conciso
+    // ══════════════════════════════════════════════════════════════════════
     } else {
-      recommended = vol > 35
-        ? candidates.find((c) => String(c.direction).toUpperCase() === "SHORT")
-        : undefined;
-    }
-
-    const lines: string[] = [];
-    lines.push(`**Análisis de opciones — Strike ATM ~$${strike}, DTE ${DTE} días, Vol ${vol}%:**`);
-    lines.push(`Sesgo fundamental: **${direction}**`);
-    lines.push("");
-
-    for (const c of candidates) {
-      const dir = String(c.direction).toUpperCase();
-      const type = String(c.optionType).toUpperCase();
-      const label = `${dir} ${type}`;
-      const maxLoss = c.maxLoss === Infinity ? "ilimitada" : `$${c.maxLoss.toFixed(0)}`;
-      const maxProfit = c.maxProfit === Infinity ? "ilimitado" : `$${c.maxProfit.toFixed(0)}`;
-      const isRec = recommended && c.optionType === recommended.optionType && String(c.direction).toUpperCase() === String(recommended.direction).toUpperCase();
-      lines.push(`${isRec ? "★ " : "  "}**${label}**${isRec ? " ← recomendada" : ""}`);
-      lines.push(`    Breakeven: $${c.breakEvenPrice.toFixed(2)} | Max profit: ${maxProfit} | Max loss: ${maxLoss}`);
-      lines.push(`    Escenarios: ATM $${c.scenarioAtm?.profitLoss?.toFixed(0) ?? "?"} | +5% $${c.scenarioPlus5?.profitLoss?.toFixed(0) ?? "?"} | -5% $${c.scenarioMinus5?.profitLoss?.toFixed(0) ?? "?"}`);
-      if (c.warnings?.length) lines.push(`    ⚠ ${c.warnings[0]}`);
-    }
-
-    if (recommended) {
-      const dir = String(recommended.direction).toUpperCase();
-      const type = String(recommended.optionType).toUpperCase();
+      lines.push(`**${result.companyName} (${ticker}) — ${result.verdict} | Score ${result.overallScore}/100**`);
+      lines.push(result.recommendation);
       lines.push("");
-      if (dir === "LONG") {
-        lines.push(`**Por qué ${dir} ${type}:** Estrategia de riesgo limitado. Pagas la prima ($${recommended.premium?.toFixed(2)}) como máxima pérdida. ${direction === "ALCISTA" && type === "CALL" ? "Captura alza ilimitada si el precio supera el breakeven." : "Captura caída si el precio baja del breakeven."}`);
-      } else {
-        lines.push(`**Por qué ${dir} ${type}:** Vendes prima (cobras $${recommended.premium?.toFixed(2)} × 100). Con vol alta (${vol}%) las primas son caras. Margen requerido: $${recommended.requiredMargin?.toFixed(0)}.`);
-      }
+      lines.push(`Estrategia activa: ${proj.strategy} | Strike $${proj.strike} | Breakeven $${proj.breakeven} | Prima $${proj.premium}/acc`);
+      lines.push("");
+      lines.push("Métricas destacadas:");
+      topMetrics.forEach((s) => lines.push(`- ${s.metric}: ${s.score}/100 — ${s.finding}`));
     }
 
     lines.push("");
+    lines.push(`*${DISCLAIMER}*`);
     return lines.join("\n");
   }
 
-  private buildDisclaimer(): string {
-    return "Este análisis es informativo y no constituye una recomendación de inversión. Consulta a un profesional antes de tomar decisiones financieras.";
-  }
+  // ---------------------------------------------------------------------------
+  // Análisis Fundamental Completo — estilo Bloomberg / Morningstar
+  // ---------------------------------------------------------------------------
 
-  private async buildFundamentalContext(ticker: string, userId?: string): Promise<FundamentalContext> {
-    const context: FundamentalContext = {
-      ticker,
-      contextDescriptions: [],
-      recentUserAnalysis: []
+  private buildFullFundamentalAnalysis(
+    result: FundamentalAnalysisResult,
+    rawData: FundamentalAnalysisData
+  ): string {
+    const m   = rawData.metrics;
+    const proj = result.projection;
+    const sections = result.sections;
+    const ticker = result.ticker;
+
+    // ── Métricas brutas ─────────────────────────────────────────────────
+    const price       = m.priceHistory?.currentPrice ?? 0;
+    const high52      = m.priceHistory?.priceHigh52Week ?? 0;
+    const low52       = m.priceHistory?.priceLow52Week ?? 0;
+    const change52    = m.priceHistory?.priceChange52WeekPercent ?? 0;
+    const volume      = m.priceHistory?.avgVolume10Day ?? 0;
+    const mcap        = m.marketCap?.value ?? 0;
+    const volAnnual   = m.volatility?.annualizedVolatility ?? 0;
+    const beta        = m.beta?.value ?? 1;
+    const pe          = m.financialRatios?.peRatio ?? 0;
+    const pb          = m.financialRatios?.pbRatio ?? 0;
+    const ps          = m.financialRatios?.psRatio ?? 0;
+    const roe         = m.financialRatios?.roe ?? 0;
+    const deRatio     = m.financialRatios?.debtToEquity ?? 0;
+    const eps         = m.eps?.eps ?? 0;
+    const epsGrowth   = m.eps?.epsGrowthYoYPercent ?? 0;
+    const revAnnual   = m.sales?.annualRevenue ?? 0;
+    const revGrowth   = m.sales?.revenueGrowthPercent ?? 0;
+    const divYield    = m.dividend?.dividendYieldPercent ?? 0;
+    const divAnnual   = m.dividend?.annualDividendPerShare ?? 0;
+    const payoutRatio = m.dividend?.payoutRatio ?? 0;
+    const sector      = m.sector?.sector ?? "N/D";
+    const industry    = m.sector?.industry ?? "N/D";
+
+    // ── Derivaciones ────────────────────────────────────────────────────
+    const score = result.overallScore;
+    const verdict = result.verdict;
+
+    const recommendation = score >= 65 ? "BUY" : score >= 40 ? "HOLD" : "SELL";
+
+    const callCount  = sections.filter((s) => s.tipoSenal === "CALL").length;
+    const holdCount  = sections.filter((s) => s.tipoSenal === "HOLD").length;
+    const putCount   = sections.filter((s) => s.tipoSenal === "PUT").length;
+    const total      = sections.length || 1;
+
+    const confidence = callCount / total >= 0.6 || putCount / total >= 0.6
+      ? "Alto"
+      : holdCount / total >= 0.5 ? "Medio" : "Moderado";
+
+    const riskLevel = (volAnnual > 35 || beta > 1.5)
+      ? "Alto"
+      : (volAnnual > 20 || beta > 1.1) ? "Moderado" : "Bajo";
+
+    const horizonStr = proj.days > 180 ? "Largo plazo (>6 meses)" : proj.days > 60 ? "Mediano plazo (2-6 meses)" : "Corto plazo (<2 meses)";
+
+    // Infra/sobre valoración por P/E
+    const valuationJudge = pe <= 0
+      ? "Sin datos de P/E disponibles"
+      : pe < 12 ? "Posiblemente infravalorada frente al mercado general"
+      : pe < 22 ? "Valuación moderada, en línea con el mercado"
+      : pe < 35 ? "Prima de valuación — el mercado descuenta crecimiento futuro"
+      : "Sobrevalorada respecto a referencias históricas (P/E >35)";
+
+    // Moat assessment
+    const moatScore = sections.find((s) => s.metric === "Ventaja Competitiva")?.score ?? 50;
+    const moatVerdict = moatScore >= 70 ? "Moat amplio" : moatScore >= 50 ? "Moat moderado" : "Moat limitado o ausente";
+
+    // Strong / weak
+    const strongMetrics = [...sections].filter((s) => s.score >= 65).sort((a, b) => b.score - a.score);
+    const weakMetrics   = [...sections].filter((s) => s.score < 40).sort((a, b) => a.score - b.score);
+    const callSections  = sections.filter((s) => s.tipoSenal === "CALL");
+    const putSections   = sections.filter((s) => s.tipoSenal === "PUT");
+
+    // ── Interpretaciones narrativas ──────────────────────────────────────
+    const peInterpret = pe <= 0 ? "No disponible"
+      : pe < 15 ? `P/E de ${pe.toFixed(1)}x — empresa cotiza con descuento frente al mercado. Puede indicar infravaloración o expectativas de crecimiento moderado.`
+      : pe < 25 ? `P/E de ${pe.toFixed(1)}x — valuación razonable para una empresa con fundamentales sólidos.`
+      : pe < 40 ? `P/E de ${pe.toFixed(1)}x — el mercado paga prima por este activo. Justificado si el crecimiento de EPS es sostenible.`
+      : `P/E de ${pe.toFixed(1)}x — valuación elevada. Requiere crecimiento de EPS acelerado para sostenerse.`;
+
+    const pbInterpret = pb <= 0 ? "" : pb < 1.5 ? `P/B de ${pb.toFixed(1)}x — cotiza cerca del valor en libros, posible oportunidad de valor.`
+      : pb < 4 ? `P/B de ${pb.toFixed(1)}x — estándar para empresas con activos intangibles importantes.`
+      : `P/B de ${pb.toFixed(1)}x — prima significativa sobre activos en libros.`;
+
+    const roeInterpret = roe <= 0 ? "ROE negativo — la empresa destruye valor para el accionista en este período."
+      : roe < 10 ? `ROE del ${roe.toFixed(1)}% — rentabilidad del patrimonio modesta. Industrias de capital intensivo típicamente operan en este rango.`
+      : roe < 20 ? `ROE del ${roe.toFixed(1)}% — rentabilidad sólida, empresa genera buen retorno sobre el capital invertido.`
+      : `ROE del ${roe.toFixed(1)}% — excelente eficiencia en el uso del capital del accionista. Señal de ventaja competitiva duradera.`;
+
+    const deInterpret = deRatio < 0.3 ? `D/E de ${deRatio.toFixed(2)} — balance extremadamente conservador. La empresa opera casi sin deuda.`
+      : deRatio < 0.8 ? `D/E de ${deRatio.toFixed(2)} — apalancamiento moderado, manejable para la mayoría de sectores.`
+      : deRatio < 2.0 ? `D/E de ${deRatio.toFixed(2)} — deuda significativa. Monitorear cobertura de intereses y flujo de caja libre.`
+      : `D/E de ${deRatio.toFixed(2)} — alto apalancamiento. Riesgo financiero elevado si los ingresos se deterioran.`;
+
+    const epsGrowthInterpret = epsGrowth > 25 ? `Crecimiento de EPS del ${epsGrowth.toFixed(1)}% YoY — expansión acelerada de utilidades, poco común y muy positivo.`
+      : epsGrowth > 10 ? `Crecimiento de EPS del ${epsGrowth.toFixed(1)}% YoY — trayectoria de crecimiento saludable y sostenible.`
+      : epsGrowth > 0 ? `Crecimiento de EPS del ${epsGrowth.toFixed(1)}% YoY — crecimiento positivo pero moderado.`
+      : `Contracción de EPS del ${Math.abs(epsGrowth).toFixed(1)}% YoY — las utilidades se están comprimiendo, señal de alerta.`;
+
+    const revGrowthInterpret = revGrowth > 20 ? `Crecimiento de ingresos del ${revGrowth.toFixed(1)}% — expansión del top-line por encima de la industria.`
+      : revGrowth > 8 ? `Crecimiento de ingresos del ${revGrowth.toFixed(1)}% — momentum de ventas saludable.`
+      : revGrowth > 0 ? `Crecimiento de ingresos del ${revGrowth.toFixed(1)}% — crecimiento modesto de la línea superior.`
+      : `Caída de ingresos del ${Math.abs(revGrowth).toFixed(1)}% — contracción del top-line, requiere atención.`;
+
+    const betaInterpret = beta < 0.7 ? `Beta de ${beta.toFixed(2)} — activo defensivo, oscila menos que el mercado.`
+      : beta < 1.1 ? `Beta de ${beta.toFixed(2)} — comportamiento cercano al mercado general.`
+      : beta < 1.5 ? `Beta de ${beta.toFixed(2)} — más volátil que el índice, amplifica movimientos del mercado.`
+      : `Beta de ${beta.toFixed(2)} — activo de alta volatilidad sistémica. Mayor potencial de ganancia y pérdida.`;
+
+    // Comparación sector (aproximada con benchmarks generales)
+    const sectorPEBenchmark: Record<string, number> = {
+      Technology: 28, "Financial Services": 15, Healthcare: 22, "Consumer Cyclical": 20,
+      Energy: 12, Utilities: 18, "Communication Services": 24, "Real Estate": 25,
+      "Consumer Defensive": 20, Industrials: 20, "Basic Materials": 14
     };
+    const benchmarkPE = sectorPEBenchmark[sector] ?? 20;
+    const vsSectorStr = pe > 0
+      ? pe > benchmarkPE * 1.2
+        ? `P/E de ${pe.toFixed(1)}x es ${((pe / benchmarkPE - 1) * 100).toFixed(0)}% superior al promedio del sector ${sector} (~${benchmarkPE}x) — prima de valuación vs. pares.`
+        : pe < benchmarkPE * 0.8
+          ? `P/E de ${pe.toFixed(1)}x es ${((1 - pe / benchmarkPE) * 100).toFixed(0)}% inferior al promedio del sector ${sector} (~${benchmarkPE}x) — posible descuento vs. pares.`
+          : `P/E de ${pe.toFixed(1)}x alineado con el promedio del sector ${sector} (~${benchmarkPE}x).`
+      : `Sin P/E para comparar con el sector ${sector}.`;
 
-    // Fetch real market data from Finviz (primary) / Yahoo (fallback)
-    try {
-      const result = await this.fundamentalService.fetch(ticker, 252);
-      if (result.success && result.data) {
-        const d = result.data;
-        const m = d.metrics;
-        context.market = {
-          companyName:          d.companyName,
-          price:                m.priceHistory?.currentPrice,
-          priceHigh52Week:      m.priceHistory?.priceHigh52Week,
-          priceLow52Week:       m.priceHistory?.priceLow52Week,
-          marketCap:            m.marketCap?.value,
-          peRatio:              m.financialRatios?.peRatio,
-          pbRatio:              m.financialRatios?.pbRatio,
-          psRatio:              m.financialRatios?.psRatio,
-          roe:                  m.financialRatios?.roe,
-          debtToEquity:         m.financialRatios?.debtToEquity,
-          dividendYield:        m.dividend?.dividendYieldPercent,
-          eps:                  m.eps?.eps,
-          annualizedVolatility: m.volatility?.annualizedVolatility,
-          sector:               m.sector?.sector,
-          industry:             m.sector?.industry,
-          revenueGrowth:        m.sales?.revenueGrowthPercent
-        };
-        context.contextDescriptions.push(`Datos de mercado cargados desde ${d.metadata.sourceId}.`);
-      }
-    } catch {
-      context.contextDescriptions.push("No se pudo cargar datos de mercado en tiempo real.");
+    // ── Construcción del reporte ─────────────────────────────────────────
+    const lines: string[] = [];
+
+    lines.push(`# ${result.companyName} (${ticker}) — Análisis Fundamental Institucional`);
+    lines.push(`*Fuente: ${result.sourceId.toUpperCase()} | Sector: ${sector} | Industria: ${industry} | Período: ${proj.projectionFrom} → ${proj.projectionTo}*`);
+    lines.push("");
+
+    // VEREDICTO
+    lines.push("## VEREDICTO GENERAL");
+    lines.push(`| Campo | Valor |`);
+    lines.push(`|-------|-------|`);
+    lines.push(`| Recomendación | **${recommendation}** |`);
+    lines.push(`| Score general | **${score}/100** (${verdict}) |`);
+    lines.push(`| Nivel de confianza | ${confidence} (${callCount} CALL / ${holdCount} HOLD / ${putCount} PUT de ${total} métricas) |`);
+    lines.push(`| Nivel de riesgo | ${riskLevel} — Vol. anual ${volAnnual.toFixed(1)}%, Beta ${beta.toFixed(2)} |`);
+    lines.push(`| Horizonte ideal | ${horizonStr} |`);
+    lines.push(`| Estrategia evaluada | ${proj.strategy} |`);
+    lines.push(`| Valuación | ${valuationJudge} |`);
+    lines.push(`| Ventaja competitiva | ${moatVerdict} (score ${moatScore}/100) |`);
+    lines.push("");
+
+    // DATOS DE MERCADO
+    lines.push("## DATOS DE MERCADO");
+    lines.push(`Precio actual: **$${price.toFixed(2)}** | Rango 52 sem: $${low52.toFixed(2)} – $${high52.toFixed(2)} | Cambio 52 sem: ${change52 >= 0 ? "+" : ""}${change52.toFixed(1)}%`);
+    if (mcap > 0) lines.push(`Market Cap: **$${(mcap / 1e9).toFixed(2)}B** | Vol. promedio 10d: ${volume > 0 ? (volume / 1e6).toFixed(2) + "M acciones" : "N/D"}`);
+    if (divAnnual > 0) lines.push(`Dividendo: $${divAnnual.toFixed(2)}/acc/año (Yield ${divYield.toFixed(2)}%) | Payout Ratio: ${payoutRatio.toFixed(0)}%`);
+    lines.push("");
+
+    // RESUMEN EJECUTIVO
+    lines.push("## RESUMEN EJECUTIVO");
+    const execParagraph = this.buildExecutiveSummary(result, rawData, recommendation, confidence, riskLevel);
+    lines.push(execParagraph);
+    lines.push("");
+
+    // ANÁLISIS DE VALUACIÓN
+    lines.push("## ANÁLISIS DE VALUACIÓN");
+    lines.push(peInterpret);
+    if (pbInterpret) lines.push(pbInterpret);
+    if (ps > 0) lines.push(`P/S de ${ps.toFixed(1)}x — ${ps < 3 ? "el mercado paga menos de 3x por cada dólar de ingresos, valuación contenida." : ps < 8 ? "prima moderada sobre ventas." : "mercado paga una prima significativa sobre ingresos."}`);
+    lines.push("");
+    lines.push(`**Conclusión de valuación:** ${valuationJudge}`);
+    lines.push(`**Sector:** ${vsSectorStr}`);
+    lines.push("");
+
+    // ANÁLISIS DE CRECIMIENTO
+    lines.push("## ANÁLISIS DE CRECIMIENTO");
+    lines.push(epsGrowthInterpret);
+    if (revAnnual > 0) lines.push(`Ingresos anuales: $${(revAnnual / 1e9).toFixed(2)}B — ${revGrowthInterpret}`);
+    if (eps !== 0) lines.push(`EPS TTM: $${eps.toFixed(2)} — ${eps > 0 ? "empresa genera ganancias por acción positivas." : "empresa registra pérdidas por acción."}`);
+    lines.push("");
+
+    // ANÁLISIS DE RENTABILIDAD
+    lines.push("## ANÁLISIS DE RENTABILIDAD");
+    lines.push(roeInterpret);
+    const rentSection = sections.find((s) => s.metric === "Rentabilidad");
+    if (rentSection) lines.push(`Score de rentabilidad: ${rentSection.score}/100 (${rentSection.tipoSenal}) — ${rentSection.finding}`);
+    lines.push("");
+
+    // SALUD FINANCIERA
+    lines.push("## SALUD FINANCIERA Y FLUJO DE CAJA");
+    lines.push(deInterpret);
+    lines.push(betaInterpret);
+    const saludSection = sections.find((s) => s.metric === "Salud Financiera");
+    const flujoSection = sections.find((s) => s.metric === "Flujo de Caja");
+    if (saludSection) lines.push(`Score salud financiera: ${saludSection.score}/100 — ${saludSection.finding}`);
+    if (flujoSection) lines.push(`Score flujo de caja: ${flujoSection.score}/100 — ${flujoSection.finding}`);
+    lines.push("");
+
+    // COMPARACIÓN SECTOR
+    lines.push("## COMPARACIÓN CONTRA SECTOR E INDUSTRIA");
+    lines.push(`Sector: **${sector}** | Industria: **${industry}**`);
+    lines.push(vsSectorStr);
+    if (roe > 0) {
+      const roeBenchmark: Record<string, number> = { Technology: 22, Healthcare: 15, Financials: 12, Energy: 10, Utilities: 8 };
+      const benchROE = roeBenchmark[sector] ?? 14;
+      lines.push(`ROE del ${roe.toFixed(1)}% vs. promedio sectorial estimado ~${benchROE}% → ${roe > benchROE ? "superior a sus pares." : "por debajo del promedio sectorial."}`);
     }
+    lines.push("");
 
-    if (!this.supabaseClient) return context;
-
-    const [fundamentals, strategy, history] = await Promise.all([
-      this.fetchFundamentals(ticker),
-      this.fetchStrategySummary(ticker),
-      userId ? this.fetchUserHistory(userId, ticker) : Promise.resolve([])
-    ]);
-
-    if (fundamentals) {
-      context.viabilityScore = fundamentals.viability_score;
-      context.viabilityJustification = fundamentals.justification;
-      context.contextDescriptions.push("Loaded company fundamentals from Supabase.");
+    // FORTALEZAS
+    lines.push("## FORTALEZAS PRINCIPALES");
+    if (strongMetrics.length > 0) {
+      strongMetrics.forEach((s) => lines.push(`- **${s.metric}** (${s.score}/100): ${s.finding}`));
+    } else {
+      lines.push(`- Score general de ${score}/100 refleja fundamentos estables.`);
+      proj.drivers.slice(0, 2).forEach((d) => lines.push(`- ${d}`));
     }
-    if (strategy) {
-      context.strategySummary = strategy.summary;
-      context.contextDescriptions.push("Loaded strategy evaluation summary from Supabase.");
-    }
-    if (history.length > 0) {
-      context.recentUserAnalysis = history;
-      context.contextDescriptions.push("Loaded recent user analysis history from Supabase.");
-    }
+    lines.push("");
 
-    return context;
+    // RIESGOS
+    lines.push("## RIESGOS PRINCIPALES");
+    if (weakMetrics.length > 0) {
+      weakMetrics.forEach((s) => lines.push(`- **${s.metric}** (${s.score}/100, riesgo): ${s.finding}`));
+    }
+    proj.changeTriggers.slice(0, 3).forEach((t) => lines.push(`- ${t}`));
+    lines.push("");
+
+    // SEÑALES POSITIVAS
+    lines.push("## SEÑALES POSITIVAS DETECTADAS");
+    if (callSections.length > 0) {
+      callSections.forEach((s) => lines.push(`- ↑ **${s.metric}**: ${s.finding} — señal CALL`));
+    } else {
+      lines.push("- Sin señales CALL claras en las métricas actuales.");
+    }
+    lines.push("");
+
+    // RED FLAGS
+    lines.push("## RED FLAGS / SEÑALES NEGATIVAS");
+    if (putSections.length > 0) {
+      putSections.forEach((s) => lines.push(`- ↓ **${s.metric}**: ${s.finding} — señal PUT`));
+    } else {
+      lines.push("- Sin señales PUT significativas detectadas.");
+    }
+    lines.push("");
+
+    // VENTAJAS COMPETITIVAS
+    lines.push("## VENTAJAS COMPETITIVAS (MOAT)");
+    const moatSection = sections.find((s) => s.metric === "Ventaja Competitiva");
+    lines.push(`**${moatVerdict}** — Score ${moatScore}/100`);
+    if (moatSection) lines.push(moatSection.finding);
+    if (roe >= 20) lines.push(`- ROE del ${roe.toFixed(1)}% sostenido sugiere barreras de entrada o poder de fijación de precios.`);
+    if (mcap > 1e11) lines.push(`- Market cap de $${(mcap / 1e9).toFixed(0)}B — economías de escala y reconocimiento de marca como factores diferenciadores.`);
+    proj.drivers.slice(0, 2).forEach((d) => lines.push(`- ${d}`));
+    lines.push("");
+
+    // CONCLUSIÓN FINAL
+    lines.push("## CONCLUSIÓN FINAL");
+    lines.push(this.buildConclusion(result, rawData, recommendation, riskLevel, horizonStr));
+    lines.push("");
+    lines.push(`---`);
+    lines.push(`*${DISCLAIMER}*`);
+
+    return lines.join("\n");
   }
 
-  private async fetchFundamentals(ticker: string): Promise<{ viability_score?: number; justification?: string } | null> {
-    try {
-      const { data, error } = await this.supabaseClient!
-        .from("company_fundamentals")
-        .select("ticker, viability_score, justification")
-        .eq("ticker", ticker)
-        .maybeSingle();
-      if (error) return null;
-      return data as { viability_score?: number; justification?: string } | null;
-    } catch { return null; }
+  private buildExecutiveSummary(
+    result: FundamentalAnalysisResult,
+    rawData: FundamentalAnalysisData,
+    recommendation: string,
+    confidence: string,
+    riskLevel: string
+  ): string {
+    const m = rawData.metrics;
+    const ticker = result.ticker;
+    const score = result.overallScore;
+    const price = m.priceHistory?.currentPrice ?? 0;
+    const pe = m.financialRatios?.peRatio ?? 0;
+    const roe = m.financialRatios?.roe ?? 0;
+    const epsGrowth = m.eps?.epsGrowthYoYPercent ?? 0;
+    const vol = m.volatility?.annualizedVolatility ?? 0;
+    const sector = m.sector?.sector ?? "su sector";
+    const companyName = result.companyName;
+
+    const sentimentWord = recommendation === "BUY" ? "positivo" : recommendation === "SELL" ? "negativo" : "neutral";
+    const verdictNarrative = score >= 65
+      ? `presenta un perfil fundamental sólido que lo posiciona favorablemente dentro de ${sector}`
+      : score >= 40
+        ? `muestra un perfil fundamental mixto, con fortalezas compensadas por áreas de riesgo que requieren monitoreo`
+        : `refleja debilidades fundamentales que generan precaución ante una posición alcista en este momento`;
+
+    let summary = `${companyName} (${ticker}), cotizando a $${price.toFixed(2)}, ${verdictNarrative}. `;
+    summary += `Con un score agregado de ${score}/100 y nivel de confianza ${confidence.toLowerCase()}, el análisis arroja un sesgo fundamental ${sentimentWord}.`;
+
+    if (pe > 0 && roe > 0) {
+      summary += ` La empresa opera con un P/E de ${pe.toFixed(1)}x y ROE del ${roe.toFixed(1)}%, parámetros que ${roe >= 15 && pe <= 30 ? "refuerzan el atractivo fundamental" : "presentan un balance que merece atención"}.`;
+    }
+
+    if (epsGrowth !== 0) {
+      summary += ` El crecimiento de EPS del ${epsGrowth >= 0 ? "+" : ""}${epsGrowth.toFixed(1)}% YoY ${epsGrowth >= 10 ? "es un catalizador positivo para la valoración actual" : epsGrowth >= 0 ? "es modesto pero mantiene una dirección positiva" : "es una señal de alerta que puede presionar múltiplos"}.`;
+    }
+
+    summary += ` La volatilidad anualizada del ${vol.toFixed(1)}% define un nivel de riesgo ${riskLevel.toLowerCase()} para el perfil de inversión en el horizonte proyectado.`;
+
+    return summary;
   }
 
-  private async fetchStrategySummary(ticker: string): Promise<{ summary?: string } | null> {
-    try {
-      const { data, error } = await this.supabaseClient!
-        .from("strategy_evaluations")
-        .select("ticker, summary")
-        .eq("ticker", ticker)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) return null;
-      return data as { summary?: string } | null;
-    } catch { return null; }
+  private buildConclusion(
+    result: FundamentalAnalysisResult,
+    rawData: FundamentalAnalysisData,
+    recommendation: string,
+    riskLevel: string,
+    horizonStr: string
+  ): string {
+    const m = rawData.metrics;
+    const ticker = result.ticker;
+    const score = result.overallScore;
+    const proj = result.projection;
+    const roe = m.financialRatios?.roe ?? 0;
+    const pe = m.financialRatios?.peRatio ?? 0;
+    const sections = result.sections;
+    const callCount = sections.filter((s) => s.tipoSenal === "CALL").length;
+    const total = sections.length || 1;
+
+    let conclusion = `Basado en el análisis de ${total} métricas fundamentales, **${ticker} recibe una recomendación de ${recommendation}** con score ${score}/100. `;
+
+    if (recommendation === "BUY") {
+      conclusion += `Los fundamentales respaldan una perspectiva constructiva: ${callCount} de ${total} métricas emiten señal CALL. `;
+      if (roe >= 15) conclusion += `El ROE del ${roe.toFixed(1)}% demuestra eficiencia en la generación de valor para el accionista. `;
+      conclusion += `La estrategia ${proj.strategy} evaluada tiene un breakeven en $${proj.breakeven}, alcanzable dentro del movimiento esperado de ±${proj.expectedMovePercent.toFixed(1)}%.`;
+    } else if (recommendation === "SELL") {
+      conclusion += `Las señales fundamentales son predominantemente negativas. Se recomienda cautela ante exposición alcista. `;
+      if (pe > 40) conclusion += `El P/E de ${pe.toFixed(1)}x implica un precio que descuenta mucho crecimiento futuro, dejando poco margen de seguridad. `;
+      conclusion += `La estrategia ${proj.strategy} evaluada requiere que el precio ${proj.strategy.includes("Call") ? "supere" : "caiga bajo"} $${proj.breakeven} para ser rentable.`;
+    } else {
+      conclusion += `Las métricas presentan señales mixtas que no justifican una posición direccional agresiva. `;
+      conclusion += `Se recomienda monitorear catalizadores como earnings, revisión de guidance o cambios en el contexto macro antes de incrementar exposición. `;
+      conclusion += `La estrategia ${proj.strategy} evaluada tiene un horizonte de ${proj.days} días con movimiento esperado de ±${proj.expectedMovePercent.toFixed(1)}%.`;
+    }
+
+    conclusion += ` Horizonte ideal de análisis: **${horizonStr}** | Riesgo: **${riskLevel}**.`;
+    return conclusion;
   }
 
-  private async fetchUserHistory(userId: string, ticker: string): Promise<string[]> {
-    try {
-      const { data, error } = await this.supabaseClient!
-        .from("user_analysis_history")
-        .select("interaction_summary")
-        .eq("user_id", userId)
-        .eq("ticker", ticker)
-        .order("created_at", { ascending: false })
-        .limit(3);
-      if (error || !data) return [];
-      return (data as Array<{ interaction_summary?: string }>)
-        .filter((item) => typeof item.interaction_summary === "string")
-        .map((item) => item.interaction_summary as string);
-    } catch { return []; }
-  }
+  // ---------------------------------------------------------------------------
 
-  private async logChatInteraction(userId: string | undefined, ticker: string, exchangeCount: number): Promise<void> {
+  private async saveInteractionSummary(userId: string | undefined, ticker: string, question: string, answer: string): Promise<void> {
     if (!this.supabaseClient) return;
+    const summary = `Q: ${question.slice(0, 150)} | A: ${answer.slice(0, 250)}`;
     try {
-      await this.supabaseClient.from("chat_audit").insert([{
-        action: "chat_message",
+      await this.supabaseClient.from("user_analysis_history").insert([{
         user_id: userId ?? null,
         ticker,
-        exchange_count: exchangeCount,
-        timestamp: new Date().toISOString()
+        interaction_summary: summary,
+        created_at: new Date().toISOString()
       }]);
     } catch { /* no fail */ }
   }
 }
+
+// Legacy export alias for backwards compatibility with existing route imports
+export type { CopilotChatRequest as ChatMessage };

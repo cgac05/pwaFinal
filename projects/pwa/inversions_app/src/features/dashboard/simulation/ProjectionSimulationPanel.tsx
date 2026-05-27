@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef } from "react";
 import {
   CandlestickSeries,
   ColorType,
-  LineSeries,
   createChart,
   createSeriesMarkers,
   type IChartApi,
@@ -13,12 +12,6 @@ import type { FundamentalProjection } from "./FundamentalAnalysisModal";
 interface Props {
   projection: FundamentalProjection;
 }
-
-const lineColors = {
-  bullish: "#16a34a",
-  base: "#2563eb",
-  bearish: "#dc2626"
-};
 
 function fmtMoney(value: number | string): string {
   if (typeof value === "string") return value;
@@ -31,19 +24,35 @@ function fmtPnL(value: number): string {
 }
 
 function buildCandles(projection: FundamentalProjection) {
-  return projection.path.map((point, index) => {
-    const previous = index === 0 ? projection.initialPrice : projection.path[index - 1].basePrice;
-    const spread = Math.max(0.15, Math.abs(point.bullishPrice - point.bearishPrice) * 0.08);
-    const high = Math.max(previous, point.basePrice) + spread;
-    const low = Math.max(0.01, Math.min(previous, point.basePrice) - spread);
+  // Deterministic PRNG seeded by ticker so useMemo output stays stable
+  let seed = projection.ticker.split("").reduce((a, c) => a + c.charCodeAt(0), 0) * 31 + projection.days;
+  const rand = () => {
+    seed = Math.imul(seed ^ (seed >>> 16), 0x45d9f3b) >>> 0;
+    seed = Math.imul(seed ^ (seed >>> 16), 0x45d9f3b) >>> 0;
+    return (seed >>> 0) / 0xffffffff;
+  };
 
-    return {
-      time: point.date as any,
-      open: previous,
-      high,
-      low,
-      close: point.basePrice
-    };
+  // Daily volatility fraction: derived from expected move, similar to real stocks
+  const dailyVolFrac = Math.max(0.004, (projection.expectedMovePercent / 100) / Math.sqrt(Math.max(1, projection.days)));
+
+  return projection.path.map((point, index) => {
+    const prevBase = index === 0 ? projection.initialPrice : projection.path[index - 1].basePrice;
+    const currBase = point.basePrice;
+
+    // Add realistic session noise around the trend, biased toward the trend direction
+    const trendBias = (currBase - prevBase) * 0.1;
+    const open  = Math.max(0.01, prevBase + trendBias * (rand() - 0.4) + prevBase * dailyVolFrac * (rand() - 0.5));
+    const close = Math.max(0.01, currBase + trendBias * (rand() - 0.4) + currBase * dailyVolFrac * (rand() - 0.5));
+
+    const bodyHigh = Math.max(open, close);
+    const bodyLow  = Math.min(open, close);
+
+    // Wicks proportional to body or price — realistic 30–90% extension
+    const wickMult = dailyVolFrac * (0.4 + rand() * 0.8);
+    const high = bodyHigh + bodyHigh * wickMult;
+    const low  = Math.max(0.01, bodyLow  - bodyLow  * wickMult);
+
+    return { time: point.date as any, open, high, low, close };
   });
 }
 
@@ -83,45 +92,13 @@ export function ProjectionSimulationPanel({ projection }: Props) {
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: "#4ade80",
       downColor: "#ef4444",
-      borderVisible: true,
+      borderUpColor: "#4ade80",
+      borderDownColor: "#ef4444",
       wickUpColor: "#4ade80",
       wickDownColor: "#ef4444"
     });
     candleSeries.setData(candles);
     candleSeriesRef.current = candleSeries;
-
-    const bullishSeries = chart.addSeries(LineSeries, {
-      color: lineColors.bullish,
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false
-    });
-    bullishSeries.setData(projection.path.map((point) => ({
-      time: point.date as any,
-      value: point.bullishPrice
-    })));
-
-    const baseSeries = chart.addSeries(LineSeries, {
-      color: lineColors.base,
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false
-    });
-    baseSeries.setData(projection.path.map((point) => ({
-      time: point.date as any,
-      value: point.basePrice
-    })));
-
-    const bearishSeries = chart.addSeries(LineSeries, {
-      color: lineColors.bearish,
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false
-    });
-    bearishSeries.setData(projection.path.map((point) => ({
-      time: point.date as any,
-      value: point.bearishPrice
-    })));
 
     if (projection.path.length > 0) {
       const first = projection.path[0];
@@ -241,9 +218,14 @@ export function ProjectionSimulationPanel({ projection }: Props) {
       </div>
 
       <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", alignItems: "center", fontSize: "0.78rem" }}>
-        <span style={{ color: lineColors.bullish, fontWeight: 700 }}>Linea alcista</span>
-        <span style={{ color: lineColors.base, fontWeight: 700 }}>Linea base y velas</span>
-        <span style={{ color: lineColors.bearish, fontWeight: 700 }}>Linea bajista</span>
+        <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+          <span style={{ width: 12, height: 12, background: "#4ade80", display: "inline-block", borderRadius: 2 }} />
+          <span style={{ fontWeight: 700 }}>Vela alcista (cuerpo: precio base, mecha alta: escenario alcista)</span>
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+          <span style={{ width: 12, height: 12, background: "#ef4444", display: "inline-block", borderRadius: 2 }} />
+          <span style={{ fontWeight: 700 }}>Vela bajista (cuerpo: precio base, mecha baja: escenario bajista)</span>
+        </span>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.6rem" }}>

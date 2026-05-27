@@ -15,7 +15,7 @@ interface CopilotResponse {
   reasoningTrace: string[];
 }
 
-const PRESET_TICKERS = ["NVDA", "AAPL", "MSFT", "SPY"];
+const PRESET_TICKERS = ["NVDA", "AAPL", "MSFT", "SPY", "TSLA", "AMZN"];
 
 interface Props {
   defaultTicker?: string;
@@ -53,6 +53,9 @@ export function FundamentalCopilotPanel({ defaultTicker = "AAPL", simulationCont
     const q = (overrideQuestion ?? question).trim();
     if (!q || loading) return;
 
+    // Snapshot history BEFORE update — this is the conversationHistory sent to the API
+    const historySnapshot = history.map((e) => ({ role: e.role, content: e.content }));
+
     setHistory((h) => [...h, { role: "user", content: q }]);
     setQuestion("");
     setLoading(true);
@@ -65,8 +68,8 @@ export function FundamentalCopilotPanel({ defaultTicker = "AAPL", simulationCont
         body: JSON.stringify({
           ticker: ticker.toUpperCase(),
           question: q,
-          includeStrategyRecommendation: Boolean(simulationContext),
-          simulationContext
+          simulationContext,
+          conversationHistory: historySnapshot
         })
       });
 
@@ -199,14 +202,12 @@ export function FundamentalCopilotPanel({ defaultTicker = "AAPL", simulationCont
         </p>
       )}
 
-      {simulationContext && (
+      {history.length === 0 && (
         <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-          {[
-            "Por que es VIABLE / MARGINAL / NO_VIABLE?",
-            "Que riesgos tiene la estrategia?",
-            "Que podria cambiar la opinion?",
-            "Como calculaste la proyeccion?"
-          ].map((prompt) => (
+          {(simulationContext
+            ? ["¿Por qué es viable esta estrategia?", "¿Qué riesgos tiene?", "¿Cuándo conviene un Long Call vs Long Put?", "¿Qué podría cambiar el veredicto?"]
+            : ["¿Cómo interpreto el P/E de este ticker?", "¿Cuándo conviene un Long Call?", "¿Qué diferencia hay entre Short Call y Short Put?", "¿Cómo afecta la volatilidad a las primas?"]
+          ).map((prompt) => (
             <button
               key={prompt}
               type="button"
@@ -227,7 +228,7 @@ export function FundamentalCopilotPanel({ defaultTicker = "AAPL", simulationCont
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={`Pregunta sobre ${ticker}… (Enter para enviar, Shift+Enter salto de línea)`}
+          placeholder={`Pregunta lo que quieras sobre ${ticker}: análisis fundamental, Long/Short Call, Long/Short Put, estrategias… (Enter enviar, Shift+Enter salto de línea)`}
           rows={2}
           style={{
             flex: 1,
