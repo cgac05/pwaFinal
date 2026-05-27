@@ -50,17 +50,6 @@ CREATE INDEX IF NOT EXISTS idx_broker_accounts_active ON broker_accounts(is_acti
 -- FIC: Habilitar RLS en tabla de cuentas (ES)
 ALTER TABLE broker_accounts ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE IF NOT EXISTS user_broker_account_mappings (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  broker_account_id UUID NOT NULL REFERENCES broker_accounts(id) ON DELETE CASCADE,
-  is_primary BOOLEAN DEFAULT false,
-  can_trade BOOLEAN DEFAULT true,
-  can_view BOOLEAN DEFAULT true,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(user_id, broker_account_id)
-);
-
 -- FIC: RLS policy: users can only see their own accounts (EN)
 -- FIC: Política RLS: usuarios solo ven sus propias cuentas (ES)
 DROP POLICY IF EXISTS broker_accounts_user_access ON broker_accounts;

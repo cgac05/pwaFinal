@@ -1,0 +1,118 @@
+# FIC: OpenAPI contract for the confluence + health endpoints (Mauricio, TEAM-02).
+openapi: 3.1.0
+info:
+  title: Indicators Core - Confluence & Health
+  version: 1.0.0
+  description: >-
+    Endpoints REST para el veredicto de confluencia tecnica consolidada (5 indicadores)
+    y el health-check del core de indicadores.
+paths:
+  /api/indicators/confluence:
+    get:
+      summary: Consolida los 5 indicadores en un veredicto tecnico explicable.
+      parameters:
+        - { in: query, name: symbol, required: true, schema: { type: string }, example: AAPL }
+        - { in: query, name: timeframe, required: false, schema: { type: string, enum: [1m, 5m, 15m, 1h, 4h, 1d], default: 1h } }
+        - { in: query, name: count, required: false, schema: { type: integer, minimum: 1, maximum: 1000, default: 300 } }
+      responses:
+        "200":
+          description: >-
+            Veredicto consolidado. Si algun indicador falla la respuesta degrada
+            (degraded=true) en lugar de fallar; nunca devuelve 500 por indicador faltante.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfluenceVerdict" }
+        "400": { description: Parametros invalidos, $ref: "#/components/responses/Error" }
+        "404": { description: Symbol sin datos OHLC, $ref: "#/components/responses/Error" }
+  /api/indicators/health:
+    get:
+      summary: Reporta disponibilidad de la fuente OHLC y de cada indicador del core.
+      responses:
+        "200":
+          description: Reporte de salud. Nunca falla ante errores parciales.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthReport" }
+components:
+  schemas:
+    ConfluenceComponent:
+      type: object
+      required: [indicator, available, signal, weight, contribution, value, detail]
+      properties:
+        indicator: { type: string }
+        available: { type: boolean }
+        signal: { type: number, minimum: -1, maximum: 1 }
+        weight: { type: number }
+        contribution: { type: number }
+        value: { type: number, nullable: true }
+        detail: { type: string }
+    ConfluenceVerdict:
+      type: object
+      required: [symbol, timeframe, verdict, score, components, degraded, missing, inputs_used, algorithm_version, computed_at, source_input_hash, bars_used]
+      properties:
+        symbol: { type: string }
+        timeframe: { type: string }
+        verdict: { type: string, enum: [alcista, neutral, bajista] }
+        score: { type: number, minimum: -1, maximum: 1 }
+        components:
+          type: array
+          items: { $ref: "#/components/schemas/ConfluenceComponent" }
+        degraded: { type: boolean }
+        missing:
+          type: array
+          items: { type: string }
+        inputs_used:
+          type: array
+          items: { type: string }
+        algorithm_version: { type: string }
+        computed_at: { type: string, format: date-time }
+        source_input_hash: { type: string }
+        bars_used: { type: integer }
+    HealthReport:
+      type: object
+      required: [status, indicators, timestamp]
+      properties:
+        # FIC: T110 / FR-020 — metadata: Record<string,unknown> queda DEPRECADO.
+        # FIC: La fuente de verdad pasa a ser ConfluenceSignalRow.observacion (SignalObservation tipada).
+        status: { type: string, enum: [up, degraded, down] }
+        metadata:
+          type: object
+          deprecated: true
+          description: "DEPRECADO (FR-020). Usar ConfluenceSignalRow.observacion (SignalObservation tipada)."
+        ohlc_source:
+          type: string
+          enum: [ok, degraded]
+          deprecated: true
+          description: "DEPRECADO Phase 6 (T136-T138). Usar dependencies[name=ohlc_source].status."
+        dependencies:
+          type: array
+          description: "Phase 6 (T136-T138). 3 dependencias en paralelo (ohlc_source, anthropic_llm, supabase)."
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              status: { type: string, enum: [up, degraded, down] }
+              latency_ms: { type: number }
+              detail: { type: string }
+        indicators:
+          type: object
+          properties:
+            rsi: { type: string, enum: [ok, degraded] }
+            macd: { type: string, enum: [ok, degraded] }
+            ema: { type: string, enum: [ok, degraded] }
+            adx: { type: string, enum: [ok, degraded] }
+            bollinger: { type: string, enum: [ok, degraded] }
+        timestamp: { type: string, format: date-time }
+    Error:
+      type: object
+      required: [error_code, message]
+      properties:
+        error_code: { type: string }
+        message: { type: string }
+        hint: { type: string }
+  responses:
+    Error:
+      description: Error estructurado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
