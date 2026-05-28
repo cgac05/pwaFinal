@@ -95,22 +95,23 @@ export const SuperChart: React.FC<SuperChartProps> = ({
 
       candleSeriesRef.current = candleSeries;
 
-      // FIC: Handle window resize (EN)
-      // FIC: Manejar redimensionamiento de ventana (ES)
-      const handleResize = () => {
-        if (containerRef.current && chartRef.current) {
-          chartRef.current.applyOptions({
-            width: containerRef.current.clientWidth,
-            height: Math.max(containerRef.current.clientHeight, 340),
-          });
-          chartRef.current.timeScale().fitContent();
+      // FIC: ResizeObserver detects container size changes from CSS transitions (panel open/close) and window resize.
+      // FIC: ResizeObserver detecta cambios de tamaño por transiciones CSS (abrir/cerrar paneles) y resize de ventana.
+      const resizeObserver = new ResizeObserver((entries) => {
+        if (!chartRef.current) return;
+        for (const entry of entries) {
+          const { width } = entry.contentRect;
+          if (width > 0) {
+            chartRef.current.applyOptions({ width });
+            chartRef.current.timeScale().fitContent();
+          }
         }
-      };
+      });
 
-      window.addEventListener("resize", handleResize);
+      resizeObserver.observe(containerRef.current);
 
       return () => {
-        window.removeEventListener("resize", handleResize);
+        resizeObserver.disconnect();
         if (chartRef.current) {
           chartRef.current.remove();
           chartRef.current = null;

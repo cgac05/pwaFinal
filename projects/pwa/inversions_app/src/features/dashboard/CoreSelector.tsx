@@ -1,6 +1,7 @@
-import React from "react";
+// FIC: Core selector — Revolut chip toggle style with accent active state and CSS vars.
+// FIC: Selector de cores — estilo toggle chip Revolut con estado activo acento y CSS vars.
 
-export interface CoreDefinition {
+interface CoreDefinition {
   id: string;
   label: string;
   description: string;
@@ -11,6 +12,8 @@ interface CoreSelectorProps {
   cores: CoreDefinition[];
   onToggle: (coreId: string) => void;
 }
+
+export type { CoreDefinition };
 
 /**
  * FIC: Selector for active analytical cores in dashboard confluence.
@@ -23,48 +26,53 @@ export function CoreSelector({ cores, onToggle }: CoreSelectorProps) {
   return (
     <section className="card">
       <h2 style={{ marginBottom: "0.75rem" }}>Cores analíticos</h2>
-      <div style={{ display: "grid", gap: "0.5rem", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
+      <div style={{ display: "grid", gap: "var(--space-sm)", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
         {cores.map((core) => (
-          <label
+          <button
             key={core.id}
+            onClick={() => onToggle(core.id)}
+            aria-pressed={core.enabled}
             style={{
               display: "block",
-              background: core.enabled ? "rgba(56, 139, 253, 0.08)" : "var(--color-surface-raised)",
+              width: "100%",
+              textAlign: "left",
+              background: core.enabled ? "var(--color-accent-subtle)" : "var(--color-surface-raised)",
               border: `1px solid ${core.enabled ? "var(--color-accent)" : "var(--color-border)"}`,
-              borderRadius: "var(--radius-sm)",
+              borderRadius: "var(--radius-md)",
               padding: "0.65rem 0.75rem",
               cursor: "pointer",
-              transition: "background 0.15s, border-color 0.15s"
+              transition: "background var(--duration-fast) var(--easing-standard), border-color var(--duration-fast) var(--easing-standard)"
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <input
-                type="checkbox"
-                checked={core.enabled}
-                onChange={() => onToggle(core.id)}
-                style={{ width: 14, height: 14, accentColor: "var(--color-accent)", cursor: "pointer" }}
-              />
-              <strong style={{ color: core.enabled ? "var(--color-text)" : "var(--color-text-muted)", fontSize: "0.875rem" }}>
+              <strong style={{
+                color: core.enabled ? "var(--color-text)" : "var(--color-text-muted)",
+                fontSize: "var(--font-size-sm)",
+                fontWeight: "var(--font-weight-emphasis)"
+              }}>
                 {core.label}
               </strong>
-              {/* FIC: Phase 5 T101 — toggle SI/NO explicito por PDF v1, reemplaza el flag "enabled" implicito. */}
+              {/* FIC: SI/NO explicit toggle badge — required by constitution §10 (PDF v1). */}
+              {/* FIC: Badge de toggle explícito SI/NO — requerido por constitución §10 (PDF v1). */}
               <span
                 aria-label={`${core.label} ${core.enabled ? "SI" : "NO"}`}
                 style={{
                   marginLeft: "auto",
-                  background: core.enabled ? "var(--color-buy, #2ec27e)" : "var(--color-text-muted)",
+                  background: core.enabled ? "var(--color-buy)" : "var(--color-text-muted)",
                   color: "#000",
-                  fontWeight: 700,
-                  fontSize: "0.65rem",
+                  fontWeight: "var(--font-weight-bold)",
+                  fontSize: "var(--font-size-xs)",
                   padding: "0.1rem 0.4rem",
-                  borderRadius: 3
+                  borderRadius: "var(--radius-xs)"
                 }}
               >
                 {core.enabled ? "SI" : "NO"}
               </span>
             </div>
-            <p style={{ marginTop: "0.3rem", fontSize: "0.75rem", paddingLeft: "1.4rem" }}>{core.description}</p>
-          </label>
+            <p style={{ marginTop: "0.3rem", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+              {core.description}
+            </p>
+          </button>
         ))}
       </div>
     </section>

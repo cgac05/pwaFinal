@@ -40,8 +40,8 @@ describe("dashboard components", () => {
       />
     );
 
-    const checkbox = screen.getByRole("checkbox", { name: /Technical/i });
-    fireEvent.click(checkbox);
+    const btn = screen.getByRole("button", { name: /Technical/i });
+    fireEvent.click(btn);
     expect(onToggle).toHaveBeenCalledWith("tech");
   });
 
@@ -101,7 +101,6 @@ describe("dashboard components", () => {
     });
 
     expect(screen.getByText(/Dashboard de Confluencia/i)).toBeTruthy();
-    expect(screen.getByPlaceholderText(/AAPL/i)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Actualizar/i })).toBeTruthy();
+    expect(screen.getByText(/Cores analíticos/i)).toBeTruthy();
   });
 });

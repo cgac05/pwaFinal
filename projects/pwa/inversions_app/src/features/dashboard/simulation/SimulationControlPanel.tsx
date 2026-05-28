@@ -1,4 +1,5 @@
-// FIC: Phase 5 T098 — panel de simulacion del PDF v1 (rangos, estrategia, tolerancia, toggles SI/NO).
+// FIC: Simulation control panel — Revolut tokens applied, logic unchanged.
+// FIC: Panel de control de simulación — tokens Revolut aplicados, lógica sin cambios.
 
 import React, { useState } from "react";
 import {
@@ -74,28 +75,42 @@ export function SimulationControlPanel({ ticket, onResult }: Props) {
     }
   };
 
+  const fieldsetStyle: React.CSSProperties = {
+    border: "1px solid var(--color-border)",
+    borderRadius: "var(--radius-sm)",
+    padding: "var(--space-sm) var(--space-md)"
+  };
+
+  const legendStyle: React.CSSProperties = {
+    fontSize: "var(--font-size-xs)",
+    color: "var(--color-text-muted)",
+    textTransform: "uppercase",
+    fontWeight: "var(--font-weight-emphasis)",
+    letterSpacing: "0.06em"
+  };
+
   return (
-    <section className="card" style={{ display: "grid", gap: "0.75rem" }}>
+    <section className="card" style={{ display: "grid", gap: "var(--space-md)" }}>
       <h2 style={{ margin: 0 }}>Panel de Control · Simulacion</h2>
 
-      <div style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
-        <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
-          <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Rango Historico</span>
+      <div style={{ display: "grid", gap: "var(--space-sm)", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "var(--font-size-xs)" }}>
+          <span style={{ color: "var(--color-text-muted)", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase" }}>Rango Historico</span>
           <select value={preset} onChange={(e) => setPreset(e.target.value as Preset)}>
             {PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
-          <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Estrategia Desde</span>
+        <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "var(--font-size-xs)" }}>
+          <span style={{ color: "var(--color-text-muted)", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase" }}>Estrategia Desde</span>
           <input type="date" value={estrategiaFrom} onChange={(e) => setEstrategiaFrom(e.target.value)} />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
-          <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Estrategia Hasta</span>
+        <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "var(--font-size-xs)" }}>
+          <span style={{ color: "var(--color-text-muted)", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase" }}>Estrategia Hasta</span>
           <input type="date" value={estrategiaTo} onChange={(e) => setEstrategiaTo(e.target.value)} />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
-          <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Temporalidad</span>
-          <select value={temporalidad} onChange={(e) => setTemporalidad(e.target.value as any)}>
+        <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "var(--font-size-xs)" }}>
+          <span style={{ color: "var(--color-text-muted)", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase" }}>Temporalidad</span>
+          <select value={temporalidad} onChange={(e) => setTemporalidad(e.target.value as typeof temporalidad)}>
             {TIMEFRAMES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </label>
@@ -103,31 +118,37 @@ export function SimulationControlPanel({ ticket, onResult }: Props) {
         <RiskToleranceToggle value={tolerancia} onChange={setTolerancia} />
       </div>
 
-      <fieldset style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.5rem 0.75rem" }}>
-        <legend style={{ fontSize: "0.7rem", color: "var(--color-text-muted)", textTransform: "uppercase" }}>Cores (SI/NO)</legend>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+      <fieldset style={fieldsetStyle}>
+        <legend style={legendStyle}>Cores (SI/NO)</legend>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-sm)", marginTop: "var(--space-xs)" }}>
           {ALL_CORES.map((c) => (
-            <label key={c} style={{ display: "flex", gap: "0.3rem", alignItems: "center", fontSize: "0.8rem" }}>
-              <input type="checkbox" checked={coresOn[c]} onChange={() => toggleCore(c)} />
-              {c}: <strong>{coresOn[c] ? "SI" : "NO"}</strong>
+            <label key={c} style={{ display: "flex", gap: "0.3rem", alignItems: "center", fontSize: "var(--font-size-sm)", cursor: "pointer" }}>
+              <input type="checkbox" checked={coresOn[c]} onChange={() => toggleCore(c)} style={{ accentColor: "var(--color-accent)" }} />
+              <span style={{ color: coresOn[c] ? "var(--color-text)" : "var(--color-text-muted)" }}>{c}:</span>
+              <strong style={{ color: coresOn[c] ? "var(--color-buy)" : "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>
+                {coresOn[c] ? "SI" : "NO"}
+              </strong>
             </label>
           ))}
         </div>
       </fieldset>
 
-      <fieldset style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.5rem 0.75rem" }}>
-        <legend style={{ fontSize: "0.7rem", color: "var(--color-text-muted)", textTransform: "uppercase" }}>Indicadores (SI/NO)</legend>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+      <fieldset style={fieldsetStyle}>
+        <legend style={legendStyle}>Indicadores (SI/NO)</legend>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-sm)", marginTop: "var(--space-xs)" }}>
           {ALL_SUBCORES.map((s) => (
-            <label key={s} style={{ display: "flex", gap: "0.3rem", alignItems: "center", fontSize: "0.8rem" }}>
-              <input type="checkbox" checked={indicadoresOn[s]} onChange={() => toggleSub(s)} />
-              {s}: <strong>{indicadoresOn[s] ? "SI" : "NO"}</strong>
+            <label key={s} style={{ display: "flex", gap: "0.3rem", alignItems: "center", fontSize: "var(--font-size-sm)", cursor: "pointer" }}>
+              <input type="checkbox" checked={indicadoresOn[s]} onChange={() => toggleSub(s)} style={{ accentColor: "var(--color-accent)" }} />
+              <span style={{ color: indicadoresOn[s] ? "var(--color-text)" : "var(--color-text-muted)" }}>{s}:</span>
+              <strong style={{ color: indicadoresOn[s] ? "var(--color-buy)" : "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>
+                {indicadoresOn[s] ? "SI" : "NO"}
+              </strong>
             </label>
           ))}
         </div>
       </fieldset>
 
-      {error && <div style={{ color: "var(--color-sell, #f85149)", fontSize: "0.8rem" }}>Error: {error}</div>}
+      {error && <div style={{ color: "var(--color-sell)", fontSize: "var(--font-size-sm)" }}>Error: {error}</div>}
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <ExecuteSimulationButton loading={loading} onClick={run} />

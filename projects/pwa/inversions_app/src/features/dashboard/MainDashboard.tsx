@@ -1,4 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+// FIC: Main operational dashboard — AppShell 4-zone layout with ActivityBar, LeftPanel, and ChatPanel.
+// FIC: Dashboard operativo principal — layout AppShell de 4 zonas con ActivityBar, LeftPanel y ChatPanel.
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getDashboardOrchestrator,
   type DashboardOrchestratorResponse,
@@ -8,15 +11,22 @@ import { CoreSelector, type CoreDefinition } from "./CoreSelector";
 import { SignalOverlay } from "./SignalOverlay";
 import { ExplainabilityTable } from "./ExplainabilityTable";
 import { SignalEvidencePanel } from "../signals/SignalEvidencePanel";
-import { WatchlistTree } from "./WatchlistTree";
 import { SuperChart } from "./SuperChart";
 import { TimeControls } from "./TimeControls";
 import { IndicatorsMenu } from "./IndicatorsMenu";
 import { RuntimeModeSwitches } from "./RuntimeModeSwitches";
 import { ConfluenceSignalsTable } from "./ConfluenceSignalsTable";
 import { SimulationControlPanel } from "./simulation/SimulationControlPanel";
+import { AppShell } from "../../layouts/AppShell";
+import { ActivityBar } from "../../components/ui/ActivityBar";
+import { LeftPanel } from "../sidebar/LeftPanel";
+import { ChatPanel } from "../chat/ChatPanel";
+import { Badge } from "../../components/ui/Badge";
+import { SkeletonCard } from "../../components/ui/SkeletonCard";
+import { Drawer } from "../../components/ui/Drawer";
 import type { ConfluenceSignalRow, SimulationResponse } from "../../services/signals/confluenceTableApi";
 import { useSignalStore } from "../../store/signals";
+import { useAppShellStore } from "../../store/appShell";
 
 const initialCores: CoreDefinition[] = [
   { id: "technical", label: "Technical", description: "Momentum y estructura", enabled: true },
@@ -26,13 +36,6 @@ const initialCores: CoreDefinition[] = [
   { id: "ai", label: "AI", description: "Confirmación IA", enabled: true }
 ];
 
-/**
- * FIC: Main operational dashboard with instrument/timeframe filters and confluence views.
- * Integrates orchestrator API payload with overlays, explainability and evidence panel.
- *
- * FIC: Dashboard operativo principal con filtros de instrumento/timeframe y vistas de confluencia.
- * Integra payload de API orquestador con overlays, explicabilidad y panel de evidencia.
- */
 export function MainDashboard() {
   const isTestEnv = import.meta.env.MODE === "test";
   const [timeframe, setTimeframe] = useState("1d");
@@ -46,7 +49,19 @@ export function MainDashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [simulationRows, setSimulationRows] = useState<ConfluenceSignalRow[] | undefined>(undefined);
   const [simulationVerdict, setSimulationVerdict] = useState<any | null>(null);
-  const { selectedInstrument, selectedSignal: storeSelectedRow, setDashboardSnapshot } = useSignalStore();
+  const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
+  const [evidenceSignal, setEvidenceSignal] = useState<DashboardSignalCard | null>(null);
+  const { selectedInstrument, selectedSignal: storeSelectedRow, runtimeMode, operationalMode, setDashboardSnapshot } = useSignalStore();
+  const { analysisCategory } = useAppShellStore();
+
+  // FIC: Map analysis category chips to visible dashboard sections.
+  // FIC: Mapeo de chips de categoría de análisis a secciones visibles del dashboard.
+  const showTechnical = ["technical", "ai"].includes(analysisCategory);
+  const showOptions = ["options", "technical"].includes(analysisCategory);
+  const showAI = ["ai", "technical"].includes(analysisCategory);
+  const showInstitutional = analysisCategory === "institutional";
+  const showFundamental = analysisCategory === "fundamental";
+  const showNews = analysisCategory === "news";
 
   const handleSimulationResult = useCallback((result: SimulationResponse) => {
     setSimulationRows(result.table);
@@ -54,19 +69,13 @@ export function MainDashboard() {
   }, []);
 
   const selectedSymbol = selectedInstrument?.symbol ?? payload?.cards[0]?.instrument ?? "SPY";
-
   const activeCoreCount = useMemo(() => cores.filter((core) => core.enabled).length, [cores]);
 
   const refreshDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
-
     try {
-      const response = await getDashboardOrchestrator({
-        instruments: instrumentsInput,
-        timeframe
-      });
-
+      const response = await getDashboardOrchestrator({ instruments: instrumentsInput, timeframe });
       setPayload(response);
       setDashboardSnapshot(response);
       setSelectedSignal(response.cards[0] ?? null);
@@ -78,186 +87,171 @@ export function MainDashboard() {
     }
   }, [instrumentsInput, timeframe]);
 
-  // Auto-load on mount
   useEffect(() => {
     void refreshDashboard();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggleCore = (coreId: string) => {
     setCores((prev) => prev.map((core) => (core.id === coreId ? { ...core, enabled: !core.enabled } : core)));
   };
 
-  return (
-    <div style={{ minHeight: "100vh", background: "var(--color-bg)" }}>
-      {/* ── Top nav bar ─────────────────────────────────────── */}
-      <nav style={{
-        background: "var(--color-surface)",
-        borderBottom: "1px solid var(--color-border)",
-        padding: "0.75rem 1.5rem",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <span style={{
-            background: "var(--color-accent)",
-            color: "white",
-            borderRadius: "var(--radius-sm)",
-            padding: "0.2rem 0.6rem",
-            fontSize: "0.75rem",
-            fontWeight: 700,
-            letterSpacing: "0.05em"
-          }}>
-            FIC
-          </span>
-          <span style={{ fontWeight: 700, fontSize: "1rem" }}>Inversions</span>
-          <span style={{ color: "var(--color-text-muted)", fontSize: "0.85rem" }}>Dashboard de Confluencia</span>
-        </div>
-        {lastUpdated ? (
-          <span style={{ color: "var(--color-text-muted)", fontSize: "0.75rem" }}>
-            Actualizado: {lastUpdated.toLocaleTimeString()}
-          </span>
-        ) : null}
-      </nav>
+  // FIC: Badge color for runtime mode — cobalt for demo, warning for real, muted for offline.
+  // FIC: Color del badge según modo runtime — cobalt para demo, warning para real, apagado para offline.
+  const modeBadgeColor =
+    runtimeMode === "offline" ? "var(--color-text-muted)" :
+    operationalMode === "real" ? "var(--color-warning)" :
+    "var(--color-accent)";
 
-      <main style={{ maxWidth: 1280, margin: "0 auto", padding: "1.5rem" }}>
-        {/* ── Filter bar ──────────────────────────────────────── */}
-        <div className="card" style={{ marginBottom: "1.25rem" }}>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto auto auto",
-            gap: "0.75rem",
-            alignItems: "end"
-          }}>
-            <div>
-              <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-text-muted)", marginBottom: "0.35rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Instrumentos
-              </label>
-              <input
-                value={instrumentsInput}
-                onChange={(event) => setInstrumentsInput(event.target.value)}
-                placeholder="AAPL, MSFT, NVDA, SPY"
-                onKeyDown={(e) => { if (e.key === "Enter") void refreshDashboard(); }}
-              />
+  const modeBadgeLabel =
+    runtimeMode === "offline" ? "Offline" :
+    operationalMode === "real" ? "Real" :
+    "Demo";
+
+  // FIC: "En construcción" block shown for categories without dashboard sections yet.
+  // FIC: Bloque "En construcción" para categorías sin secciones del dashboard disponibles aún.
+  const ComingSoonBlock = ({ category }: { category: string }) => (
+    <div style={{ textAlign: "center", padding: "4rem 2rem", color: "var(--color-text-muted)" }}>
+      <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>🚧</div>
+      <p style={{ fontWeight: "var(--font-weight-emphasis)" }}>Esta sección estará disponible próximamente</p>
+      <p style={{ fontSize: "var(--font-size-sm)", marginTop: "0.5rem" }}>Categoría: {category}</p>
+    </div>
+  );
+
+  const mainContent = (
+    <div style={{ padding: "var(--space-lg)", display: "grid", gap: "var(--space-lg)" }}>
+      {/* ── Nav bar row */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+          <Badge label="FIC" color="var(--color-accent)" size="sm" />
+          <span style={{ fontWeight: "var(--font-weight-bold)", fontSize: "var(--font-size-base)" }}>Inversions</span>
+          <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>Dashboard de Confluencia</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-md)" }}>
+          <Badge
+            label={modeBadgeLabel}
+            color={modeBadgeColor}
+            pulse={operationalMode === "real" && runtimeMode !== "offline"}
+          />
+          {lastUpdated && (
+            <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>
+              Actualizado: {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ── Filter bar */}
+      <div className="card">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: "var(--space-sm)", alignItems: "end" }}>
+          <div>
+            <label style={{ display: "block", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "0.35rem", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Instrumentos
+            </label>
+            <input
+              value={instrumentsInput}
+              onChange={(e) => setInstrumentsInput(e.target.value)}
+              placeholder="AAPL, MSFT, NVDA, SPY"
+              onKeyDown={(e) => { if (e.key === "Enter") void refreshDashboard(); }}
+            />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "0.35rem", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Cores
+            </label>
+            <div style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.45rem 0.75rem", color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)", whiteSpace: "nowrap" }}>
+              {activeCoreCount} / {cores.length} activos
             </div>
-            <div>
-              <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-text-muted)", marginBottom: "0.35rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Timeframe
-              </label>
-              <select value={timeframe} onChange={(event) => setTimeframe(event.target.value)} style={{ width: "auto" }}>
-                <option value="15m">15 min</option>
-                <option value="1h">1 hora</option>
-                <option value="4h">4 horas</option>
-                <option value="1d">1 día</option>
-              </select>
-            </div>
-            <div style={{ paddingBottom: "0.05rem" }}>
-              <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-text-muted)", marginBottom: "0.35rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Cores
-              </label>
-              <div style={{
-                background: "var(--color-surface-raised)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "var(--radius-sm)",
-                padding: "0.45rem 0.75rem",
-                color: "var(--color-text-muted)",
-                fontSize: "0.875rem",
-                whiteSpace: "nowrap"
-              }}>
-                {activeCoreCount} / {cores.length} activos
+          </div>
+          <button className="btn-primary" onClick={() => void refreshDashboard()} disabled={loading} style={{ height: "34px" }}>
+            {loading ? "Cargando…" : "Actualizar"}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Core selector — always visible */}
+      <CoreSelector cores={cores} onToggle={toggleCore} />
+
+      {/* ── Runtime and chart controls — always visible */}
+      {!isTestEnv && (
+        <div style={{ display: "grid", gap: "var(--space-sm)" }}>
+          <RuntimeModeSwitches />
+          <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-sm)", flexWrap: "wrap" }}>
+            <IndicatorsMenu />
+            <TimeControls
+              symbol={selectedSymbol}
+              onTimeframeChange={(tf) => setTimeframe(tf)}
+              onPeriodChange={(_p, startDate, endDate) => setPeriodRange({ startDate, endDate })}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Error banner */}
+      {error && (
+        <div style={{ background: "rgba(226, 59, 74, 0.08)", border: "1px solid var(--color-sell)", borderRadius: "var(--radius-md)", padding: "0.75rem 1rem", color: "var(--color-sell)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ fontWeight: "var(--font-weight-bold)" }}>Error:</span> {error}
+        </div>
+      )}
+
+      {/* ── Loading skeleton */}
+      {loading && !payload && (
+        <div style={{ display: "grid", gap: "var(--space-sm)", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+          {[1, 2, 3, 4].map((n) => <SkeletonCard key={n} height={110} lines={3} />)}
+        </div>
+      )}
+
+      {/* ── Payload views */}
+      {payload && (
+        <div style={{ display: "grid", gap: "var(--space-lg)" }}>
+
+          {/* FIC: SuperChart + simulation — always visible regardless of analysisCategory. */}
+          {/* FIC: SuperChart + simulación — siempre visible independientemente de analysisCategory. */}
+          {!isTestEnv && (
+            <div style={{ display: "grid", gap: "var(--space-md)", gridTemplateColumns: "1fr" }}>
+              <div className="card" style={{ minHeight: 380 }}>
+                <SuperChart symbol={selectedSymbol} timeframe={timeframe} startDate={periodRange?.startDate} endDate={periodRange?.endDate} />
               </div>
-            </div>
-            <button
-              className="btn-primary"
-              onClick={() => void refreshDashboard()}
-              disabled={loading}
-              style={{ height: "34px" }}
-            >
-              {loading ? "Cargando…" : "Actualizar"}
-            </button>
-          </div>
-        </div>
-
-        {/* ── Core selector ───────────────────────────────────── */}
-        <div style={{ marginBottom: "1.25rem" }}>
-          <CoreSelector cores={cores} onToggle={toggleCore} />
-        </div>
-
-        {/* ── Runtime and chart controls ─────────────────────── */}
-        {!isTestEnv ? (
-          <div style={{ marginBottom: "1.25rem", display: "grid", gap: "0.75rem" }}>
-            <RuntimeModeSwitches />
-            <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-              <IndicatorsMenu />
-              <TimeControls
-                symbol={selectedSymbol}
-                onTimeframeChange={(nextTimeframe) => setTimeframe(nextTimeframe)}
-                onPeriodChange={(_period, startDate, endDate) => setPeriodRange({ startDate, endDate })}
-              />
-            </div>
-          </div>
-        ) : null}
-
-        {/* ── Error banner ────────────────────────────────────── */}
-        {error ? (
-          <div style={{
-            background: "rgba(248, 81, 73, 0.08)",
-            border: "1px solid var(--color-sell)",
-            borderRadius: "var(--radius-sm)",
-            padding: "0.75rem 1rem",
-            color: "var(--color-sell)",
-            marginBottom: "1rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem"
-          }}>
-            <span style={{ fontWeight: 700 }}>Error:</span> {error}
-          </div>
-        ) : null}
-
-        {/* ── Loading skeleton ─────────────────────────────────── */}
-        {loading && !payload ? (
-          <div style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", marginBottom: "1.25rem" }}>
-            {[1, 2, 3, 4].map((n) => (
-              <div key={n} className="card skeleton" style={{ height: 110 }} />
-            ))}
-          </div>
-        ) : null}
-
-        {/* ── Payload views ───────────────────────────────────── */}
-        {payload ? (
-          <div style={{ display: "grid", gap: "1.25rem" }}>
-            {!isTestEnv ? (
-              <div style={{ display: "grid", gap: "1rem", gridTemplateColumns: "280px 1fr" }}>
-                <WatchlistTree />
-                <div style={{ display: "grid", gap: "1rem" }}>
-                  <div className="card" style={{ minHeight: 380 }}>
-                    <SuperChart
-                      symbol={selectedSymbol}
-                      timeframe={timeframe}
-                      startDate={periodRange?.startDate}
-                      endDate={periodRange?.endDate}
-                    />
-                  </div>
-                  <SimulationControlPanel ticket={selectedSymbol} onResult={handleSimulationResult} />
-                  {simulationVerdict && (
-                    <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-                      <strong>Verdict derivado:</strong>
-                      <span>
-                        {String(simulationVerdict.verdict)} (score {Number(simulationVerdict.score ?? 0).toFixed(3)})
-                        {simulationVerdict.degraded ? <em style={{ color: "var(--color-text-muted)" }}> · degradado</em> : null}
-                      </span>
-                    </div>
-                  )}
-                  <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} />
+              <SimulationControlPanel ticket={selectedSymbol} onResult={handleSimulationResult} />
+              {simulationVerdict && (
+                <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <strong>Verdict derivado:</strong>
+                  <span>
+                    {String(simulationVerdict.verdict)} (score {Number(simulationVerdict.score ?? 0).toFixed(3)})
+                    {simulationVerdict.degraded && <em style={{ color: "var(--color-text-muted)" }}> · degradado</em>}
+                  </span>
                 </div>
-              </div>
-            ) : null}
+              )}
+            </div>
+          )}
 
-            <SignalOverlay cards={payload.cards} />
+          {/* FIC: Confluence table — visible for technical, options, institutional and AI. */}
+          {/* FIC: Tabla de confluencia — visible para técnico, opciones, institucional e IA. */}
+          <div style={{ display: (showTechnical || showOptions || showInstitutional || showAI) ? "" : "none" }}>
+            <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} />
+          </div>
+
+          {/* FIC: Signal overlay and explainability — technical and AI categories. */}
+          {/* FIC: Overlay de señales y explicabilidad — categorías técnico e IA. */}
+          <div style={{ display: (showTechnical || showAI) ? "" : "none" }}>
+            <SignalOverlay
+              cards={payload.cards}
+              onCardClick={(card) => {
+                setEvidenceSignal(card);
+                setEvidenceDrawerOpen(true);
+              }}
+            />
+          </div>
+
+          {/* FIC: AI explainability table — visible for technical and AI categories. */}
+          {/* FIC: Tabla de explicabilidad IA — visible para categorías técnico e IA. */}
+          <div style={{ display: showAI ? "" : "none" }}>
             <ExplainabilityTable cards={payload.cards} />
+          </div>
 
-            {/* ── Evidence detail ──────────────────────────────── */}
+          {/* FIC: Inline evidence — test env only; Drawer handles production evidence display. */}
+          {/* FIC: Evidencia inline — solo en test; el Drawer maneja la evidencia en producción. */}
+          {isTestEnv && (
             <div className="card">
               <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <h2>Detalle de evidencia</h2>
@@ -274,7 +268,6 @@ export function MainDashboard() {
                 </div>
               </div>
               <SignalEvidencePanel evidence={selectedSignal?.evidence ?? []} />
-              {/* FIC: Phase 5 T102 — click en fila de tabla canonica abre las evidencia_refs aqui. */}
               {storeSelectedRow && Array.isArray((storeSelectedRow.metadata as any)?.evidencia_refs) && (
                 <div style={{ marginTop: "0.75rem", padding: "0.5rem 0.75rem", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
                   <strong style={{ fontSize: "0.8rem" }}>Evidencia de la fila seleccionada</strong>
@@ -286,18 +279,42 @@ export function MainDashboard() {
                 </div>
               )}
             </div>
-          </div>
-        ) : !loading ? (
-          <div style={{
-            textAlign: "center",
-            padding: "4rem 2rem",
-            color: "var(--color-text-muted)"
-          }}>
-            <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>📊</div>
-            <p style={{ fontSize: "1rem" }}>Cargando datos de confluencia…</p>
-          </div>
-        ) : null}
-      </main>
+          )}
+
+          {/* ── Coming soon for Fundamental and News */}
+          {showFundamental && <ComingSoonBlock category="Fundamental" />}
+          {showNews && <ComingSoonBlock category="Noticias" />}
+        </div>
+      )}
+
+      {!payload && !loading && (
+        <div style={{ textAlign: "center", padding: "4rem 2rem", color: "var(--color-text-muted)" }}>
+          <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>📊</div>
+          <p>Cargando datos de confluencia…</p>
+        </div>
+      )}
     </div>
+  );
+
+  return (
+    <>
+      <AppShell
+        activityBar={<ActivityBar />}
+        leftPanel={<LeftPanel />}
+        main={mainContent}
+        chatPanel={<ChatPanel />}
+      />
+
+      {/* FIC: Evidence drawer — slide-in from right, opens on signal card click. */}
+      {/* FIC: Drawer de evidencia — desliza desde la derecha, se abre al clic en tarjeta de señal. */}
+      <Drawer
+        isOpen={evidenceDrawerOpen}
+        onClose={() => setEvidenceDrawerOpen(false)}
+        position="right"
+        title={evidenceSignal ? `Evidencia — ${evidenceSignal.instrument}` : "Evidencia"}
+      >
+        <SignalEvidencePanel evidence={evidenceSignal?.evidence ?? []} />
+      </Drawer>
+    </>
   );
 }

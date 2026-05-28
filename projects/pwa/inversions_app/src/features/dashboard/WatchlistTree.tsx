@@ -1,10 +1,12 @@
-// FIC: Watchlist tree component with dynamic instrument categories
-// FIC: Componente árbol de watchlist con categorías dinámicas de instrumentos
+// FIC: Watchlist tree component — Tailwind replaced with CSS vars, price/% change via useWatchlistPrices.
+// FIC: Componente árbol de watchlist — Tailwind reemplazado con CSS vars, precio/% cambio via useWatchlistPrices.
 
 import React, { useState, useEffect } from "react";
 import { ChevronRight, Star, Plus, X } from "lucide-react";
 import { useSignalStore } from "../../store/signals";
 import { getAuthHeaders } from "../../services/signals/signalApi";
+import { useWatchlistPrices } from "../../services/signals/marketApi";
+import { useAnimatedValue } from "../../hooks/useAnimatedValue";
 
 interface WatchlistCategory {
   id: string;
@@ -20,6 +22,33 @@ interface WatchlistItem {
   isFavorite: boolean;
 }
 
+interface PriceDisplayProps {
+  price: number | undefined;
+  changePercent: number | undefined;
+}
+
+function PriceDisplay({ price, changePercent }: PriceDisplayProps) {
+  const animatedPrice = useAnimatedValue(price ?? 0, { decimals: 2 });
+  const animatedChange = useAnimatedValue(changePercent ?? 0, { decimals: 2 });
+
+  if (price === undefined) {
+    return <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>—</span>;
+  }
+
+  const changeColor = (changePercent ?? 0) >= 0 ? "var(--color-buy)" : "var(--color-sell)";
+
+  return (
+    <div style={{ textAlign: "right", lineHeight: 1.3 }}>
+      <div style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-emphasis)", color: "var(--color-text)" }}>
+        {animatedPrice.toFixed(2)}
+      </div>
+      <div style={{ fontSize: "var(--font-size-xs)", color: changeColor }}>
+        {(animatedChange >= 0 ? "+" : "")}{animatedChange.toFixed(2)}%
+      </div>
+    </div>
+  );
+}
+
 interface TreeNodeProps {
   category: WatchlistCategory;
   items: WatchlistItem[];
@@ -29,141 +58,127 @@ interface TreeNodeProps {
   onAddItem: (categoryId: string) => void;
   onRemoveItem: (itemId: string) => void;
   selectedSymbol?: string;
+  prices: Record<string, { price: number; changePercent: number }>;
 }
 
-// FIC: Tree node component for each category (EN)
-// FIC: Componente nodo de árbol para cada categoría (ES)
-const TreeNode: React.FC<TreeNodeProps> = ({
-  category,
-  items,
-  isExpanded,
-  onToggle,
-  onSelectItem,
-  onAddItem,
-  onRemoveItem,
-  selectedSymbol,
-}) => {
+function TreeNode({ category, items, isExpanded, onToggle, onSelectItem, onAddItem, onRemoveItem, selectedSymbol, prices }: TreeNodeProps) {
   return (
-    <div className="mb-2">
-      {/* Category header */}
+    <div style={{ marginBottom: "var(--space-xs)" }}>
+      {/* FIC: Category header row with chevron toggle. */}
+      {/* FIC: Fila de encabezado de categoría con toggle de chevron. */}
       <div
-        className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-100 rounded"
         onClick={() => onToggle(category.id)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-xs)",
+          padding: "0.4rem var(--space-sm)",
+          cursor: "pointer",
+          borderRadius: "var(--radius-sm)",
+          color: "var(--color-text-muted)",
+          transition: "background var(--duration-fast) var(--easing-standard)"
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-surface-raised)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
       >
         <ChevronRight
-          size={16}
-          className={`transition-transform ${isExpanded ? "rotate-90" : ""}`}
+          size={14}
+          style={{ transform: isExpanded ? "rotate(90deg)" : "none", transition: "transform var(--duration-fast) var(--easing-standard)", flexShrink: 0 }}
         />
-        <span className="font-semibold text-sm">{category.name}</span>
-        <span className="text-xs text-gray-500 ml-auto">({items.length})</span>
+        <span style={{ fontWeight: "var(--font-weight-emphasis)", fontSize: "var(--font-size-sm)", flex: 1 }}>{category.name}</span>
+        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>({items.length})</span>
         <button
-          className="p-1 hover:bg-blue-100 rounded"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAddItem(category.id);
-          }}
+          style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", padding: "2px", borderRadius: "var(--radius-xs)" }}
+          onClick={(e) => { e.stopPropagation(); onAddItem(category.id); }}
         >
-          <Plus size={14} />
+          <Plus size={12} />
         </button>
       </div>
 
-      {/* FIC: Collapsed items list (EN) */}
-      {/* FIC: Lista de items colapsada (ES) */}
       {isExpanded && (
-        <div className="ml-4 border-l border-gray-200">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className={`group flex items-center gap-2 px-3 py-2 cursor-pointer rounded text-sm transition-colors ${
-                selectedSymbol === item.symbol
-                  ? "bg-blue-50 text-blue-900 font-semibold"
-                  : "hover:bg-gray-50 text-gray-700"
-              }`}
-              onClick={() => onSelectItem(item)}
-            >
-              {/* FIC: Favorite star toggle (EN) */}
-              {/* FIC: Botón de estrella favorita (ES) */}
-              <button
-                className="p-0 hover:text-yellow-500"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // TODO: Toggle favorite
+        <div style={{ borderLeft: "1px solid var(--color-border-subtle)", marginLeft: "var(--space-md)" }}>
+          {items.map((item) => {
+            const isSelected = selectedSymbol === item.symbol;
+            const quote = prices[item.symbol];
+            return (
+              <div
+                key={item.id}
+                onClick={() => onSelectItem(item)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--space-xs)",
+                  padding: "0.4rem var(--space-sm)",
+                  cursor: "pointer",
+                  borderRadius: "var(--radius-sm)",
+                  background: isSelected ? "var(--color-accent-subtle)" : "transparent",
+                  color: isSelected ? "var(--color-text)" : "var(--color-text-muted)",
+                  fontSize: "var(--font-size-sm)"
                 }}
+                onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--color-surface-raised)"; }}
+                onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
               >
-                <Star
-                  size={14}
-                  fill={item.isFavorite ? "currentColor" : "none"}
-                  className={item.isFavorite ? "text-yellow-500" : ""}
-                />
-              </button>
-
-              {/* Symbol and name */}
-              <span className="flex-1 font-mono">{item.symbol}</span>
-              <span className="text-xs text-gray-500 truncate">{item.name}</span>
-
-              {/* FIC: Remove button (EN) */}
-              {/* FIC: Botón de eliminar (ES) */}
-              <button
-                className="p-0 hover:text-red-500 opacity-0 group-hover:opacity-100"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemoveItem(item.id);
-                }}
-              >
-                <X size={14} />
-              </button>
-            </div>
-          ))}
+                <button
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: item.isFavorite ? "#f5a623" : "var(--color-text-muted)", flexShrink: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Star size={12} fill={item.isFavorite ? "currentColor" : "none"} />
+                </button>
+                <span style={{ flex: 1, fontFamily: "monospace", fontWeight: isSelected ? "var(--font-weight-bold)" : "var(--font-weight-body)", color: isSelected ? "var(--color-accent)" : "var(--color-text)" }}>
+                  {item.symbol}
+                </span>
+                <PriceDisplay price={quote?.price} changePercent={quote?.changePercent} />
+                <button
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--color-text-muted)", opacity: 0, flexShrink: 0 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = "0")}
+                  onClick={(e) => { e.stopPropagation(); onRemoveItem(item.id); }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
-};
+}
 
-// FIC: Main WatchlistTree component (EN)
-// FIC: Componente principal WatchlistTree (ES)
 export const WatchlistTree: React.FC = () => {
   const [categories, setCategories] = useState<WatchlistCategory[]>([]);
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set()
-  );
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [selectedSymbol, setSelectedSymbol] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const { setSelectedInstrument } = useSignalStore();
+  const symbols = watchlistItems.map((item) => item.symbol);
+  const quotesMap = useWatchlistPrices(symbols);
 
-  // FIC: Load categories and watchlist from API (EN)
-  // FIC: Cargar categorías y watchlist desde API (ES)
+  // FIC: Adapt MarketQuote to price/changePercent shape for TreeNode.
+  // FIC: Adaptar MarketQuote a shape precio/changePercent para TreeNode.
+  const prices: Record<string, { price: number; changePercent: number }> = {};
+  for (const [sym, q] of Object.entries(quotesMap)) {
+    prices[sym] = { price: q.price, changePercent: q.changePercent };
+  }
+
   useEffect(() => {
     const loadWatchlist = async () => {
       try {
         setLoading(true);
         setError(null);
+        const catRes = await fetch("/api/catalogs/instruments", { headers: getAuthHeaders() });
+        if (!catRes.ok) throw new Error("Failed to load instrument categories");
+        const catData = await catRes.json();
 
-        // FIC: Fetch catalog categories (EN)
-        // FIC: Obtener categorías del catálogo (ES)
-        const categoriesResponse = await fetch("/api/catalogs/instruments", {
-          headers: getAuthHeaders(),
-        });
-        if (!categoriesResponse.ok) {
-          throw new Error("Failed to load instrument categories");
-        }
-        const categoriesData = await categoriesResponse.json();
+        const wlRes = await fetch("/api/watchlist", { headers: getAuthHeaders() });
+        if (!wlRes.ok) throw new Error("Failed to load watchlist");
+        const wlData = await wlRes.json();
 
-        // FIC: Fetch user watchlist items (EN)
-        // FIC: Obtener items de watchlist del usuario (ES)
-        const watchlistResponse = await fetch("/api/watchlist", {
-          headers: getAuthHeaders(),
-        });
-        if (!watchlistResponse.ok) {
-          throw new Error("Failed to load watchlist");
-        }
-        const watchlistData = await watchlistResponse.json();
-
-        setCategories(categoriesData.categories || []);
-        setWatchlistItems(watchlistData.items || []);
+        setCategories(catData.categories || []);
+        setWatchlistItems(wlData.items || []);
       } catch (err) {
         setError((err as Error).message);
         console.error("Watchlist load error:", err);
@@ -171,76 +186,42 @@ export const WatchlistTree: React.FC = () => {
         setLoading(false);
       }
     };
-
     loadWatchlist();
   }, []);
 
-  // FIC: Toggle category expansion (EN)
-  // FIC: Alternar expansión de categoría (ES)
   const handleToggleCategory = (categoryId: string) => {
     const newExpanded = new Set(expandedCategories);
-    if (newExpanded.has(categoryId)) {
-      newExpanded.delete(categoryId);
-    } else {
-      newExpanded.add(categoryId);
-    }
+    if (newExpanded.has(categoryId)) newExpanded.delete(categoryId);
+    else newExpanded.add(categoryId);
     setExpandedCategories(newExpanded);
   };
 
-  // FIC: Handle item selection (EN)
-  // FIC: Manejar selección de item (ES)
   const handleSelectItem = (item: WatchlistItem) => {
     setSelectedSymbol(item.symbol);
-    setSelectedInstrument({
-      symbol: item.symbol,
-      name: item.name,
-      category: item.category,
-    });
+    setSelectedInstrument({ symbol: item.symbol, name: item.name, category: item.category });
   };
 
-  // FIC: Handle adding new item to watchlist (EN)
-  // FIC: Manejar agregar nuevo item a watchlist (ES)
   const handleAddItem = async (categoryId: string) => {
     const symbol = prompt("Enter symbol (e.g., AAPL, GC=F):");
     if (!symbol) return;
-
     try {
-      const response = await fetch("/api/watchlist", {
+      const res = await fetch("/api/watchlist", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
-        body: JSON.stringify({
-          symbol,
-          category: categoryId,
-        }),
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ symbol, category: categoryId })
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to add item");
-      }
-
-      const newItem = await response.json();
+      if (!res.ok) throw new Error("Failed to add item");
+      const newItem = await res.json();
       setWatchlistItems([...watchlistItems, newItem]);
     } catch (err) {
       alert(`Error adding item: ${(err as Error).message}`);
     }
   };
 
-  // FIC: Handle removing item from watchlist (EN)
-  // FIC: Manejar eliminar item de watchlist (ES)
   const handleRemoveItem = async (itemId: string) => {
     try {
-      const response = await fetch(`/api/watchlist/${itemId}`, {
-        method: "DELETE",
-        headers: getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to remove item");
-      }
-
+      const res = await fetch(`/api/watchlist/${itemId}`, { method: "DELETE", headers: getAuthHeaders() });
+      if (!res.ok) throw new Error("Failed to remove item");
       setWatchlistItems(watchlistItems.filter((item) => item.id !== itemId));
     } catch (err) {
       alert(`Error removing item: ${(err as Error).message}`);
@@ -249,56 +230,51 @@ export const WatchlistTree: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="p-4 text-center text-gray-500">Loading watchlist...</div>
+      <div style={{ padding: "var(--space-lg)", color: "var(--color-text-muted)", textAlign: "center", fontSize: "var(--font-size-sm)" }}>
+        Cargando watchlist…
+      </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 text-center text-red-500">Error: {error}</div>
+      <div style={{ padding: "var(--space-lg)", color: "var(--color-sell)", textAlign: "center", fontSize: "var(--font-size-sm)" }}>
+        Error: {error}
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-white border-r border-gray-200">
-      {/* FIC: Header (EN) */}
-      {/* FIC: Encabezado (ES) */}
-      <div className="px-4 py-3 border-b border-gray-200">
-        <h2 className="font-bold text-lg">Watchlist</h2>
-        <p className="text-xs text-gray-500 mt-1">
-          {watchlistItems.length} instruments
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* FIC: Watchlist header with instrument count. */}
+      {/* FIC: Encabezado de watchlist con contador de instrumentos. */}
+      <div style={{ padding: "var(--space-md)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
+        <h2 style={{ fontWeight: "var(--font-weight-bold)", fontSize: "var(--font-size-base)", color: "var(--color-text)" }}>Watchlist</h2>
+        <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginTop: "2px" }}>
+          {watchlistItems.length} instrumentos
         </p>
       </div>
 
-      {/* FIC: Categories tree (EN) */}
-      {/* FIC: Árbol de categorías (ES) */}
-      <div className="flex-1 overflow-auto p-3">
+      <div style={{ flex: 1, overflow: "auto", padding: "var(--space-sm)" }}>
         {categories.length === 0 ? (
-          <div className="text-center text-gray-500 py-4">
-            No categories available
+          <div style={{ textAlign: "center", color: "var(--color-text-muted)", padding: "var(--space-lg)", fontSize: "var(--font-size-sm)" }}>
+            Sin categorías disponibles
           </div>
         ) : (
-          categories.map((category) => {
-            // FIC: Filter items for this category (EN)
-            // FIC: Filtrar items para esta categoría (ES)
-            const categoryItems = watchlistItems.filter(
-              (item) => item.category === category.id
-            );
-
-            return (
-              <TreeNode
-                key={category.id}
-                category={category}
-                items={categoryItems}
-                isExpanded={expandedCategories.has(category.id)}
-                onToggle={handleToggleCategory}
-                onSelectItem={handleSelectItem}
-                onAddItem={handleAddItem}
-                onRemoveItem={handleRemoveItem}
-                selectedSymbol={selectedSymbol}
-              />
-            );
-          })
+          categories.map((category) => (
+            <TreeNode
+              key={category.id}
+              category={category}
+              items={watchlistItems.filter((item) => item.category === category.id)}
+              isExpanded={expandedCategories.has(category.id)}
+              onToggle={handleToggleCategory}
+              onSelectItem={handleSelectItem}
+              onAddItem={handleAddItem}
+              onRemoveItem={handleRemoveItem}
+              selectedSymbol={selectedSymbol}
+              prices={prices}
+            />
+          ))
         )}
       </div>
     </div>

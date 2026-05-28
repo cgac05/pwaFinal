@@ -1,33 +1,48 @@
-import React from "react";
+// FIC: Signal overlay cards with Revolut design tokens — animated confluence score, verdict colors.
+// FIC: Tarjetas de overlay de señales con tokens Revolut — score de confluencia animado, colores de veredicto.
+
 import type { DashboardSignalCard } from "../../services/signals/signalApi";
+import { useAnimatedValue } from "../../hooks/useAnimatedValue";
 
 interface SignalOverlayProps {
   cards: DashboardSignalCard[];
+  onCardClick?: (card: DashboardSignalCard) => void;
 }
 
-function signalBadgeClass(signal: DashboardSignalCard["signal"]) {
-  if (signal === "BUY") return "badge badge-buy";
-  if (signal === "SELL") return "badge badge-sell";
-  return "badge badge-hold";
+function verdictColor(signal: DashboardSignalCard["signal"]): string {
+  if (signal === "BUY") return "var(--color-buy)";
+  if (signal === "SELL") return "var(--color-sell)";
+  return "var(--color-hold)";
 }
 
-function riskBadgeClass(risk: DashboardSignalCard["riskLevel"]) {
-  if (risk === "LOW") return "badge badge-low";
-  if (risk === "HIGH") return "badge badge-high";
-  return "badge badge-medium";
+function riskColor(risk: DashboardSignalCard["riskLevel"]): string {
+  if (risk === "LOW") return "var(--color-buy)";
+  if (risk === "HIGH") return "var(--color-sell)";
+  return "var(--color-hold)";
 }
 
-function confluenceBar(score: number) {
-  const pct = Math.min(100, Math.max(0, score));
-  const color = pct >= 70 ? "var(--color-buy)" : pct >= 45 ? "var(--color-hold)" : "var(--color-sell)";
+interface ScoreBarProps {
+  score: number;
+}
+
+function ScoreBar({ score }: ScoreBarProps) {
+  const animated = useAnimatedValue(score, { decimals: 0 });
+  const color = animated >= 70 ? "var(--color-buy)" : animated >= 45 ? "var(--color-hold)" : "var(--color-sell)";
+
   return (
     <div style={{ marginTop: "0.6rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.3rem" }}>
-        <span style={{ fontSize: "0.7rem", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Confluencia</span>
-        <span style={{ fontSize: "0.75rem", fontWeight: 700, color }}>{score}</span>
+        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Confluencia</span>
+        <span style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-bold)", color }}>{animated}</span>
       </div>
       <div style={{ height: 4, borderRadius: 2, background: "var(--color-border)" }}>
-        <div style={{ height: "100%", width: `${pct}%`, borderRadius: 2, background: color, transition: "width 0.4s" }} />
+        <div style={{
+          height: "100%",
+          width: `${Math.min(100, Math.max(0, score))}%`,
+          borderRadius: 2,
+          background: color,
+          transition: "width var(--duration-normal) var(--easing-standard)"
+        }} />
       </div>
     </div>
   );
@@ -40,52 +55,69 @@ function confluenceBar(score: number) {
  * FIC: Overlay visual de señales de confluencia por instrumento/confianza de core.
  * Provee escaneo operativo rápido de BUY/SELL/HOLD de un vistazo.
  */
-export function SignalOverlay({ cards }: SignalOverlayProps) {
+export function SignalOverlay({ cards, onCardClick }: SignalOverlayProps) {
   return (
     <section>
       <h2 style={{ marginBottom: "0.75rem" }}>Overlay de señales</h2>
-      <div style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+      <div style={{ display: "grid", gap: "var(--space-sm)", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
         {cards.map((card) => (
           <article
             key={card.signalId}
-            className="card"
+            onClick={() => onCardClick?.(card)}
+            style={{
+              background: "var(--color-surface-raised)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-lg)",
+              padding: "var(--space-md)",
+              cursor: onCardClick ? "pointer" : undefined,
+              boxShadow: "var(--shadow-card)"
+            }}
             title={`Timing D: ${card.metadata?.timing_d ?? "n/a"} | Timing H: ${card.metadata?.timing_h ?? "n/a"} | Stop: ${card.metadata?.stop ?? "n/a"} | Objetivo: ${card.metadata?.objetivo ?? "n/a"}`}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
-                <div style={{ fontWeight: 700, fontSize: "1.1rem", letterSpacing: "0.04em" }}>{card.instrument}</div>
-                <div style={{ marginTop: "0.25rem" }}>
-                  <span className={riskBadgeClass(card.riskLevel)} style={{ fontSize: "0.65rem" }}>
-                    Riesgo {card.riskLevel}
-                  </span>
+                <div style={{ fontWeight: "var(--font-weight-bold)", fontSize: "var(--font-size-lg)", letterSpacing: "0.04em" }}>{card.instrument}</div>
+                <div style={{ marginTop: "0.25rem", fontSize: "var(--font-size-xs)", color: riskColor(card.riskLevel) }}>
+                  Riesgo {card.riskLevel}
                 </div>
               </div>
-              <span className={signalBadgeClass(card.signal)}>{card.signal}</span>
+              <span style={{
+                background: `color-mix(in srgb, ${verdictColor(card.signal)} 15%, transparent)`,
+                color: verdictColor(card.signal),
+                border: `1px solid color-mix(in srgb, ${verdictColor(card.signal)} 40%, transparent)`,
+                borderRadius: "var(--radius-pill)",
+                fontSize: "var(--font-size-xs)",
+                fontWeight: "var(--font-weight-bold)",
+                padding: "0.2rem 0.6rem",
+                letterSpacing: "0.05em"
+              }}>
+                {card.signal}
+              </span>
             </div>
-            {confluenceBar(card.confluenceScore)}
+
+            <ScoreBar score={card.confluenceScore} />
+
             <div style={{ marginTop: "0.6rem", display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
+              <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
                 Confianza: <strong style={{ color: "var(--color-text)" }}>{Math.round(card.confidence * 100)}%</strong>
               </span>
-              <span style={{ fontSize: "0.7rem", color: "var(--color-text-muted)" }}>
+              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
                 {card.activeCores.length} cores
               </span>
             </div>
 
-            {/* FIC: Top indicator panel style summary (EN) */}
-            {/* FIC: Resumen tipo panel superior de indicadores (ES) */}
+            {/* FIC: Indicator summary badges using Revolut color tokens. */}
+            {/* FIC: Badges de resumen de indicadores usando tokens de color Revolut. */}
             <div style={{ marginTop: "0.6rem", display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-              <span className="badge badge-low">Timing {card.metadata?.timing_d ?? "-"}</span>
-              <span className="badge badge-medium">Divergencia {card.metadata?.divergencia ?? "-"}</span>
-              <span className="badge badge-hold">Z {card.metadata?.z_extrema ?? "-"}</span>
-            </div>
-
-            {/* FIC: Bottom indicator panel style summary (EN) */}
-            {/* FIC: Resumen tipo panel inferior de indicadores (ES) */}
-            <div style={{ marginTop: "0.4rem", display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-              <span className="badge badge-buy">Bid {card.metadata?.bid ?? "-"}</span>
-              <span className="badge badge-sell">Ask {card.metadata?.ask ?? "-"}</span>
-              <span className="badge badge-medium">Riesgo {card.metadata?.riesgo ?? "-"}</span>
+              <span style={{ background: "var(--color-accent-subtle)", color: "var(--color-accent)", borderRadius: "var(--radius-xs)", padding: "0.1rem 0.4rem", fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-emphasis)" }}>
+                Timing {card.metadata?.timing_d ?? "-"}
+              </span>
+              <span style={{ background: "rgba(176, 144, 0, 0.12)", color: "var(--color-hold)", borderRadius: "var(--radius-xs)", padding: "0.1rem 0.4rem", fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-emphasis)" }}>
+                Div {card.metadata?.divergencia ?? "-"}
+              </span>
+              <span style={{ background: "rgba(255,255,255,0.06)", color: "var(--color-text-muted)", borderRadius: "var(--radius-xs)", padding: "0.1rem 0.4rem", fontSize: "var(--font-size-xs)" }}>
+                Z {card.metadata?.z_extrema ?? "-"}
+              </span>
             </div>
           </article>
         ))}

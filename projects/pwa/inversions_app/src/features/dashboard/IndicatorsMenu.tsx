@@ -1,8 +1,8 @@
-// FIC: Indicators menu and search modal component
-// FIC: Componente menú de indicadores y modal de búsqueda
+// FIC: Indicators menu — Tailwind removed, CSS vars applied. Logic and structure unchanged.
+// FIC: Menú de indicadores — Tailwind eliminado, CSS vars aplicados. Lógica y estructura sin cambios.
 
 import React, { useState, useEffect } from "react";
-import { Search, X, TrendingUp, Settings } from "lucide-react";
+import { Search, X, TrendingUp } from "lucide-react";
 
 interface Indicator {
   id: string;
@@ -17,11 +17,9 @@ interface IndicatorsMenuProps {
   maxVisibleQuick?: number;
 }
 
-// FIC: IndicatorsMenu component with 3-item quick access + overflow modal (EN)
-// FIC: Componente IndicatorsMenu con 3 accesos rápidos + modal de desbordamiento (ES)
 export const IndicatorsMenu: React.FC<IndicatorsMenuProps> = ({
   onIndicatorsSelected,
-  maxVisibleQuick = 3,
+  maxVisibleQuick = 3
 }) => {
   const [allIndicators, setAllIndicators] = useState<Indicator[]>([]);
   const [selectedIndicators, setSelectedIndicators] = useState<Indicator[]>([]);
@@ -29,17 +27,12 @@ export const IndicatorsMenu: React.FC<IndicatorsMenuProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // FIC: Load indicators from API or backend (EN)
-  // FIC: Cargar indicadores desde API o backend (ES)
   useEffect(() => {
     const loadIndicators = async () => {
       try {
         setLoading(true);
         const response = await fetch("/api/indicators/catalog");
-        if (!response.ok) {
-          throw new Error("Failed to load indicators");
-        }
-
+        if (!response.ok) throw new Error("Failed to load indicators");
         const data = await response.json();
         setAllIndicators(data.indicators || []);
       } catch (err) {
@@ -48,148 +41,158 @@ export const IndicatorsMenu: React.FC<IndicatorsMenuProps> = ({
         setLoading(false);
       }
     };
-
     loadIndicators();
   }, []);
 
-  // FIC: Filter indicators based on search (EN)
-  // FIC: Filtrar indicadores según búsqueda (ES)
   const filteredIndicators = allIndicators.filter(
     (ind) =>
       ind.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ind.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // FIC: Handle indicator selection (EN)
-  // FIC: Manejar selección de indicador (ES)
   const handleSelectIndicator = (indicator: Indicator) => {
     const isSelected = selectedIndicators.some((ind) => ind.id === indicator.id);
-
     const updated = isSelected
       ? selectedIndicators.filter((ind) => ind.id !== indicator.id)
       : [...selectedIndicators, indicator];
-
     setSelectedIndicators(updated);
-
-    if (onIndicatorsSelected) {
-      onIndicatorsSelected(updated);
-    }
+    onIndicatorsSelected?.(updated);
   };
 
-  // FIC: Quick access indicators (first N) (EN)
-  // FIC: Indicadores de acceso rápido (primeros N) (ES)
   const quickAccessIndicators = allIndicators.slice(0, maxVisibleQuick);
 
   return (
-    <div className="flex items-center gap-2">
-      {/* FIC: Quick access buttons (EN) */}
-      {/* FIC: Botones de acceso rápido (ES) */}
-      {quickAccessIndicators.map((ind) => (
-        <button
-          key={ind.id}
-          className={`px-3 py-2 text-xs font-medium rounded transition-colors flex items-center gap-2 ${
-            selectedIndicators.some((s) => s.id === ind.id)
-              ? "bg-blue-500 text-white"
-              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-          }`}
-          onClick={() => handleSelectIndicator(ind)}
-          title={ind.description}
-        >
-          <TrendingUp size={14} />
-          {ind.name}
-        </button>
-      ))}
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)" }}>
+      {/* FIC: Quick access buttons */}
+      {/* FIC: Botones de acceso rápido */}
+      {quickAccessIndicators.map((ind) => {
+        const isSelected = selectedIndicators.some((s) => s.id === ind.id);
+        return (
+          <button
+            key={ind.id}
+            title={ind.description}
+            onClick={() => handleSelectIndicator(ind)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-xs)",
+              background: isSelected ? "var(--color-accent-subtle)" : "var(--color-surface-raised)",
+              color: isSelected ? "var(--color-accent)" : "var(--color-text-muted)",
+              border: `1px solid ${isSelected ? "var(--color-accent)" : "var(--color-border)"}`,
+              borderRadius: "var(--radius-pill)",
+              padding: "0.3rem 0.75rem",
+              fontSize: "var(--font-size-xs)",
+              fontWeight: "var(--font-weight-emphasis)",
+              cursor: "pointer"
+            }}
+          >
+            <TrendingUp size={12} />
+            {ind.name}
+          </button>
+        );
+      })}
 
-      {/* FIC: Overflow menu button (EN) */}
-      {/* FIC: Botón menú de desbordamiento (ES) */}
       {allIndicators.length > maxVisibleQuick && (
         <button
-          className="px-3 py-2 text-xs font-medium bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
-          onClick={() => setShowModal(true)}
           title="More indicators"
+          onClick={() => setShowModal(true)}
+          style={{
+            background: "var(--color-surface-raised)",
+            color: "var(--color-text-muted)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-pill)",
+            padding: "0.3rem 0.75rem",
+            fontSize: "var(--font-size-xs)",
+            cursor: "pointer"
+          }}
         >
           ⋯
         </button>
       )}
 
-      {/* FIC: Search and selection modal (EN) */}
-      {/* FIC: Modal de búsqueda y selección (ES) */}
+      {/* FIC: Indicator search modal — CSS vars replace Tailwind. */}
+      {/* FIC: Modal de búsqueda de indicadores — CSS vars reemplazan Tailwind. */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-96 flex flex-col">
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.7)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: "var(--color-surface-raised)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-lg)",
+            maxWidth: 600,
+            width: "90%",
+            maxHeight: "80vh",
+            display: "flex",
+            flexDirection: "column"
+          }}>
             {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="font-bold text-lg">Technical Indicators</h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "var(--space-md) var(--space-lg)", borderBottom: "1px solid var(--color-border)" }}>
+              <h2 style={{ fontWeight: "var(--font-weight-bold)", fontSize: "var(--font-size-base)" }}>Technical Indicators</h2>
               <button
-                className="p-1 hover:bg-gray-100 rounded"
                 onClick={() => setShowModal(false)}
+                style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", fontSize: "1.25rem", padding: "var(--space-xs)" }}
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            {/* FIC: Search bar (EN) */}
-            {/* FIC: Barra de búsqueda (ES) */}
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="relative">
-                <Search
-                  className="absolute left-3 top-3 text-gray-400"
-                  size={18}
-                />
+            {/* Search */}
+            <div style={{ padding: "var(--space-md) var(--space-lg)", borderBottom: "1px solid var(--color-border)" }}>
+              <div style={{ position: "relative" }}>
+                <Search size={16} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--color-text-muted)" }} />
                 <input
                   type="text"
                   placeholder="Search indicators..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   autoFocus
+                  style={{ paddingLeft: "2.25rem" }}
                 />
               </div>
             </div>
 
-            {/* FIC: Indicators list (EN) */}
-            {/* FIC: Lista de indicadores (ES) */}
-            <div className="flex-1 overflow-auto px-6 py-4">
+            {/* List */}
+            <div style={{ flex: 1, overflow: "auto", padding: "var(--space-md) var(--space-lg)" }}>
               {loading ? (
-                <div className="text-center py-4 text-gray-500">
-                  Loading indicators...
+                <div style={{ textAlign: "center", color: "var(--color-text-muted)", padding: "var(--space-xl)", fontSize: "var(--font-size-sm)" }}>
+                  Cargando indicadores…
                 </div>
               ) : filteredIndicators.length === 0 ? (
-                <div className="text-center py-4 text-gray-500">
-                  No indicators found
+                <div style={{ textAlign: "center", color: "var(--color-text-muted)", padding: "var(--space-xl)", fontSize: "var(--font-size-sm)" }}>
+                  Sin indicadores encontrados
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-sm)" }}>
                   {filteredIndicators.map((ind) => {
-                    const isSelected = selectedIndicators.some(
-                      (s) => s.id === ind.id
-                    );
+                    const isSelected = selectedIndicators.some((s) => s.id === ind.id);
                     return (
                       <button
                         key={ind.id}
-                        className={`p-3 rounded border-2 transition-all text-left ${
-                          isSelected
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200 hover:border-gray-300"
-                        } ${!ind.available ? "opacity-50 cursor-not-allowed" : ""}`}
-                        onClick={() =>
-                          ind.available && handleSelectIndicator(ind)
-                        }
                         disabled={!ind.available}
+                        onClick={() => ind.available && handleSelectIndicator(ind)}
+                        style={{
+                          background: isSelected ? "var(--color-accent-subtle)" : "var(--color-surface)",
+                          border: `1px solid ${isSelected ? "var(--color-accent)" : "var(--color-border)"}`,
+                          borderRadius: "var(--radius-md)",
+                          padding: "var(--space-sm) var(--space-md)",
+                          textAlign: "left",
+                          cursor: ind.available ? "pointer" : "not-allowed",
+                          opacity: ind.available ? 1 : 0.5
+                        }}
                       >
-                        <div className="font-semibold text-sm">{ind.name}</div>
-                        <div className="text-xs text-gray-500">
-                          {ind.category}
+                        <div style={{ fontWeight: "var(--font-weight-emphasis)", fontSize: "var(--font-size-sm)", color: isSelected ? "var(--color-accent)" : "var(--color-text)" }}>
+                          {ind.name}
                         </div>
-                        {ind.description && (
-                          <div className="text-xs text-gray-600 mt-1">
-                            {ind.description}
-                          </div>
-                        )}
+                        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>{ind.category}</div>
                         {!ind.available && (
-                          <div className="text-xs text-red-500 mt-1">
-                            Unavailable in offline mode
-                          </div>
+                          <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-sell)", marginTop: "2px" }}>No disponible en modo offline</div>
                         )}
                       </button>
                     );
@@ -198,18 +201,13 @@ export const IndicatorsMenu: React.FC<IndicatorsMenuProps> = ({
               )}
             </div>
 
-            {/* FIC: Footer with selection count (EN) */}
-            {/* FIC: Pie con contador de selección (ES) */}
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center bg-gray-50">
-              <span className="text-sm text-gray-600">
-                {selectedIndicators.length} indicator
-                {selectedIndicators.length !== 1 ? "s" : ""} selected
+            {/* Footer */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "var(--space-md) var(--space-lg)", borderTop: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+              <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
+                {selectedIndicators.length} seleccionado{selectedIndicators.length !== 1 ? "s" : ""}
               </span>
-              <button
-                className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded hover:bg-blue-600"
-                onClick={() => setShowModal(false)}
-              >
-                Done
+              <button className="btn-primary" onClick={() => setShowModal(false)} style={{ padding: "0.4rem 1rem", fontSize: "var(--font-size-sm)" }}>
+                Listo
               </button>
             </div>
           </div>

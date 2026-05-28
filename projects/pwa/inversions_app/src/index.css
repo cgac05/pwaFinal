@@ -1,3 +1,8 @@
+/* FIC: Inversions App PWA — Design System Base. Imports Revolut token registry and animations.
+   FIC: Inversions App PWA — Base del sistema de diseño. Importa el registro de tokens Revolut y animaciones. */
+@import './styles/tokens.css';
+@import './styles/animations.css';
+
 /* =========================================================
    Inversions App PWA – Design System Base
    ========================================================= */
@@ -8,33 +13,10 @@
   padding: 0;
 }
 
-:root {
-  --color-bg: #0d1117;
-  --color-surface: #161b22;
-  --color-surface-raised: #21262d;
-  --color-border: #30363d;
-  --color-border-subtle: #21262d;
-  --color-text: #e6edf3;
-  --color-text-muted: #8b949e;
-  --color-accent: #388bfd;
-  --color-accent-hover: #58a6ff;
-  --color-buy: #3fb950;
-  --color-sell: #f85149;
-  --color-hold: #d29922;
-  --color-risk-low: #3fb950;
-  --color-risk-medium: #d29922;
-  --color-risk-high: #f85149;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-pill: 999px;
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.2);
-}
-
 html, body {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-size: 14px;
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
   line-height: 1.5;
   background: var(--color-bg);
   color: var(--color-text);
@@ -55,9 +37,15 @@ button {
   cursor: pointer;
   border: none;
   border-radius: var(--radius-sm);
-  font-size: 0.875rem;
-  font-weight: 600;
-  transition: background 0.15s, opacity 0.15s;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-emphasis);
+  font-family: var(--font-family);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button {
+    transition: background var(--duration-fast) var(--easing-standard), opacity var(--duration-fast) var(--easing-standard);
+  }
 }
 
 button:disabled {
@@ -69,6 +57,7 @@ button:disabled {
   background: var(--color-accent);
   color: #fff;
   padding: 0.5rem 1.25rem;
+  border-radius: var(--radius-pill);
 }
 .btn-primary:hover:not(:disabled) { background: var(--color-accent-hover); }
 
@@ -77,8 +66,9 @@ button:disabled {
   color: var(--color-text);
   padding: 0.35rem 0.75rem;
   border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
 }
-.btn-ghost:hover:not(:disabled) { background: var(--color-border); }
+.btn-ghost:hover:not(:disabled) { background: var(--color-surface-raised); opacity: 0.8; }
 .btn-ghost.active { border-color: var(--color-accent); color: var(--color-accent); }
 
 /* ── Inputs & Selects ───────────────────────────────────── */
@@ -90,7 +80,7 @@ input, select {
   font-size: 0.875rem;
   padding: 0.45rem 0.75rem;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color var(--duration-fast) var(--easing-standard);
   width: 100%;
 }
 input:focus, select:focus { border-color: var(--color-accent); }
@@ -100,7 +90,7 @@ input:disabled { opacity: 0.6; cursor: not-allowed; }
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   padding: 1rem;
   box-shadow: var(--shadow-card);
 }
@@ -147,22 +137,18 @@ tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover td { background: var(--color-surface-raised); }
 
 /* ── Loading Skeleton ───────────────────────────────────── */
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
 .skeleton {
-  background: linear-gradient(90deg,
-    var(--color-surface) 25%,
-    var(--color-surface-raised) 50%,
-    var(--color-surface) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+  background: var(--color-surface-raised);
   border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton {
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+  }
 }
 
 /* ── Scrollbar ──────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--color-bg); }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: var(--radius-xs); }
