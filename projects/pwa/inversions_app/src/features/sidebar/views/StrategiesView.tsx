@@ -1,13 +1,16 @@
 // FIC: StrategiesView — options strategy calculator cards (Short Put, Long Put, Short Call, Long Call).
 // FIC: StrategiesView — cards de calculadora de estrategias de opciones (Short Put, Long Put, Short Call, Long Call).
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Shield, ArrowDown } from "lucide-react";
 import { useSignalStore } from "../../../store/signals";
 
+type StrategyId = "short-put" | "long-put" | "short-call" | "long-call";
+type StrategyName = "Short Put" | "Long Put" | "Short Call" | "Long Call";
+
 interface StrategyConfig {
-  id: "short-put" | "long-put" | "short-call" | "long-call";
-  name: string;
+  id: StrategyId;
+  name: StrategyName;
   icon: React.ReactNode;
   description: string;
   riskProfile: "limited" | "unlimited";
@@ -56,6 +59,7 @@ const STRATEGIES: StrategyConfig[] = [
 
 interface StrategyForm {
   ticker: string;
+  currentPrice: string;
   strikePrice: string;
   premium: string;
   quantity: string;
@@ -70,10 +74,43 @@ interface StrategyResult {
   strategy?: {
     maxProfit?: number | string;
     maxLoss?: number | string;
+    breakEven?: number | string;
     breakeven?: number | string;
     netPremium?: number | string;
   };
 }
+
+interface MarketQuoteResponse {
+  quotes: Array<{
+    symbol: string;
+    price: number;
+  }>;
+}
+
+interface InstrumentCatalogItem {
+  symbol: string;
+  name: string;
+  category: string;
+}
+
+interface InstrumentCatalogResponse {
+  instruments: InstrumentCatalogItem[];
+}
+
+const FALLBACK_INSTRUMENTS: InstrumentCatalogItem[] = [
+  { symbol: "SPY", name: "SPDR S&P 500 ETF", category: "indices" },
+  { symbol: "QQQ", name: "Invesco QQQ", category: "indices" },
+  { symbol: "AAPL", name: "Apple Inc", category: "stocks" },
+  { symbol: "MSFT", name: "Microsoft Corp", category: "stocks" },
+  { symbol: "ES=F", name: "E-Mini S&P 500", category: "futures" },
+  { symbol: "NQ=F", name: "E-Mini Nasdaq 100", category: "futures" },
+  { symbol: "EURUSD", name: "Euro / US Dollar", category: "forex" },
+  { symbol: "GBPUSD", name: "British Pound / US Dollar", category: "forex" },
+  { symbol: "BTCUSD", name: "Bitcoin", category: "cripto" },
+  { symbol: "ETHUSD", name: "Ethereum", category: "cripto" },
+  { symbol: "US10Y", name: "US 10Y Treasury", category: "bonos" },
+  { symbol: "VIX", name: "Volatility Index", category: "references_idx" }
+];
 
 export function StrategiesView() {
   const { selectedOptionsStrategy, setSelectedOptionsStrategy } = useSignalStore();
@@ -81,7 +118,26 @@ export function StrategiesView() {
   const [forms, setForms] = useState<Record<string, StrategyForm>>({});
   const [results, setResults] = useState<Record<string, StrategyResult>>({});
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [quoteLoadingId, setQuoteLoadingId] = useState<string | null>(null);
+  const [instruments, setInstruments] = useState<InstrumentCatalogItem[]>(FALLBACK_INSTRUMENTS);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const loadInstruments = async () => {
+      try {
+        const res = await fetch("/api/catalogs/instruments");
+        if (!res.ok) return;
+        const data = (await res.json()) as InstrumentCatalogResponse;
+        if (Array.isArray(data.instruments) && data.instruments.length > 0) {
+          setInstruments(data.instruments);
+        }
+      } catch {
+        // Fallback list remains available.
+      }
+    };
+
+    void loadInstruments();
+  }, []);
 
   const toggle = (id: string) => {
     const strategy = STRATEGIES.find((item) => item.id === id);
@@ -94,6 +150,7 @@ export function StrategiesView() {
   const getForm = (id: string): StrategyForm =>
     forms[id] ?? {
       ticker: "AAPL",
+      currentPrice: "",
       strikePrice: "",
       premium: "",
       quantity: "1",
@@ -106,6 +163,64 @@ export function StrategiesView() {
 
   const setFormField = (id: string, field: keyof StrategyForm, value: string) => {
     setForms((prev) => ({ ...prev, [id]: { ...getForm(id), [field]: value } }));
+  };
+
+  const setTickerField = (id: string, value: string) => {
+    const ticker = value.toUpperCase();
+    setForms((prev) => {
+      const form = prev[id] ?? getForm(id);
+      return {
+        ...prev,
+        [id]: {
+          ...form,
+          ticker,
+          currentPrice: ticker === form.ticker ? form.currentPrice : "",
+          strikePrice: ticker === form.ticker ? form.strikePrice : ""
+        }
+      };
+    });
+  };
+
+  const fetchQuote = async (id: string): Promise<void> => {
+    const form = getForm(id);
+    const ticker = form.ticker.trim().toUpperCase();
+    if (!ticker) return;
+
+    setQuoteLoadingId(id);
+    setErrors((prev) => ({ ...prev, [id]: "" }));
+
+    try {
+      const res = await fetch(`/api/market/quotes?symbols=${encodeURIComponent(ticker)}`);
+      if (!res.ok) {
+        throw new Error("No se pudo cargar precio actual.");
+      }
+
+      const data = (await res.json()) as MarketQuoteResponse;
+      const quote = data.quotes.find((item) => item.symbol === ticker) ?? data.quotes[0];
+      if (!quote || !Number.isFinite(quote.price)) {
+        throw new Error("La API no devolvió precio para ese ticker.");
+      }
+
+      setForms((prev) => {
+        const nextForm = prev[id] ?? getForm(id);
+        return {
+          ...prev,
+          [id]: {
+            ...nextForm,
+            ticker,
+            currentPrice: quote.price.toFixed(2),
+            strikePrice: Math.round(quote.price).toString()
+          }
+        };
+      });
+    } catch (err) {
+      setErrors((prev) => ({
+        ...prev,
+        [id]: err instanceof Error ? err.message : "Error al cargar precio."
+      }));
+    } finally {
+      setQuoteLoadingId(null);
+    }
   };
 
   const calculate = async (strategy: StrategyConfig) => {
@@ -129,6 +244,7 @@ export function StrategiesView() {
           optionType,
           direction,
           strikePrice: Number(form.strikePrice),
+          currentPrice: Number(form.currentPrice || form.strikePrice),
           premium: Number(form.premium),
           premiumPerContract: Number(form.premium),
           quantity: Number(form.quantity || 1),
@@ -167,14 +283,40 @@ export function StrategiesView() {
     return `$${v.toFixed(2)}`;
   };
 
+  const fmtMetric = (
+    strategyId: StrategyId,
+    metric: "maxProfit" | "maxLoss",
+    value: number | string | undefined
+  ): string => {
+    if (value == null) {
+      if (strategyId === "long-call" && metric === "maxProfit") return "Ilimitado";
+      if (strategyId === "short-call" && metric === "maxLoss") return "Ilimitado";
+    }
+    return fmtResult(value);
+  };
+
+  const calculateNetPremium = (form: StrategyForm): number => {
+    return Number(form.premium || 0) * Number(form.quantity || 1) * 100;
+  };
+
   return (
     <div style={{ padding: "var(--space-sm)", display: "flex", flexDirection: "column", gap: "var(--space-xs)" }}>
+      <datalist id="strategy-ticker-options">
+        {instruments.map((instrument) => (
+          <option
+            key={`${instrument.category}-${instrument.symbol}`}
+            value={instrument.symbol}
+            label={`${instrument.name} (${instrument.category})`}
+          />
+        ))}
+      </datalist>
       {STRATEGIES.map((strategy) => {
         const isExpanded = expandedId === strategy.id;
         const isSelected = selectedOptionsStrategy?.id === strategy.id;
         const form = getForm(strategy.id);
         const result = results[strategy.id];
         const isLoading = loadingId === strategy.id;
+        const isQuoteLoading = quoteLoadingId === strategy.id;
         const errorMsg = errors[strategy.id];
 
         return (
@@ -236,11 +378,41 @@ export function StrategiesView() {
                   <label style={{ display: "flex", flexDirection: "column", gap: "0.15rem", fontSize: "var(--font-size-xs)" }}>
                     <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Ticker</span>
                     <input
+                      list="strategy-ticker-options"
                       value={form.ticker}
-                      onChange={(e) => setFormField(strategy.id, "ticker", e.target.value.toUpperCase())}
-                      placeholder="AAPL"
+                      onChange={(e) => setTickerField(strategy.id, e.target.value)}
+                      onBlur={() => void fetchQuote(strategy.id)}
+                      placeholder="Selecciona ticker"
                       style={{ fontSize: "var(--font-size-xs)", padding: "0.2rem 0.4rem" }}
                     />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: "0.15rem", fontSize: "var(--font-size-xs)" }}>
+                    <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Precio actual $</span>
+                    <div style={{ display: "flex", gap: "0.25rem" }}>
+                      <input
+                        type="number"
+                        value={form.currentPrice}
+                        onChange={(e) => setFormField(strategy.id, "currentPrice", e.target.value)}
+                        placeholder="Auto"
+                        style={{ fontSize: "var(--font-size-xs)", padding: "0.2rem 0.4rem", minWidth: 0, flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void fetchQuote(strategy.id)}
+                        disabled={isQuoteLoading}
+                        style={{
+                          fontSize: "0.65rem",
+                          padding: "0.2rem 0.35rem",
+                          borderRadius: "var(--radius-xs)",
+                          border: "1px solid var(--color-border)",
+                          background: "var(--color-bg)",
+                          color: "var(--color-text)",
+                          cursor: isQuoteLoading ? "not-allowed" : "pointer"
+                        }}
+                      >
+                        {isQuoteLoading ? "..." : "Auto"}
+                      </button>
+                    </div>
                   </label>
                   <label style={{ display: "flex", flexDirection: "column", gap: "0.15rem", fontSize: "var(--font-size-xs)" }}>
                     <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Strike $</span>
@@ -363,10 +535,10 @@ export function StrategiesView() {
                 {result?.strategy && (
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.3rem", marginTop: "0.25rem" }}>
                     {[
-                      ["Max. Profit", fmtResult(result.strategy.maxProfit)],
-                      ["Max. Loss", fmtResult(result.strategy.maxLoss)],
-                      ["Breakeven", fmtResult(result.strategy.breakeven)],
-                      ["Prima neta", fmtResult(result.strategy.netPremium)],
+                      ["Max. Profit", fmtMetric(strategy.id, "maxProfit", result.strategy.maxProfit)],
+                      ["Max. Loss", fmtMetric(strategy.id, "maxLoss", result.strategy.maxLoss)],
+                      ["Breakeven", fmtResult(result.strategy.breakEven ?? result.strategy.breakeven)],
+                      ["Prima neta", fmtResult(result.strategy.netPremium ?? calculateNetPremium(form))],
                     ].map(([label, value]) => (
                       <div key={label} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-xs)", padding: "0.25rem 0.4rem" }}>
                         <div style={{ fontSize: "0.6rem", color: "var(--color-text-muted)", fontWeight: 700, textTransform: "uppercase" }}>{label}</div>
