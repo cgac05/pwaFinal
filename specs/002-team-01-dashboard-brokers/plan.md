@@ -267,6 +267,8 @@ specs/002-team-01-dashboard-brokers/
 - Mantener comandos oficiales de arranque/parada con modo silencioso por defecto y modo visible solo bajo demanda.
 - Incluir comando de estado operativo para verificar `health`, puertos y logs recientes sin exponer salida interactiva permanente.
 - Documentar troubleshooting de `401 AUTH_CONTEXT_*`, desalineacion de secretos y conflictos de puertos en el runbook del feature.
+- T057 cierra la guia operativa reproducible para arranque y recuperacion local.
+- T058 cierra la validacion automatizada del bootstrap auth entre backend y frontend.
 
 ### 7. Superchart + Workspace Operativo (Phase 8)
 

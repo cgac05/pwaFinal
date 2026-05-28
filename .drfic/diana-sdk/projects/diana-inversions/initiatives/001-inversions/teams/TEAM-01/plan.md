@@ -167,6 +167,12 @@ Trazabilidad a requisitos:
 - FR-001, FR-002, FR-003, FR-004, FR-005, FR-006
 - SC-001, SC-002, SC-004, SC-005, SC-008
 
+### Sincronizacion Operativa con Feature 002
+
+- Sync Speckit T057 -> Diana T060: cerrar runbook operativo local con secuencia start/stop/status y troubleshooting de `AUTH_CONTEXT_*`, JWT desalineado y puertos ocupados.
+- Sync Speckit T058 -> Diana T067: cerrar prueba de integracion de bootstrap auth del dashboard orquestador (token sincronizado -> acceso OK; token ausente/invalido -> 401 explicito).
+- El cierre de estos puntos se valida por evidencia en la feature `specs/002-team-01-dashboard-brokers` sin alterar la autoridad del canon global.
+
 ## Riesgos y Mitigaciones
 
 - Riesgo: desalineacion entre dashboard y contratos de broker.

@@ -7,8 +7,47 @@ Param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-ListeningPidsByPort {
+  Param([int]$Port)
+
+  try {
+    $connections = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction Stop
+    return $connections | Select-Object -ExpandProperty OwningProcess | Sort-Object -Unique
+  }
+  catch {
+    $lines = netstat -ano -p TCP | Select-String -Pattern (":$Port\s")
+    $pids = @()
+
+    foreach ($line in $lines) {
+      $text = ($line.Line -replace "\s+", " ").Trim()
+      $parts = $text.Split(" ")
+
+      if ($parts.Count -lt 5) {
+        continue
+      }
+
+      $state = $parts[3]
+      $pidText = $parts[4]
+
+      if ($state -ne "LISTENING") {
+        continue
+      }
+
+      $parsedPid = 0
+      if (-not [int]::TryParse($pidText, [ref]$parsedPid)) {
+        continue
+      }
+
+      $pids += $parsedPid
+    }
+
+    return $pids | Sort-Object -Unique
+  }
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $resolvedLogsDir = Join-Path $repoRoot $LogsDir
+$processRegistry = Join-Path $resolvedLogsDir "dev-processes.json"
 
 Write-Host "== Service Health =="
 try {
@@ -27,7 +66,32 @@ catch {
 
 Write-Host ""
 Write-Host "== Port Status =="
-Write-Host "[debug bypass] Skipping port status checks..."
+foreach ($port in $Ports) {
+  $pids = Get-ListeningPidsByPort -Port $port
+  if (-not $pids) {
+    Write-Host "port ${port}: DOWN"
+    continue
+  }
+
+  Write-Host "port ${port}: UP (pid: $($pids -join ','))"
+}
+
+Write-Host ""
+Write-Host "== Process Registry =="
+if (Test-Path $processRegistry) {
+  try {
+    $registry = Get-Content -Path $processRegistry -Raw | ConvertFrom-Json
+    Write-Host "registry: FOUND ($processRegistry)"
+    Write-Host "backend pid: $($registry.backendPid)"
+    Write-Host "frontend pid: $($registry.frontendPid)"
+  }
+  catch {
+    Write-Host "registry: UNREADABLE ($processRegistry)"
+  }
+}
+else {
+  Write-Host "registry: MISSING"
+}
 
 Write-Host ""
 Write-Host "== Recent Logs =="
