@@ -28,9 +28,9 @@ El proyecto **inversions_app_pwa** está al **70% de implementación**. Se tiene
 | 5 | API endpoints conectados a frontend | 🟠 ALTA | Flujo end-to-end | Mock data, no real |
 | 6 | Adapter IBKR completo (60% solo) | 🟠 ALTA | Integración brokers | Incompleto |
 | 7 | Adapter Alpaca (40% solo) | 🟠 ALTA | Integración brokers | Muy incompleto |
-| 8 | Tests unitarios (meta 80%, tiene 65%) | 🟡 MEDIA | Cobertura de tests | 15% faltante |
-| 9 | CI/CD pipeline en .github/workflows | 🟡 MEDIA | DevOps | 60% solo |
-| 10 | Azure Infrastructure (Bicep) | 🟡 MEDIA | Despliegue cloud | Templates, no deployed |
+| 8 | Gemini Agent Service (Team 7: Volatility + Chat) | 🟠 ALTA | AI analysis + chat | Parcialmente (T151-T155) |
+| 9 | Tests unitarios (meta 80%, tiene 65%) | 🟡 MEDIA | Cobertura de tests | 15% faltante |
+| 10 | CI/CD pipeline en .github/workflows | 🟡 MEDIA | DevOps | 60% solo |
 
 ---
 
@@ -314,6 +314,62 @@ Compress-Archive -Path "entrega_ia" -DestinationPath "entrega_ia.zip"
 # Verificar
 Get-Item "entrega_ia.zip"
 ```
+
+---
+
+## 🤖 GEMINI EN TEAM 7 (Gap #8)
+
+**Estado:** Documentado en specs/008-team-07-ai-volatility/ - Parcialmente implementado
+
+### Uso de Gemini en Team 7:
+
+1. **Orquestación de Agentes IA (Analyzer → Strategist → Executor)**
+   - Análisis de volatilidad con indicadores técnicos
+   - Recomendación de estrategias (Straddle, Strangle)
+   - Validación y ejecución de órdenes
+
+2. **Chat Explicativo para Usuarios**
+   - Explicaciones de estrategias recomendadas
+   - Análisis de payoff y riesgos en lenguaje natural
+   - Respuestas a preguntas sobre volatilidad
+
+### Qué está documentado en Team 7:
+- ✅ Especificación completa: `specs/008-team-07-ai-volatility/spec.md`
+- ✅ Tasks: T151-T155, T158, T164
+- ✅ Gemini SDK configuration (nodejs)
+- ✅ Prompts para agentes y chat
+
+### Qué falta implementar:
+- ❌ **GeminiAgentService.ts** (servicio wrapper)
+- ❌ **geminiAgentOrchestration.ts** (coordinador de agentes)
+- ❌ **volatilityAnalysis.ts** (módulo análisis)
+- ❌ **Endpoints API:** `/api/ai/volatility-analysis`, `/api/ai/strategy-chat`
+- ❌ **Frontend components:** VolatilityAnalyzer.tsx, StrategyChat.tsx
+- ❌ **Tests unitarios** para Gemini services
+
+### Funcionalidades esperadas:
+```
+ANALISIS:
+├─ POST /api/ai/volatility-analysis
+│  ├─ Input: Symbol, timeframe, CSV históricos
+│  └─ Output: JSON (agente output) + Markdown (explicación)
+│
+CHAT:
+├─ POST /api/ai/strategy-chat
+│  ├─ Input: Pregunta usuario, contexto estrategia
+│  └─ Output: Explicación en Markdown
+
+MODELO: gemini-2.5-flash
+API_KEY: GEMINI_API_KEY (env)
+```
+
+### Para otra IA:
+Si vas a completar Gemini en Team 7:
+1. Leer: `specs/008-team-07-ai-volatility/spec.md` (líneas de Gemini)
+2. Leer: `specs/008-team-07-ai-volatility/tasks.md` (T151-T155)
+3. Crear archivos en `projects/rest-api/inversions_api/src/modules/ai/`
+4. Implementar endpoints en `routes/ai.ts`
+5. Tests en `tests/unit/modules/ai/`
 
 ---
 
