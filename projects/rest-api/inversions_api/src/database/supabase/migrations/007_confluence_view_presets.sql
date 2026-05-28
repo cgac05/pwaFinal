@@ -36,6 +36,7 @@ ALTER TABLE confluence_view_presets ENABLE ROW LEVEL SECURITY;
 
 -- FIC: RLS policy: users can see their own presets and public role presets (EN)
 -- FIC: Política RLS: usuarios ven sus presets y presets públicos por rol (ES)
+DROP POLICY IF EXISTS confluence_presets_read ON confluence_view_presets;
 CREATE POLICY confluence_presets_read ON confluence_view_presets
   FOR SELECT
   TO authenticated
@@ -46,6 +47,7 @@ CREATE POLICY confluence_presets_read ON confluence_view_presets
 
 -- FIC: RLS policy: users can insert their own presets (EN)
 -- FIC: Política RLS: usuarios pueden insertar sus propios presets (ES)
+DROP POLICY IF EXISTS confluence_presets_insert ON confluence_view_presets;
 CREATE POLICY confluence_presets_insert ON confluence_view_presets
   FOR INSERT
   TO authenticated
@@ -53,6 +55,7 @@ CREATE POLICY confluence_presets_insert ON confluence_view_presets
 
 -- FIC: RLS policy: users can update only their own presets (EN)
 -- FIC: Política RLS: usuarios solo pueden actualizar sus propios presets (ES)
+DROP POLICY IF EXISTS confluence_presets_update ON confluence_view_presets;
 CREATE POLICY confluence_presets_update ON confluence_view_presets
   FOR UPDATE
   TO authenticated
@@ -61,6 +64,7 @@ CREATE POLICY confluence_presets_update ON confluence_view_presets
 
 -- FIC: RLS policy: users can delete only their own presets (EN)
 -- FIC: Política RLS: usuarios solo pueden eliminar sus propios presets (ES)
+DROP POLICY IF EXISTS confluence_presets_delete ON confluence_view_presets;
 CREATE POLICY confluence_presets_delete ON confluence_view_presets
   FOR DELETE
   TO authenticated

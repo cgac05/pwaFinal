@@ -16,6 +16,19 @@ export interface ChatResponse {
   cached?: boolean;
 }
 
+export interface FundamentalCopilotRequest {
+  ticker: string;
+  question: string;
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
+}
+
+export interface FundamentalCopilotResponse {
+  answer: string;
+  disclaimer: string;
+  sourceContext: string[];
+  reasoningTrace: string[];
+}
+
 const TIMEOUT_MS = 15_000;
 
 export async function sendChatMessage(req: ChatRequest): Promise<ChatResponse> {
@@ -54,4 +67,31 @@ export async function sendChatMessage(req: ChatRequest): Promise<ChatResponse> {
   }
 
   return res.json() as Promise<ChatResponse>;
+}
+
+export async function sendFundamentalCopilotMessage(req: FundamentalCopilotRequest): Promise<FundamentalCopilotResponse> {
+  let signal: AbortSignal | undefined;
+  try {
+    signal = AbortSignal.timeout(30_000);
+  } catch {
+    // AbortSignal.timeout not supported in all environments.
+  }
+
+  const res = await fetch("/api/team-03/ai/fundamental/copilot", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+    signal,
+  }).catch((err: unknown) => {
+    if (err instanceof Error && err.name === "TimeoutError") {
+      throw new Error("El copilot tardó demasiado. Intenta de nuevo.");
+    }
+    throw new Error("Error de red. Verifica tu conexión.");
+  });
+
+  if (!res.ok) {
+    throw new Error(`El copilot fundamental no está disponible (HTTP ${res.status}).`);
+  }
+
+  return res.json() as Promise<FundamentalCopilotResponse>;
 }

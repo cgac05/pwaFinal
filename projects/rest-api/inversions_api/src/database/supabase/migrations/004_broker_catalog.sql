@@ -118,6 +118,7 @@ ALTER TABLE broker_configurations ENABLE ROW LEVEL SECURITY;
 
 -- FIC: Create RLS policy to allow authenticated users read-only access to active brokers (EN)
 -- FIC: Política RLS para permitir lectura de brokers activos a usuarios autenticados (ES)
+DROP POLICY IF EXISTS broker_configurations_read ON broker_configurations;
 CREATE POLICY broker_configurations_read ON broker_configurations
   FOR SELECT
   TO authenticated
@@ -125,6 +126,7 @@ CREATE POLICY broker_configurations_read ON broker_configurations
 
 -- FIC: Create RLS policy for admin-only updates (EN)
 -- FIC: Política RLS para actualizaciones solo de administrador (ES)
+DROP POLICY IF EXISTS broker_configurations_admin_update ON broker_configurations;
 CREATE POLICY broker_configurations_admin_update ON broker_configurations
   FOR UPDATE
   TO authenticated

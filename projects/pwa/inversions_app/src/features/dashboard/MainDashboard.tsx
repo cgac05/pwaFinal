@@ -17,6 +17,8 @@ import { IndicatorsMenu } from "./IndicatorsMenu";
 import { RuntimeModeSwitches } from "./RuntimeModeSwitches";
 import { ConfluenceSignalsTable } from "./ConfluenceSignalsTable";
 import { SimulationControlPanel } from "./simulation/SimulationControlPanel";
+import { ProjectionSimulationPanel } from "./simulation/ProjectionSimulationPanel";
+import type { AnalysisResult } from "./simulation/FundamentalAnalysisModal";
 import { AppShell } from "../../layouts/AppShell";
 import { ActivityBar } from "../../components/ui/ActivityBar";
 import { LeftPanel } from "../sidebar/LeftPanel";
@@ -49,6 +51,7 @@ export function MainDashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [simulationRows, setSimulationRows] = useState<ConfluenceSignalRow[] | undefined>(undefined);
   const [simulationVerdict, setSimulationVerdict] = useState<any | null>(null);
+  const [fundamentalSimulation, setFundamentalSimulation] = useState<AnalysisResult | null>(null);
   const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
   const [evidenceSignal, setEvidenceSignal] = useState<DashboardSignalCard | null>(null);
   const { selectedInstrument, selectedSignal: storeSelectedRow, runtimeMode, operationalMode } = useSignalStore();
@@ -66,6 +69,18 @@ export function MainDashboard() {
   const handleSimulationResult = useCallback((result: SimulationResponse) => {
     setSimulationRows(result.table);
     setSimulationVerdict(result.verdict);
+  }, []);
+
+  const handleFundamentalRows = useCallback((rows: ConfluenceSignalRow[]) => {
+    setSimulationRows((prev) => {
+      const existing = prev ?? [];
+      const withoutFundamental = existing.filter((r) => r.core !== "A_FUNDAMENTAL");
+      return [...withoutFundamental, ...rows];
+    });
+  }, []);
+
+  const handleProjectionResult = useCallback((result: AnalysisResult) => {
+    setFundamentalSimulation(result);
   }, []);
 
   const selectedSymbol = selectedInstrument?.symbol ?? payload?.cards[0]?.instrument ?? "SPY";
@@ -106,16 +121,6 @@ export function MainDashboard() {
     runtimeMode === "offline" ? "Offline" :
     operationalMode === "real" ? "Real" :
     "Demo";
-
-  // FIC: "En construcción" block shown for categories without dashboard sections yet.
-  // FIC: Bloque "En construcción" para categorías sin secciones del dashboard disponibles aún.
-  const ComingSoonBlock = ({ category }: { category: string }) => (
-    <div style={{ textAlign: "center", padding: "4rem 2rem", color: "var(--color-text-muted)" }}>
-      <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>🚧</div>
-      <p style={{ fontWeight: "var(--font-weight-emphasis)" }}>Esta sección estará disponible próximamente</p>
-      <p style={{ fontSize: "var(--font-size-sm)", marginTop: "0.5rem" }}>Categoría: {category}</p>
-    </div>
-  );
 
   const mainContent = (
     <div style={{ padding: "var(--space-lg)", display: "grid", gap: "var(--space-lg)" }}>
@@ -211,7 +216,12 @@ export function MainDashboard() {
               <div className="card" style={{ minHeight: 380 }}>
                 <SuperChart symbol={selectedSymbol} timeframe={timeframe} startDate={periodRange?.startDate} endDate={periodRange?.endDate} />
               </div>
-              <SimulationControlPanel ticket={selectedSymbol} onResult={handleSimulationResult} />
+              <SimulationControlPanel
+                ticket={selectedSymbol}
+                onResult={handleSimulationResult}
+                onFundamentalRows={handleFundamentalRows}
+                onProjectionResult={handleProjectionResult}
+              />
               {simulationVerdict && (
                 <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
                   <strong>Verdict derivado:</strong>
@@ -220,6 +230,11 @@ export function MainDashboard() {
                     {simulationVerdict.degraded && <em style={{ color: "var(--color-text-muted)" }}> · degradado</em>}
                   </span>
                 </div>
+              )}
+              {/* FIC: Projection panel shown after fundamental analysis execution. */}
+              {/* FIC: Panel de proyección visible tras ejecución de análisis fundamental. */}
+              {showFundamental && fundamentalSimulation?.projection && (
+                <ProjectionSimulationPanel projection={fundamentalSimulation.projection} />
               )}
             </div>
           )}
@@ -280,9 +295,14 @@ export function MainDashboard() {
             </div>
           )}
 
-          {/* ── Coming soon for Fundamental and News */}
-          {showFundamental && <ComingSoonBlock category="Fundamental" />}
-          {showNews && <ComingSoonBlock category="Noticias" />}
+          {/* FIC: News section placeholder. */}
+          {showNews && (
+            <div style={{ textAlign: "center", padding: "4rem 2rem", color: "var(--color-text-muted)" }}>
+              <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>🚧</div>
+              <p style={{ fontWeight: "var(--font-weight-emphasis)" }}>Esta sección estará disponible próximamente</p>
+              <p style={{ fontSize: "var(--font-size-sm)", marginTop: "0.5rem" }}>Categoría: Noticias</p>
+            </div>
+          )}
         </div>
       )}
 

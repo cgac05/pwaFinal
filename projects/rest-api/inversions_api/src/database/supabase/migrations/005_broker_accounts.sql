@@ -23,6 +23,19 @@ CREATE TABLE IF NOT EXISTS broker_accounts (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+ALTER TABLE broker_accounts
+  ADD COLUMN IF NOT EXISTS broker_id UUID REFERENCES broker_configurations(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS account_number TEXT,
+  ADD COLUMN IF NOT EXISTS account_name TEXT,
+  ADD COLUMN IF NOT EXISTS account_type TEXT CHECK (account_type IS NULL OR account_type IN ('cash', 'margin', 'futures', 'options', 'forex')),
+  ADD COLUMN IF NOT EXISTS mode TEXT CHECK (mode IS NULL OR mode IN ('demo', 'real')),
+  ADD COLUMN IF NOT EXISTS credentials_encrypted JSONB,
+  ADD COLUMN IF NOT EXISTS available_balance NUMERIC(15, 2),
+  ADD COLUMN IF NOT EXISTS buying_power NUMERIC(15, 2),
+  ADD COLUMN IF NOT EXISTS used_margin NUMERIC(15, 2),
+  ADD COLUMN IF NOT EXISTS last_sync TIMESTAMP WITH TIME ZONE,
+  ADD COLUMN IF NOT EXISTS sync_status TEXT DEFAULT 'unknown' CHECK (sync_status IN ('synced', 'pending', 'error', 'unknown'));
+
 -- FIC: Create composite unique constraint for broker + account + mode (EN)
 -- FIC: Restricción única compuesta para broker + cuenta + modo (ES)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_broker_accounts_unique 
@@ -39,19 +52,21 @@ ALTER TABLE broker_accounts ENABLE ROW LEVEL SECURITY;
 
 -- FIC: RLS policy: users can only see their own accounts (EN)
 -- FIC: Política RLS: usuarios solo ven sus propias cuentas (ES)
+DROP POLICY IF EXISTS broker_accounts_user_access ON broker_accounts;
 CREATE POLICY broker_accounts_user_access ON broker_accounts
   FOR SELECT
   TO authenticated
   USING (
     auth.uid() IN (
       SELECT DISTINCT user_id FROM user_broker_account_mappings
-      WHERE broker_account_id = id
+      WHERE broker_account_id = broker_accounts.id
     )
     OR auth.jwt() ->> 'role' = 'admin'
   );
 
 -- FIC: RLS policy: admin can update any account (EN)
 -- FIC: Política RLS: admin puede actualizar cualquier cuenta (ES)
+DROP POLICY IF EXISTS broker_accounts_admin_update ON broker_accounts;
 CREATE POLICY broker_accounts_admin_update ON broker_accounts
   FOR UPDATE
   TO authenticated
@@ -100,6 +115,7 @@ ALTER TABLE user_broker_account_mappings ENABLE ROW LEVEL SECURITY;
 
 -- FIC: RLS policy: users can only see their own mappings (EN)
 -- FIC: Política RLS: usuarios solo ven sus propios mapeos (ES)
+DROP POLICY IF EXISTS user_broker_mappings_read ON user_broker_account_mappings;
 CREATE POLICY user_broker_mappings_read ON user_broker_account_mappings
   FOR SELECT
   TO authenticated

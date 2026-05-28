@@ -7,7 +7,7 @@ import type { ChatMessage } from "./types";
 import { ChatMessageList } from "./ChatMessageList";
 import { ChatInputBar } from "./ChatInputBar";
 import { ChatContextBadge } from "./ChatContextBadge";
-import { sendChatMessage } from "../../services/chat/chatApi";
+import { sendChatMessage, sendFundamentalCopilotMessage } from "../../services/chat/chatApi";
 import { useSignalStore } from "../../store/signals";
 import { useAppShellStore } from "../../store/appShell";
 
@@ -63,6 +63,8 @@ export function ChatPanel() {
     return [systemMsg, ...msgs.slice(msgs.length - TRIM_TO)];
   }, []);
 
+  const conversationHistoryRef = React.useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
+
   const handleSend = useCallback(async (text: string) => {
     if (pending) return;
 
@@ -93,17 +95,36 @@ export function ChatPanel() {
     setPending(true);
 
     try {
-      const response = await sendChatMessage({
-        symbol: context?.symbol ?? "",
-        timeframe: context?.timeframe ?? "1d",
-        question: text,
-        context: context?.analysisCategory,
-      });
+      let responseContent: string;
+
+      if (analysisCategory === "fundamental") {
+        const ticker = selectedInstrument?.symbol ?? "SPY";
+        const history = conversationHistoryRef.current;
+        const response = await sendFundamentalCopilotMessage({
+          ticker,
+          question: text,
+          conversationHistory: history,
+        });
+        responseContent = response.answer;
+        conversationHistoryRef.current = [
+          ...history,
+          { role: "user", content: text },
+          { role: "assistant", content: response.answer },
+        ];
+      } else {
+        const response = await sendChatMessage({
+          symbol: context?.symbol ?? "",
+          timeframe: context?.timeframe ?? "1d",
+          question: text,
+          context: context?.analysisCategory,
+        });
+        responseContent = response.explanation;
+      }
 
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: response.explanation, status: "ok" }
+            ? { ...m, content: responseContent, status: "ok" }
             : m
         )
       );
