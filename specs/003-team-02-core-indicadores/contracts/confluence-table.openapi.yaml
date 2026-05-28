@@ -1,0 +1,163 @@
+# FIC: OpenAPI contract for the canonical confluence table endpoint (Phase 5, FR-014, US5).
+openapi: 3.1.0
+info:
+  title: Indicators Core — Confluence Table (canonical, PDF v1)
+  version: 1.0.0
+  description: >-
+    Tabla canonica de senales de confluencia por core. Reemplaza el `metadata: Record<string, unknown>`
+    deprecado por FR-020. Renderizada 1:1 por el PWA (SC-007).
+
+paths:
+  /api/signals/confluence-table:
+    get:
+      summary: Lista filas de confluencia por core/subCore para un ticket.
+      description: >-
+        Retorna 1 fila por core habilitado (PDF v1) y, dentro del core A_INDICADORES,
+        1 fila adicional por cada subCore (RSI/MACD/EMA/ADX/BB). Cores no implementados
+        emiten fila con estado=DEGRADADA en lugar de omitirse (FR-016).
+      parameters:
+        - { in: query, name: ticket, required: true, schema: { type: string }, example: AAPL }
+        - { in: query, name: timeframe, required: false, schema: { type: string, enum: [1m, 5m, 15m, 1h, 4h, 1d], default: 1h } }
+        - { in: query, name: from, required: false, schema: { type: string, format: date }, description: "Inicio de la ventana (ISO date)." }
+        - { in: query, name: to, required: false, schema: { type: string, format: date }, description: "Fin de la ventana (ISO date)." }
+        - in: query
+          name: cores
+          required: false
+          schema:
+            type: array
+            items: { type: string, enum: [A_INDICADORES, A_FUNDAMENTAL, A_TECNICO, A_INSTITUCIONAL, A_NOTICIAS, A_IA] }
+          style: form
+          explode: false
+          description: "Filtra los cores incluidos. Default: todos."
+      responses:
+        "200":
+          description: Filas de confluencia. Si un core no esta implementado, su fila viene con estado=DEGRADADA.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfluenceTableResponse" }
+        "400":
+          description: "INVALID_RANGE (from > to) o `core` fuera del enum (US5.5)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: "AUTH_REQUIRED / AUTH_INVALID (US7)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: "AUTH_FORBIDDEN (rol fuera de viewer|trader|admin)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: "RATE_LIMITED (60/min)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RateLimitError" }
+      security:
+        - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CoreId:
+      type: string
+      enum: [A_INDICADORES, A_FUNDAMENTAL, A_TECNICO, A_INSTITUCIONAL, A_NOTICIAS, A_IA]
+    TipoSenal:  { type: string, enum: [CALL, PUT, HOLD] }
+    Tendencia:  { type: string, enum: [ALCISTA, BAJISTA, LATERAL] }
+    EstadoSenal:{ type: string, enum: [ACTIVA, EXPIRADA, INVALIDADA, DEGRADADA] }
+    DeltaPrev:  { type: string, enum: [NUEVA, CONFIRMADA, INVERTIDA, DEGRADADA] }
+
+    SignalObservation:
+      type: object
+      required: [objetivo, senal, explicacion, metricas]
+      properties:
+        objetivo: { type: string }
+        senal: { type: string }
+        explicacion: { type: string }
+        metricas:
+          type: object
+          additionalProperties:
+            oneOf:
+              - { type: number }
+              - { type: string }
+
+    OptionGreeks:
+      type: object
+      required: [ala, vencimiento, strike, gamma, theta, delta, posicion, tolerancia]
+      properties:
+        ala: { type: string, enum: [ALA1, ALA2] }
+        vencimiento: { type: string, format: date }
+        strike: { type: number }
+        gamma: { type: number }
+        theta: { type: number }
+        delta: { type: number }
+        posicion: { type: string, enum: [SHORT, LONG] }
+        tolerancia: { type: string, enum: [BAJO, MEDIO, ALTO] }
+
+    ConfluenceSignalRow:
+      type: object
+      required: [ticket, core, precio, tipoSenal, fecha, timeframe, tendencia, score, peso, invertir, estado, vigencia, fuente, evidencia_refs, ia_revisada, delta_vs_anterior, observacion, algorithm_version, computed_at, source_input_hash]
+      properties:
+        ticket: { type: string }
+        core:   { $ref: "#/components/schemas/CoreId" }
+        subCore: { type: string, nullable: true, description: "Obligatorio cuando core=A_INDICADORES (FR-017)." }
+        precio: { type: number }
+        tipoSenal: { $ref: "#/components/schemas/TipoSenal" }
+        fecha: { type: string, format: date }
+        timeframe: { type: string, enum: [1m, 5m, 15m, 1h, 4h, 1d] }
+        tendencia: { $ref: "#/components/schemas/Tendencia" }
+        score: { type: number, minimum: -1, maximum: 1 }
+        peso: { type: number, minimum: 0 }
+        invertir: { type: boolean }
+        estado: { $ref: "#/components/schemas/EstadoSenal" }
+        vigencia: { type: string, format: date-time }
+        fuente: { type: string }
+        evidencia_refs:
+          type: array
+          items: { type: string }
+        ia_revisada: { type: boolean }
+        disclaimer_id: { type: string, nullable: true, description: "Obligatorio cuando core=A_IA (FR-019, SC-009)." }
+        delta_vs_anterior: { $ref: "#/components/schemas/DeltaPrev" }
+        observacion: { $ref: "#/components/schemas/SignalObservation" }
+        optionLeg: { allOf: [{ $ref: "#/components/schemas/OptionGreeks" }], nullable: true }
+        algorithm_version: { type: string }
+        computed_at: { type: string, format: date-time }
+        source_input_hash: { type: string }
+
+    ConfluenceTableResponse:
+      type: object
+      required: [rows, generated_at, algorithm_version, ticket]
+      properties:
+        ticket: { type: string }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/ConfluenceSignalRow" }
+        generated_at: { type: string, format: date-time }
+        algorithm_version: { type: string }
+
+    Error:
+      type: object
+      required: [error_code, message]
+      properties:
+        error_code:
+          type: string
+          example: INVALID_RANGE
+          description: "INVALID_RANGE | AUTH_REQUIRED | AUTH_INVALID | AUTH_FORBIDDEN | INVALID_ENUM"
+        message: { type: string }
+        hint: { type: string }
+
+    RateLimitError:
+      allOf:
+        - { $ref: "#/components/schemas/Error" }
+        - type: object
+          required: [retry_after_seconds]
+          properties:
+            error_code: { type: string, enum: [RATE_LIMITED] }
+            retry_after_seconds: { type: integer, minimum: 1 }

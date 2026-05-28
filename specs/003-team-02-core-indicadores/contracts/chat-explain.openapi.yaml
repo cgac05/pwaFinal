@@ -1,0 +1,96 @@
+# FIC: OpenAPI contract for the explanatory Chat IA endpoint (Hansel, TEAM-02).
+openapi: 3.1.0
+info:
+  title: Indicators Core - Chat IA Explainer
+  version: 1.0.0
+  description: >-
+    Endpoint REST del Chat IA explicativo. La IA solo EXPLICA la señal tecnica; nunca
+    recomienda ni ejecuta operaciones. Toda respuesta incluye el disclaimer constitucional.
+paths:
+  /api/chat/explain:
+    post:
+      summary: Explica en lenguaje natural la señal tecnica actual de un instrumento.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChatExplanationRequest" }
+      responses:
+        "200":
+          description: >-
+            Explicacion estructurada. Las peticiones que implican ejecutar una orden se
+            rechazan tambien con 200 y refused=true para que la UI las muestre como explicacion.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatExplanationResponse" }
+        "400": { description: Parametros invalidos, $ref: "#/components/responses/Error" }
+        "404": { description: Symbol sin datos OHLC, $ref: "#/components/responses/Error" }
+components:
+  schemas:
+    ChatExplanationRequest:
+      type: object
+      required: [symbol, question]
+      properties:
+        symbol: { type: string, example: AAPL }
+        timeframe: { type: string, enum: [1m, 5m, 15m, 1h, 4h, 1d], default: 1h }
+        question: { type: string, example: "por que la señal esta alcista?" }
+        context: { type: string, description: Contexto adicional opcional. }
+    IndicatorCitation:
+      type: object
+      required: [indicator, value, reading]
+      properties:
+        indicator: { type: string }
+        value: { type: number, nullable: true }
+        reading: { type: string }
+    ChatExplanationResponse:
+      type: object
+      required: [explanation_text, indicators_cited, disclaimer, model_version, computed_at, refused]
+      properties:
+        explanation_text: { type: string }
+        indicators_cited:
+          type: array
+          items: { $ref: "#/components/schemas/IndicatorCitation" }
+        disclaimer:
+          type: string
+          enum: ["esta explicacion no constituye orden ni recomendacion ejecutable"]
+        model_version: { type: string }
+        computed_at: { type: string, format: date-time }
+        refused:
+          type: boolean
+          description: true cuando la pregunta implicaba ejecutar una orden y fue rechazada.
+        # FIC: Phase 5 T104/T105 — observacion estructurada, ia_revisada + disclaimer_id (FR-019, SC-009).
+        observation:
+          type: object
+          description: SignalObservation tipada producida por el chat IA cuando se invoca desde el pipeline.
+          properties:
+            objetivo: { type: string }
+            senal: { type: string }
+            explicacion: { type: string }
+            metricas: { type: object, additionalProperties: true }
+        ia_revisada:
+          type: boolean
+          description: Phase 5 FR-019/SC-009 — true cuando la respuesta paso por la IA constitucional.
+        disclaimer_id:
+          type: string
+          description: Referencia al disclaimer constitucional (no nulo cuando ia_revisada=true).
+        # FIC: Phase 6 T124 — degradacion grace de LLM (no propaga 5xx al cliente).
+        degraded:
+          type: boolean
+          description: true cuando el LLM externo cayo o agoto rate-limit y se uso fallback determinista.
+        error_code:
+          type: string
+          enum: [LLM_UNAVAILABLE, LLM_RATE_LIMITED]
+          description: Presente solo cuando degraded=true.
+    Error:
+      type: object
+      required: [error_code, message]
+      properties:
+        error_code: { type: string }
+        message: { type: string }
+        hint: { type: string }
+  responses:
+    Error:
+      description: Error estructurado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }

@@ -1,0 +1,77 @@
+# FIC: OpenAPI contract for MACD endpoint (Kevin, TEAM-02).
+openapi: 3.1.0
+info:
+  title: Indicators Core - MACD
+  version: 1.0.0
+  description: Endpoint REST para MACD (linea, señal, histograma y cruce).
+paths:
+  /api/indicators/macd:
+    get:
+      summary: Calcula MACD sobre OHLC del simbolo y timeframe indicados.
+      parameters:
+        - { in: query, name: symbol, required: true, schema: { type: string }, example: AAPL }
+        - { in: query, name: timeframe, required: false, schema: { type: string, enum: [1m, 5m, 15m, 1h, 4h, 1d], default: 1h } }
+        - { in: query, name: fast, required: false, schema: { type: integer, minimum: 1, maximum: 500, default: 12 } }
+        - { in: query, name: slow, required: false, schema: { type: integer, minimum: 1, maximum: 500, default: 26 } }
+        - { in: query, name: signal, required: false, schema: { type: integer, minimum: 1, maximum: 500, default: 9 } }
+        - { in: query, name: count, required: false, schema: { type: integer, minimum: 1, maximum: 1000, default: 300 } }
+      responses:
+        "200":
+          description: Resultado MACD con serie y valor actual con cruce.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MacdResult" }
+        "400": { description: Parametros invalidos (incluye fast >= slow), $ref: "#/components/responses/Error" }
+        "404": { description: Symbol sin datos OHLC, $ref: "#/components/responses/Error" }
+        "422": { description: Datos insuficientes para los periodos solicitados, $ref: "#/components/responses/Error" }
+components:
+  schemas:
+    MacdPoint:
+      type: object
+      required: [time, macd, signal, histogram]
+      properties:
+        time: { type: integer }
+        macd: { type: number, nullable: true }
+        signal: { type: number, nullable: true }
+        histogram: { type: number, nullable: true }
+    MacdCurrent:
+      allOf:
+        - $ref: "#/components/schemas/MacdPoint"
+        - type: object
+          required: [cross]
+          properties:
+            cross: { type: string, enum: [bullish, bearish, none] }
+    MacdResult:
+      type: object
+      required: [symbol, timeframe, indicator, params, algorithm_version, computed_at, source_input_hash, bars_used, current_value, series]
+      properties:
+        symbol: { type: string }
+        timeframe: { type: string }
+        indicator: { type: string, enum: [macd] }
+        params:
+          type: object
+          properties:
+            fast: { type: integer }
+            slow: { type: integer }
+            signal: { type: integer }
+        algorithm_version: { type: string }
+        computed_at: { type: string, format: date-time }
+        source_input_hash: { type: string }
+        bars_used: { type: integer }
+        current_value: { $ref: "#/components/schemas/MacdCurrent" }
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/MacdPoint" }
+    Error:
+      type: object
+      required: [error_code, message]
+      properties:
+        error_code: { type: string }
+        message: { type: string }
+        hint: { type: string }
+  responses:
+    Error:
+      description: Error estructurado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
