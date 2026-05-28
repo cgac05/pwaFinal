@@ -17,6 +17,7 @@ venv/
 Thumbs.db
 *.tmp
 *.swp
+*:Zone.Identifier
 .vscode/
 .idea/
 .claude/
