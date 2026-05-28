@@ -235,12 +235,12 @@
 
 **Purpose**: Asegurar operabilidad local reproducible desde especificacion para evitar gaps tardios de autenticacion y arranque.
 
-- [ ] T053 Implementar/estandarizar arranque local con modos silencioso por defecto y visible bajo demanda en `scripts/dev-clean-start.ps1` y `package.json`
-- [ ] T054 Implementar comando de estado operativo local (`health`, puertos, log tail) en `scripts/dev-status.ps1` y `package.json`
-- [ ] T055 Implementar bootstrap de JWT dev (generacion/sincronizacion backend->frontend) en `projects/rest-api/inversions_api/scripts/generate-dev-token.js` y `projects/rest-api/inversions_api/scripts/sync-dev-token-to-frontend.js`
-- [ ] T056 Ajustar wiring de autenticacion local y mensajes accionables `AUTH_CONTEXT_*` en `projects/pwa/inversions_app/src/services/signals/signalApi.ts` y `projects/rest-api/inversions_api/src/middleware/authContext.ts`
-- [ ] T057 Documentar runbook operativo y troubleshooting (`401`, secretos desalineados, puertos en uso) con pasos reproducibles en seccion de Runbook bajo `specs/002-team-01-dashboard-brokers/checklists/requirements.md` y en comentarios de scripts (`scripts/dev-clean-start.ps1`, `scripts/dev-status.ps1`)
-- [ ] T058 [P] Crear tests de integracion para arranque/auth bootstrap del dashboard orquestador en `projects/rest-api/inversions_api/tests/integration/dashboard/orchestratorAuthBootstrap.test.ts`
+- [X] T053 Implementar/estandarizar arranque local con modos silencioso por defecto y visible bajo demanda en `scripts/dev-clean-start.ps1` y `package.json` (evidencia: `scripts/dev-clean-start.ps1` con `StreamLogs=false` por defecto y `StreamLogs=true` en `dev:clean-start:logs`; `package.json` expone ambos comandos)
+- [X] T054 Implementar comando de estado operativo local (`health`, puertos, log tail) en `scripts/dev-status.ps1` y `package.json` (evidencia: `scripts/dev-status.ps1` reporta `health`, estado de puertos y tail de logs; `package.json` expone `dev:status`)
+- [X] T055 Implementar bootstrap de JWT dev (generacion/sincronizacion backend->frontend) en `projects/rest-api/inversions_api/scripts/generate-dev-token.js` y `projects/rest-api/inversions_api/scripts/sync-dev-token-to-frontend.js` (evidencia: `generate-dev-token.js` genera el token desde `JWT_SECRET` y `sync-dev-token-to-frontend.js` lo sincroniza a `projects/pwa/inversions_app/.env.local`; scripts expuestos en `projects/rest-api/inversions_api/package.json`)
+- [X] T056 Ajustar wiring de autenticacion local y mensajes accionables `AUTH_CONTEXT_*` en `projects/pwa/inversions_app/src/services/signals/signalApi.ts` y `projects/rest-api/inversions_api/src/middleware/authContext.ts` (evidencia: `signalApi.ts` traduce `AUTH_CONTEXT_MISSING` y `AUTH_CONTEXT_INVALID_TOKEN` a mensajes accionables; `authContext.ts` emite esos codigos en 401)
+- [ ] T057 Documentar runbook operativo de arranque local para desarrollo: secuencia de start/stop/status, recuperacion de `401 AUTH_CONTEXT_*`, JWT desalineado, secretos faltantes y puertos ocupados; debe quedar en la seccion Runbook de `specs/002-team-01-dashboard-brokers/checklists/requirements.md` y en comentarios operativos de `scripts/dev-clean-start.ps1` y `scripts/dev-status.ps1` (evidencia esperada: pasos reproducibles de verificacion y recuperacion)
+- [ ] T058 [P] Crear test de integracion end-to-end del bootstrap auth del dashboard orquestador que valide el flujo backend->frontend con JWT dev sincronizado, acceso correcto al orquestador y 401 explicito cuando falte o sea invalido el token, en `projects/rest-api/inversions_api/tests/integration/dashboard/orchestratorAuthBootstrap.test.ts` (evidencia esperada: arranque exitoso y cobertura de errores de autenticacion)
 
 ---
 

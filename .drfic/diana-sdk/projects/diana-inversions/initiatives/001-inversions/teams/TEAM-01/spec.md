@@ -53,6 +53,12 @@ Definir el slice canonico de TEAM-01 para la plataforma de inversiones con IA, c
 - Las decisiones humanas y los intentos de ejecucion quedan auditables de extremo a extremo.
 - El alcance del equipo no invade responsabilidades funcionales de otros TEAM-XX.
 
+## Criterios de Sync con Feature 002 (Operabilidad Local)
+
+- El sync de tareas operativas desde Feature 002 debe conservar los IDs canonicos de TEAM-01 y validar evidencia equivalente de cierre.
+- Para el equivalente de runbook operativo (Speckit T057 -> Diana T060), la evidencia minima incluye pasos reproducibles de start/stop/status y recuperacion ante `AUTH_CONTEXT_MISSING`, `AUTH_CONTEXT_INVALID_TOKEN`, secretos faltantes y puertos ocupados.
+- Para el equivalente de prueba de bootstrap auth (Speckit T058 -> Diana T067), la evidencia minima incluye test de integracion del orquestador con JWT dev sincronizado y 401 explicito para token ausente/invalido.
+
 ## Trazabilidad
 
 - Principios constitucionales:

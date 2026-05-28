@@ -108,6 +108,17 @@ Mapeo explícito TEAM-01:
 | T079 (renderer frontend metadata-driven de tabla) | T067 |
 | T080 (tests integracion tabla dinamica/presets) | T067 |
 
+### Aclaracion de Sync Operativo (Feature 002)
+
+- Para cierre por sincronizacion de Speckit T057 (runbook auth/puertos), el equivalente canónico en TEAM-01 es Diana T060 y requiere evidencia de guia reproducible de start/stop/status, recuperacion de `AUTH_CONTEXT_*`, JWT desalineado y puertos ocupados.
+- Para cierre por sincronizacion de Speckit T058 (test bootstrap auth dashboard), el equivalente canónico en TEAM-01 es Diana T067 y requiere evidencia de prueba de integracion end-to-end con JWT dev sincronizado, acceso correcto al orquestador y 401 explicito ante token ausente/invalido.
+- Estas aclaraciones no renumeran ni sustituyen IDs canonicos; solo precisan criterio de cierre cuando el origen de verdad operativo es `specs/002-team-01-dashboard-brokers`.
+
+### Pendientes de Sync Feature 002 (sin cierre canónico)
+
+- [ ] Sync T057 -> validar evidencia en Feature 002 para cierre de criterio operativo equivalente en Diana T060 (runbook start/stop/status + troubleshooting `AUTH_CONTEXT_*`, JWT y puertos).
+- [ ] Sync T058 -> validar evidencia en Feature 002 para cierre de criterio de validacion equivalente en Diana T067 (test de integracion bootstrap auth del orquestador con casos 401 y acceso exitoso).
+
 ## Ciclo Operativo de Sync (TEAM-01)
 
 1. Ejecutar /diana.sync action="tasks" mode="dry-run" team="TEAM-01" feature="002-team-01-dashboard-brokers".

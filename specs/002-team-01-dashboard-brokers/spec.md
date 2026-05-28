@@ -93,6 +93,12 @@ Como auditor operativo, necesito consultar el historial completo desde la senal 
 - **FR-020**: El sistema DEBE proveer scripts oficiales de arranque/parada para desarrollo local con dos modos: silencioso por defecto (background + logs en archivo) y modo visible bajo demanda para depuracion.
 - **FR-021**: El sistema DEBE proveer un comando de estado operativo local que reporte `health`, puertos criticos y ultimas lineas de logs para diagnostico rapido sin abrir modo interactivo.
 - **FR-022**: La documentacion de la feature DEBE incluir runbook de inicio local y troubleshooting minimo para `401 AUTH_CONTEXT_*`, desalineacion de JWT y conflictos de puertos.
+
+### Operational Readiness Acceptance
+
+- El runbook de inicio local DEBE describir el orden de start/stop/status y como recuperar el entorno si backend o frontend quedan levantados o desincronizados.
+- El runbook DEBE diferenciar claramente `AUTH_CONTEXT_MISSING` de `AUTH_CONTEXT_INVALID_TOKEN` y explicar como regenerar/sincronizar el JWT dev.
+- La autenticacion local DEBE considerarse cerrada solo cuando exista una prueba de integracion que confirme el bootstrap auth del dashboard orquestador con token sincronizado y error 401 explicito ante credenciales ausentes o invalidas.
 - **FR-023**: El selector de instrumentos DEBE implementarse como watchlist en estructura de arbol por categorias `Indices`, `Stocks`, `Futures`, `Forex`, `Cripto`, `Bonos` y `References IDX`, permitiendo alta/baja dinamica de simbolos por usuario.
 - **FR-024**: El dashboard DEBE incluir un superchart de velas (estilo TradingView) capaz de renderizar historico de alta densidad con overlay de senales, zoom/pan y tooltip enriquecido por vela/senal.
 - **FR-025**: El dashboard DEBE soportar selector de temporalidad dinamica (incluyendo `1m`, `5m`, `15m`, `1h`, `4h`, `1d`, `1w`, `1M`, `ALL`) segun capacidades reportadas por la fuente de datos activa.
