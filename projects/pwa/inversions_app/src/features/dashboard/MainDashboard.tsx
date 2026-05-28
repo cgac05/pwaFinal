@@ -8,7 +8,6 @@ import {
   type DashboardSignalCard
 } from "../../services/signals/signalApi";
 import { CoreSelector, type CoreDefinition } from "./CoreSelector";
-import { WatchlistTree } from "./WatchlistTree";
 import { SignalOverlay } from "./SignalOverlay";
 import { ExplainabilityTable } from "./ExplainabilityTable";
 import { SignalEvidencePanel } from "../signals/SignalEvidencePanel";
