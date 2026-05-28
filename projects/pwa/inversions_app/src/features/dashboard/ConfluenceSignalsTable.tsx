@@ -4,6 +4,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useSignalStore, type SelectedSignal } from "../../store/signals";
+import { useAppShellStore } from "../../store/appShell";
+import { useInstitutionalStore, getNearestZone } from "../../store/institutional";
 import {
   getConfluenceTable,
   type ConfluenceSignalRow,
@@ -11,6 +13,7 @@ import {
 } from "../../services/signals/confluenceTableApi";
 import { ObservationCell } from "./ObservationCell";
 import { OptionGreeksRow } from "./OptionGreeksRow";
+import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailModal";
 
 // FIC: 13 columnas canonicas del PDF v1 (US5).
 const PDF_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "observacion"; label: string }> = [
@@ -52,7 +55,12 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<Omit<ConfluenceTableResponse, "rows"> | null>(null);
+  const [modalTicker, setModalTicker] = useState<string | null>(null);
   const { setSelectedSignal } = useSignalStore();
+  const { analysisCategory } = useAppShellStore();
+  const { results: institutionalResults } = useInstitutionalStore();
+
+  const showInstitutionalColumns = analysisCategory === "institutional";
 
   useEffect(() => {
     if (rowsProp) {
@@ -107,6 +115,24 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
                   {col.label}
                 </th>
               ))}
+              {/* FIC: Institutional columns — only shown when analysisCategory === "institutional". (EN) */}
+              {/* FIC: Columnas institucionales — solo visibles cuando analysisCategory === "institutional". (ES) */}
+              {showInstitutionalColumns && (
+                <>
+                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.5rem", textAlign: "left", fontSize: "0.7rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)" }}>
+                    INST. SCORE
+                  </th>
+                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.5rem", textAlign: "left", fontSize: "0.7rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)" }}>
+                    TREND
+                  </th>
+                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.5rem", textAlign: "left", fontSize: "0.7rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)" }}>
+                    ZONA CERCANA
+                  </th>
+                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.5rem", textAlign: "left", fontSize: "0.7rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)" }}>
+                    DÍAS OPEX
+                  </th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -117,12 +143,27 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
             ) : (
               sorted.flatMap((row, idx) => {
                 const rowKey = `${row.core}-${row.subCore ?? "agg"}-${idx}`;
-                const onClick = () =>
-                  setSelectedSignal({
-                    id: rowKey,
-                    symbol: row.ticket,
-                    metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
-                  } as SelectedSignal);
+                const instData = institutionalResults[row.ticket?.toUpperCase() ?? ""];
+                const onClick = () => {
+                  if (showInstitutionalColumns && instData) {
+                    // FIC: Open institutional detail modal on row click when institutional data is available. (EN)
+                    // FIC: Abre el modal de detalle institucional al clic en la fila cuando hay datos disponibles. (ES)
+                    setModalTicker(row.ticket ?? null);
+                  } else {
+                    setSelectedSignal({
+                      id: rowKey,
+                      symbol: row.ticket,
+                      metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
+                    } as SelectedSignal);
+                  }
+                };
+                // Institutional derived values for this row's ticker
+                const instScore = instData?.zones?.institutionalScore;
+                const trendDir = instData?.trends?.direction;
+                const allZones = instData?.zones?.all ?? [];
+                const nearestZone = getNearestZone(allZones, row.precio ?? 0);
+                const daysToOpex = instData?.expiration?.daysToNextOpex;
+
                 const cells = (
                   <tr key={rowKey} onClick={onClick} style={{ cursor: "pointer", opacity: row.estado === "DEGRADADA" ? 0.55 : 1 }}>
                     {PDF_COLUMNS.map((col) => {
@@ -155,10 +196,36 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
                         </td>
                       );
                     })}
+                    {/* FIC: Institutional columns — rendered per-row when category=institutional. (EN) */}
+                    {showInstitutionalColumns && (
+                      <>
+                        <td style={{ padding: "0.4rem 0.5rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.8rem" }}>
+                          {instScore != null ? (
+                            <span style={{ color: instScore >= 0.7 ? "var(--color-buy)" : instScore >= 0.4 ? "var(--color-hold)" : "var(--color-sell)", fontWeight: 600 }}>
+                              {instScore.toFixed(2)}
+                            </span>
+                          ) : "—"}
+                        </td>
+                        <td style={{ padding: "0.4rem 0.5rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.8rem" }}>
+                          {trendDir === "bullish" ? "🟢 Bullish" : trendDir === "bearish" ? "🔴 Bearish" : trendDir === "neutral" ? "⚫ Neutral" : "—"}
+                        </td>
+                        <td style={{ padding: "0.4rem 0.5rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.8rem" }}>
+                          {nearestZone
+                            ? <span style={{ color: nearestZone.type === "support" ? "var(--color-buy)" : "var(--color-sell)" }}>
+                                ${nearestZone.price.toFixed(2)} ({nearestZone.type === "support" ? "S" : "R"})
+                              </span>
+                            : "—"}
+                        </td>
+                        <td style={{ padding: "0.4rem 0.5rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.8rem" }}>
+                          {daysToOpex != null ? `${daysToOpex}d` : "—"}
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
+                const totalCols = PDF_COLUMNS.length + (showInstitutionalColumns ? 4 : 0);
                 if (row.optionLeg) {
-                  return [cells, <OptionGreeksRow key={`${rowKey}-greeks`} greeks={row.optionLeg} colSpan={PDF_COLUMNS.length} />];
+                  return [cells, <OptionGreeksRow key={`${rowKey}-greeks`} greeks={row.optionLeg} colSpan={totalCols} />];
                 }
                 return [cells];
               })
@@ -166,6 +233,15 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
           </tbody>
         </table>
       </div>
+
+      {/* FIC: InstitutionalDetailModal — opens when clicking a row with institutional data. (EN) */}
+      {/* FIC: InstitutionalDetailModal — se abre al clic en una fila con datos institucionales. (ES) */}
+      <InstitutionalDetailModal
+        isOpen={modalTicker !== null}
+        onClose={() => setModalTicker(null)}
+        ticker={modalTicker ?? ""}
+        data={modalTicker ? (institutionalResults[modalTicker.toUpperCase()] ?? null) : null}
+      />
     </section>
   );
 }

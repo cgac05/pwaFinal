@@ -32,6 +32,12 @@ import { chatExplainRouter } from "./routes/indicators/chatExplain";
 import { confluenceTableRouter } from "./routes/signals/confluenceTable";
 import { simulationRunRouter } from "./routes/simulation/run";
 import { indicatorsRateLimit, chatRateLimit } from "./middleware/indicatorsRateLimit";
+import { institutionalAnalysisRouter } from "./routes/institutional/institutionalAnalysis";
+import { regulatoryPositionsRouter } from "./routes/institutional/regulatoryPositions";
+import { institutionalCopilotRouter } from "./routes/ai/institutionalCopilot";
+import { coverageAnalyzeRouter } from "./routes/coverage/analyze";
+import { coverageCompareRouter } from "./routes/coverage/compare";
+import { coverageSimulateRouter } from "./routes/coverage/simulate";
 
 const envValidation = validateEnvironment();
 if (!envValidation.isValid) {
@@ -78,6 +84,12 @@ app.use("/api/indicators", indicatorsRateLimit, bollingerRouter);
 app.use("/api/indicators", indicatorsRateLimit, indicatorsConfluenceRouter);
 app.use("/api/indicators", indicatorsHealthRouter);
 app.use("/api/chat", chatRateLimit, chatExplainRouter);
+app.use("/api/institutional", institutionalAnalysisRouter);
+app.use("/api/institutional", regulatoryPositionsRouter);
+app.use("/api/ai", institutionalCopilotRouter);
+app.use("/api/coverage", coverageAnalyzeRouter);
+app.use("/api/coverage", coverageCompareRouter);
+app.use("/api/coverage", coverageSimulateRouter);
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });

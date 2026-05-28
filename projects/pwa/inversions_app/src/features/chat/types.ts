@@ -8,6 +8,8 @@ export interface ChatContext {
   symbol: string;
   timeframe: string;
   analysisCategory: string;
+  /** FIC: Optional institutional observations from TEAM-05 store — enriches AI context. (EN) */
+  institutionalObservations?: string | null;
 }
 
 export interface ChatMessage {

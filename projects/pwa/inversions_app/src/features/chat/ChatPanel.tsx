@@ -10,6 +10,7 @@ import { ChatContextBadge } from "./ChatContextBadge";
 import { sendChatMessage } from "../../services/chat/chatApi";
 import { useSignalStore } from "../../store/signals";
 import { useAppShellStore } from "../../store/appShell";
+import { getObservationSummary } from "../../store/institutional";
 
 const STORAGE_KEY = "inversions.chat.history";
 const MAX_MESSAGES = 100;
@@ -66,8 +67,14 @@ export function ChatPanel() {
   const handleSend = useCallback(async (text: string) => {
     if (pending) return;
 
+    // FIC: Enrich context with institutional observations from TEAM-05 store if available. (EN)
+    // FIC: Enriquece el contexto con observaciones institucionales del store de TEAM-05 si están disponibles. (ES)
+    const institutionalObservations = selectedInstrument?.symbol
+      ? getObservationSummary(selectedInstrument.symbol)
+      : null;
+
     const context = selectedInstrument?.symbol
-      ? { symbol: selectedInstrument.symbol, timeframe: "1d", analysisCategory }
+      ? { symbol: selectedInstrument.symbol, timeframe: "1d", analysisCategory, institutionalObservations }
       : null;
 
     const userMsg: ChatMessage = {

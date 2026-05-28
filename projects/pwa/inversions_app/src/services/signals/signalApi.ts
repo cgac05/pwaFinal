@@ -90,18 +90,29 @@ interface ApiErrorPayload {
 
 const API_BASE = "/api/signals";
 
-export function getAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
-  const storageToken =
-    typeof window !== "undefined" ? window.localStorage.getItem("inversions.dev.token") ?? undefined : undefined;
-  const envToken = import.meta.env.VITE_DEV_BEARER_TOKEN as string | undefined;
-  const token = storageToken || envToken;
+// FIC: Memoized token cache — avoids repeated localStorage reads on every API call. (EN)
+// FIC: Caché de token memoizado — evita lecturas repetidas de localStorage en cada llamada API. (ES)
+let _cachedToken: string | null | undefined = undefined;
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+export function getAuthHeaders(): Record<string, string> {
+  if (_cachedToken === undefined) {
+    const storageToken =
+      typeof window !== "undefined" ? window.localStorage.getItem("inversions.dev.token") : null;
+    const envToken = import.meta.env.VITE_DEV_BEARER_TOKEN as string | undefined;
+    _cachedToken = storageToken || envToken || null;
   }
 
+  const headers: Record<string, string> = {};
+  if (_cachedToken) {
+    headers.Authorization = `Bearer ${_cachedToken}`;
+  }
   return headers;
+}
+
+// FIC: Reset the memoized auth cache — call on logout or token rotation. (EN)
+// FIC: Reinicia el caché de auth memoizado — llamar en logout o rotación de token. (ES)
+export function invalidateAuthCache(): void {
+  _cachedToken = undefined;
 }
 
 export async function evaluateSignal(payload: EvaluateSignalRequest): Promise<EvaluateSignalResponse> {

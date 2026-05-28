@@ -27,13 +27,18 @@ import { Drawer } from "../../components/ui/Drawer";
 import type { ConfluenceSignalRow, SimulationResponse } from "../../services/signals/confluenceTableApi";
 import { useSignalStore } from "../../store/signals";
 import { useAppShellStore } from "../../store/appShell";
+import { useInstitutionalStore, setInstitutionalLoading, setInstitutionalResult, setInstitutionalError } from "../../store/institutional";
+import { getInstitutionalAnalysis } from "../../services/institutional/institutionalApi";
 
 const initialCores: CoreDefinition[] = [
   { id: "technical", label: "Technical", description: "Momentum y estructura", enabled: true },
   { id: "options", label: "Options", description: "Flujo y skew", enabled: true },
   { id: "flow", label: "Institutional Flow", description: "UOA/bloques", enabled: true },
   { id: "news", label: "News", description: "Sentimiento y eventos", enabled: true },
-  { id: "ai", label: "AI", description: "Confirmación IA", enabled: true }
+  { id: "ai", label: "AI", description: "Confirmación IA", enabled: true },
+  // FIC: Institutional core (TEAM-05) — calls /api/institutional/analysis when simulation runs. (EN)
+  // FIC: Core institucional (TEAM-05) — llama /api/institutional/analysis al ejecutar simulación. (ES)
+  { id: "institutional", label: "Institucional", description: "Zonas S/R, tendencias, 13F", enabled: false },
 ];
 
 export function MainDashboard() {
@@ -53,6 +58,7 @@ export function MainDashboard() {
   const [evidenceSignal, setEvidenceSignal] = useState<DashboardSignalCard | null>(null);
   const { selectedInstrument, selectedSignal: storeSelectedRow, runtimeMode, operationalMode } = useSignalStore();
   const { analysisCategory } = useAppShellStore();
+  const { results: institutionalResults, loading: institutionalLoading } = useInstitutionalStore();
 
   // FIC: Map analysis category chips to visible dashboard sections.
   // FIC: Mapeo de chips de categoría de análisis a secciones visibles del dashboard.
@@ -70,6 +76,26 @@ export function MainDashboard() {
 
   const selectedSymbol = selectedInstrument?.symbol ?? payload?.cards[0]?.instrument ?? "SPY";
   const activeCoreCount = useMemo(() => cores.filter((core) => core.enabled).length, [cores]);
+
+  // FIC: Trigger institutional analysis when user navigates to "institutional" category with a selected symbol. (EN)
+  // FIC: Dispara análisis institucional cuando el usuario navega a la categoría "institutional" con símbolo seleccionado. (ES)
+  useEffect(() => {
+    const institutionalCoreEnabled = cores.find((c) => c.id === "institutional")?.enabled ?? false;
+    if (analysisCategory !== "institutional" || !institutionalCoreEnabled || !selectedSymbol) return;
+    if (institutionalResults[selectedSymbol.toUpperCase()]) return;
+
+    const controller = new AbortController();
+    setInstitutionalLoading(selectedSymbol, true);
+    getInstitutionalAnalysis(selectedSymbol, "daily", "medium", controller.signal)
+      .then((data) => setInstitutionalResult(selectedSymbol, data))
+      .catch((err) => {
+        if ((err as Error).name !== "AbortError") {
+          setInstitutionalError(selectedSymbol, (err as Error).message);
+        }
+      });
+    return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysisCategory, selectedSymbol, cores]);
 
   const refreshDashboard = useCallback(async () => {
     setLoading(true);
@@ -279,6 +305,81 @@ export function MainDashboard() {
               )}
             </div>
           )}
+
+          {/* FIC: Institutional summary view — shows when analysisCategory=institutional. (EN) */}
+          {/* FIC: Vista resumen institucional — visible cuando analysisCategory=institutional. (ES) */}
+          {showInstitutional && (() => {
+            const instData = institutionalResults[selectedSymbol.toUpperCase()];
+            const isLoading = institutionalLoading[selectedSymbol.toUpperCase()];
+            return (
+              <div className="card" style={{ padding: "var(--space-lg)" }}>
+                <h2 style={{ margin: "0 0 var(--space-md)" }}>Análisis Institucional — {selectedSymbol}</h2>
+                {isLoading && (
+                  <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
+                    Cargando análisis institucional…
+                  </p>
+                )}
+                {!isLoading && !instData && (
+                  <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
+                    Activa el core "Institucional" y actualiza para cargar datos.
+                  </p>
+                )}
+                {instData && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "var(--space-md)" }}>
+                    {instData.trends && (
+                      <div>
+                        <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Tendencia</p>
+                        <p style={{ fontWeight: 600, color: instData.trends.direction === "bullish" ? "var(--color-buy)" : instData.trends.direction === "bearish" ? "var(--color-sell)" : "var(--color-text-muted)" }}>
+                          {instData.trends.direction === "bullish" ? "🟢 Bullish" : instData.trends.direction === "bearish" ? "🔴 Bearish" : "⚫ Neutral"}
+                        </p>
+                      </div>
+                    )}
+                    {instData.zones && (
+                      <div>
+                        <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Zonas detectadas</p>
+                        <p style={{ fontWeight: 600 }}>{instData.zones.support.length} soporte · {instData.zones.resistance.length} resistencia</p>
+                      </div>
+                    )}
+                    {instData.expiration && (
+                      <div>
+                        <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Próximo OpEx</p>
+                        <p style={{ fontWeight: 600 }}>{instData.expiration.daysToNextOpex} días</p>
+                      </div>
+                    )}
+                    {instData.metrics && (
+                      <div>
+                        <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Ownership inst.</p>
+                        <p style={{ fontWeight: 600 }}>{instData.metrics.fundsOwnershipPct.toFixed(1)}%</p>
+                      </div>
+                    )}
+                    {instData.metrics && (
+                      <div>
+                        <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Net Flow</p>
+                        <p style={{ fontWeight: 600, color: instData.metrics.netFlow >= 0 ? "var(--color-buy)" : "var(--color-sell)" }}>
+                          ${instData.metrics.netFlow.toLocaleString()}
+                        </p>
+                      </div>
+                    )}
+                    <div>
+                      <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Fuentes</p>
+                      <p style={{ fontSize: "var(--font-size-xs)" }}>
+                        {instData.sourceReports.map((s) => (
+                          <span key={s.sourceId} style={{ marginRight: "var(--space-xs)" }}>
+                            {s.status === "ok" ? "✅" : s.status === "partial" ? "⚠️" : "❌"} {s.sourceId.split("_")[0]}
+                          </span>
+                        ))}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {instData && (
+                  <p style={{ marginTop: "var(--space-sm)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+                    Haz clic en una fila de la tabla de confluencia para ver el detalle completo.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ── Coming soon for Fundamental and News */}
           {showFundamental && <ComingSoonBlock category="Fundamental" />}

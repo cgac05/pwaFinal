@@ -299,8 +299,6 @@ router.delete(
   }
 );
 
-export default router;
-
 // FIC: Read confluence column configs for metadata-driven renderer (EN)
 // FIC: Leer configuraciones de columnas para renderer metadata-driven (ES)
 router.get(
@@ -334,3 +332,5 @@ router.get(
     }
   }
 );
+
+export default router;

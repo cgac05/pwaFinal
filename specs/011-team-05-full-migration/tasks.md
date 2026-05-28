@@ -155,7 +155,7 @@ description: "Master task list for 011-team-05-full-migration — replica comple
 
 ## BACKEND — Phase 5: Coverage Engines
 
-- [ ] T1011 [P] Crear `src/modules/strategies/coverage/protectivePutEngine.ts`
+- [X] T1011 [P] Crear `src/modules/strategies/coverage/protectivePutEngine.ts`
   - `breakEvenPrice = currentPrice + netPremiumPerShare` (válido OTM/ATM/ITM)
   - `stopLossBuffer = clamp(riskTolerancePct*0.5, 0.01, 0.10)` — fallback 0.03 cuando `riskTolerancePct===0`
   - `stopLossPrice = putStrike * (1 - stopLossBuffer)`
@@ -166,7 +166,7 @@ description: "Master task list for 011-team-05-full-migration — replica comple
   - Alerta `MARRIED_PUT_BASIS_CHECK`: para `kind=married_put`
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1012 [P] Crear `src/modules/strategies/coverage/collarEngine.ts`
+- [X] T1012 [P] Crear `src/modules/strategies/coverage/collarEngine.ts`
   - `netPremiumPerShare = putPremium - callPremium` (positivo=débito, negativo=crédito neto)
   - `maxProfit = max(0, callStrike - currentPrice - netPremiumPerShare) * shares`
   - `maxLoss = max(0, currentPrice - putStrike + netPremiumPerShare) * shares`
@@ -180,7 +180,7 @@ description: "Master task list for 011-team-05-full-migration — replica comple
   - Alerta `COLLAR_LOWER_BAND_BROKEN`: si `currentPrice <= stopLossLow`
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1013 [P] Crear `src/modules/strategies/coverage/coveredStraddleEngine.ts`
+- [X] T1013 [P] Crear `src/modules/strategies/coverage/coveredStraddleEngine.ts`
   - `kind = "covered_straddle"` (mantener por compatibilidad de contratos)
   - Estructura real: acciones long + put short + call short → **covered strangle** (strikes distintos)
   - Riesgo asimétrico: ilimitado SOLO a la baja (put short); alza cubierta por acciones long
@@ -188,30 +188,30 @@ description: "Master task list for 011-team-05-full-migration — replica comple
   - Alerta `HIGH_VOLATILITY_PROFILE` con texto explicativo "covered strangle"
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1014 [P] Crear `src/modules/strategies/coverage/coverageSimulationEngine.ts`
+- [X] T1014 [P] Crear `src/modules/strategies/coverage/coverageSimulationEngine.ts`
   - Monte Carlo: 256 iteraciones por defecto (demo/visualización)
   - `monteCarloIterations=0` → skip MC, retorna payoff instantáneo sin loop
   - Escenarios determinísticos (subida/bajada %)
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1015 [P] Crear `src/modules/strategies/coverage/coverageRiskService.ts`
+- [X] T1015 [P] Crear `src/modules/strategies/coverage/coverageRiskService.ts`
   - Stop-loss configurable, alertas de margen y niveles críticos
   - Notificaciones via `Promise.allSettled` (paralelas, no secuenciales)
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1016 [P] Crear `src/modules/strategies/coverage/coverageReportService.ts`
+- [X] T1016 [P] Crear `src/modules/strategies/coverage/coverageReportService.ts`
   - `generateReport(strategyReq, recipients?, precomputed?)`
   - Si `precomputed` → skip `simulationEngine.analyze()` y `riskService.evaluate()`
   - File I/O (JSON + Markdown) con `Promise.all` en paralelo
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1017 [P] Crear `src/modules/strategies/coverage/coverageComparator.ts`
+- [X] T1017 [P] Crear `src/modules/strategies/coverage/coverageComparator.ts`
   - `compare()`: ejecuta 4 estrategias, genera matriz de comparación y ranking
   - Pasa `precomputed` a `generateReport` — evita 4 re-simulaciones duplicadas
   - Score: 50% PnL esperado + distribución riesgo/costo/contexto
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1034 [P] Crear `src/modules/strategies/coverage/coverageStrategyAdapter.ts`
+- [X] T1034 [P] Crear `src/modules/strategies/coverage/coverageStrategyAdapter.ts`
   - Función `adaptContractToEngine(contract)` — mapea contrato a parámetros del engine correspondiente
   - Función `adaptResultToResponse(result)` — mapea resultado del engine a respuesta API
   - Score de confianza: 40% protectionScore + 30% costEfficiencyScore + 30% riskScore
@@ -222,7 +222,7 @@ description: "Master task list for 011-team-05-full-migration — replica comple
 
 ## BACKEND — Phase 6: AI Copilot
 
-- [ ] T1018 [P] Crear `src/modules/ai/institutionalCopilotChat.ts`
+- [X] T1018 [P] Crear `src/modules/ai/institutionalCopilotChat.ts`
   - Modelo: Gemini 2.5 Flash (`GEMINI_API_KEY` de env)
   - Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={KEY}`
   - `timeoutMs=30000`, `initialDecisionWindowMs=5000`, `pollingIntervalMs=2000`, `maxPollingAttempts=15`, `jobTtlMs=30000`
@@ -240,7 +240,7 @@ description: "Master task list for 011-team-05-full-migration — replica comple
 
 ## BACKEND — Phase 7: Routes & Bootstrap
 
-- [ ] T1019 [P] Crear `src/routes/institutional/bootstrap.ts`
+- [X] T1019 [P] Crear `src/routes/institutional/bootstrap.ts`
   - `getInstitutionalRouteContext()`: singleton que crea `InstitutionalDataService` con 4 fuentes + 3 engines
   - 4 fuentes: `sec_edgar_13f` (priority=1, cache=600s, rate=10/min), `finra_short_interest` (p=2, cache=600s, rate=10/min), `yahoo_options_flow` (p=3, cache=120s, rate=20/min), `yahoo_institutional` (p=4, cache=300s, rate=20/min)
   - `ensureFinraCache().catch(()=>{})` en background (no bloquea startup)
@@ -249,20 +249,20 @@ description: "Master task list for 011-team-05-full-migration — replica comple
   - Helpers: `buildInstitutionalTrendSummary`, `buildInstitutionalMetricsSummary`, `buildInstitutionalPositionsSummary`
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1020 [P] Crear `src/routes/institutional/institutionalAnalysis.ts`
+- [X] T1020 [P] Crear `src/routes/institutional/institutionalAnalysis.ts`
   - `GET /analysis` — `authContextMiddleware`
   - `resolve()` UNA VEZ → `preResolvedResult` compartido con Zones + Trend + Expiration en paralelo (`Promise.allSettled`)
   - `overallStatus==="all_failed"` → HTTP 503 `{ code:"ALL_SOURCES_UNAVAILABLE" }`
   - HTTP 200 con: request, analysis, zones (all/support/resistance), trends, expiration, metrics, sourceReports
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1021 [P] Crear `src/routes/institutional/regulatoryPositions.ts`
+- [X] T1021 [P] Crear `src/routes/institutional/regulatoryPositions.ts`
   - `GET /positions` — `authContextMiddleware`
   - Resuelve datos institucionales, misma degradación parcial que institutionalAnalysis
   - HTTP 200 con: positions13F[], flows (inflows/outflows/netFlow), sourceReports, cacheHit, usedSourceIds
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1022 [P] Crear `src/routes/coverage/analyze.ts`
+- [X] T1022 [P] Crear `src/routes/coverage/analyze.ts`
   - `POST /analyze` — roles: analyst, risk_manager, trader
   - `buildContracts(body)`: 4 estrategias (protective_put, married_put, collar_put, covered_straddle)
   - Defaults: price=450, expiry=90d, shares=100, capital=100000, risk=5%, put=95%×price, call=105%×price
@@ -271,19 +271,19 @@ description: "Master task list for 011-team-05-full-migration — replica comple
   - Errores: FORBIDDEN_ROLE(403), INVALID_TICKER/PRICE/SHARES(400)
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1023 [P] Crear `src/routes/coverage/simulate.ts`
+- [X] T1023 [P] Crear `src/routes/coverage/simulate.ts`
   - `POST /simulate` — roles: analyst, risk_manager, trader
   - Crea contract `protective_put` con params del body → ejecuta `CoverageSimulationEngine`
   - Retorna `CoverageSimulationResult`
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1024 [P] Crear `src/routes/coverage/compare.ts`
+- [X] T1024 [P] Crear `src/routes/coverage/compare.ts`
   - `POST /compare` — roles: analyst, risk_manager, trader
   - `CoverageComparator.compare()` con 4 estrategias
   - Retorna `CoverageComparisonResult`
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1025 [P] Crear `src/routes/ai/institutionalCopilot.ts`
+- [X] T1025 [P] Crear `src/routes/ai/institutionalCopilot.ts`
   - `POST /institutional-chat` — `authContextMiddleware`
   - Valida: ticker, currentPrice, zones, question (required)
   - `userRole` del body o inferido de `authContext.role`
@@ -294,7 +294,7 @@ description: "Master task list for 011-team-05-full-migration — replica comple
   - `inferAIRole`: admin/trader→analyst, otro→risk_manager
   - FIC: comentarios bilingüe EN/ES
 
-- [ ] T1026 Modificar `src/index.ts` — registrar todas las rutas nuevas de TEAM-05:
+- [X] T1026 Modificar `src/index.ts` — registrar todas las rutas nuevas de TEAM-05:
   ```typescript
   app.use("/api/institutional", institutionalAnalysisRouter);
   app.use("/api/institutional", regulatoryPositionsRouter);
@@ -305,7 +305,7 @@ description: "Master task list for 011-team-05-full-migration — replica comple
   app.use("/api/dashboard", confluenceViewPresetsRouter); // ya montado, incluir confluenceViewPresets fix
   ```
 
-- [ ] T1035 [P] Modificar `src/routes/dashboard/confluenceViewPresets.ts`
+- [X] T1035 [P] Modificar `src/routes/dashboard/confluenceViewPresets.ts`
   - En el handler `GET /confluence-columns`: usar `createAuthenticatedClient(req.authContext.token)` en lugar de `supabaseClient`
   - Eliminar `supabaseClient` del import si ya no se usa en el archivo
   - Asegurarse de que el handler esté registrado ANTES del `export default router` (o mover la declaración)
@@ -315,7 +315,7 @@ description: "Master task list for 011-team-05-full-migration — replica comple
 
 ## BACKEND — Phase 8: Variables de Entorno
 
-- [ ] T1027 Configurar variables de entorno en `.env.example` del proyecto principal:
+- [X] T1027 Configurar variables de entorno en `.env.example` del proyecto principal:
   ```env
   EDGAR_USER_AGENT=TurboPapus/1.0 (contact@turbopapus.com)
   GEMINI_API_KEY=<obtener del proyecto TEAM-05>
@@ -327,11 +327,11 @@ description: "Master task list for 011-team-05-full-migration — replica comple
 
 > Estos fixes deben aplicarse **sobre** los archivos creados en Phases 1-7, o integrarse directamente al crearlos.
 
-- [ ] T1100 [P] Fix `normalCdf` en `coverageTypes.ts` — multiplicar por `φ(x)` no por `(1-φ(x))`
+- [X] T1100 [P] Fix `normalCdf` en `coverageTypes.ts` — multiplicar por `φ(x)` no por `(1-φ(x))`
   - Verificación: `normalCdf(0) ≈ 0.500 (±0.001)`, `normalCdf(-10) = 0`, `normalCdf(10) = 1`
   - **Nota**: integrar directamente en T1002 al crear `coverageTypes.ts`
 
-- [ ] T1101 [P] Fix Collar stop-loss en `collarEngine.ts` + `coverageTypes.ts`
+- [X] T1101 [P] Fix Collar stop-loss en `collarEngine.ts` + `coverageTypes.ts`
   - `RiskMetrics`: agregar `stopLossLowPrice?: number`, `stopLossHighPrice?: number`
   - `collarEngine`: exponer `stopLossPrice=stopLossLow` (retrocompatibilidad) + ambos campos nuevos
   - **Nota**: integrar directamente en T1002 y T1012 al crearlos
@@ -354,12 +354,12 @@ description: "Master task list for 011-team-05-full-migration — replica comple
   - `month===9`→`"bearish"`, `month===10`→`"neutral"`, `month===11||12`→`"bullish"`, `4-6`→`"bullish"`, `7-8`→`"neutral"`, default→`"neutral"`
   - **Nota**: integrar directamente en T1010
 
-- [ ] T1106 Fix test `protectivePutEngine.test.ts` — cambiar `riskTolerancePct: 0.3` → `riskTolerancePct: 0`
+- [X] T1106 Fix test `protectivePutEngine.test.ts` — cambiar `riskTolerancePct: 0.3` → `riskTolerancePct: 0`
   - Con 0.3: buffer=10%, stopLossPrice=85.5, currentPrice=90 → alerta NO dispara
   - Con 0: buffer=3%, stopLossPrice=92.15, currentPrice=90 → alerta SÍ dispara ✅
   - Verificar que `alerts.some(a => a.code === "STOP_LOSS_TRIGGERED")` es true
 
-- [ ] T1107 Fix test `confluenceDynamicColumns.test.ts` — mock de `supabaseClient`
+- [X] T1107 Fix test `confluenceDynamicColumns.test.ts` — mock de `supabaseClient`
   - La ruta `/confluence-columns` usa `createAuthenticatedClient`; el mock del test ya lo intercepta
   - Si la ruta fue creada correctamente en T1035, este test pasa automáticamente
   - Verificar: `GET /api/dashboard/confluence-columns` → HTTP 200, body `{ columns: [...] }`
@@ -368,16 +368,16 @@ description: "Master task list for 011-team-05-full-migration — replica comple
 
 ## BACKEND — Phase 10: Cache Fixes SEC EDGAR
 
-- [ ] T1031 [P] Incluir `period` en la key de `searchEftsCache` e `inflightEfts` (`realSourceParsers.ts`)
+- [X] T1031 [P] Incluir `period` en la key de `searchEftsCache` e `inflightEfts` (`realSourceParsers.ts`)
   - Cache key actual: solo `ticker` → cambiar a `${ticker}:${period}`
   - Evita que requests con distintos períodos compartan el mismo resultado cacheado
 
-- [ ] T1032 [P] Agregar TTL de 24h a `searchEftsCache` (`realSourceParsers.ts`)
+- [X] T1032 [P] Agregar TTL de 24h a `searchEftsCache` (`realSourceParsers.ts`)
   - `SEARCH_EFTS_CACHE_TTL_MS = 86_400_000`
   - Cambiar `Map<string, EftsHit[]>` → `Map<string, { hits: EftsHit[]; timestamp: number }>`
   - Verificar expiración en `searchEfts()` antes de retornar cache
 
-- [ ] T1033 [P] Incluir `period` en `InstitutionalDataService.getCacheKey()` (`institutionalDataService.ts`)
+- [X] T1033 [P] Incluir `period` en `InstitutionalDataService.getCacheKey()` (`institutionalDataService.ts`)
   - Key actual: `sourceId:ticker` → cambiar a `${sourceId}:${ticker}:${period}`
   - Evita que requests con diferentes períodos compartan la misma observación cacheada
 
@@ -385,16 +385,16 @@ description: "Master task list for 011-team-05-full-migration — replica comple
 
 ## BACKEND — Phase 11: Tests Backend
 
-- [ ] T1028 [P] Crear `tests/unit/strategies/coverage/collarEngine.test.ts`
+- [X] T1028 [P] Crear `tests/unit/strategies/coverage/collarEngine.test.ts`
   - Caso crédito neto: `callPremium=9.26, putPremium=0.74, currentPrice=450.50, callStrike=460, shares=100`
   - `netPremiumPerShare ≈ -8.52`, `maxProfit ≈ 1002`, `protectionCeilingPrice ≈ 468.52`
   - Caso débito neto: verificar `maxProfit`, `maxLoss`, `stopLossLowPrice`, `stopLossHighPrice`
 
-- [ ] T1029 Crear `tests/unit/strategies/coverage/protectivePutEngine.test.ts`
+- [X] T1029 Crear `tests/unit/strategies/coverage/protectivePutEngine.test.ts`
   - Break-even OTM/ATM/ITM
   - `stopLossPrice` dinámico con `riskTolerancePct=0` (trigger activo) y `riskTolerancePct=0.3` (no trigger)
 
-- [ ] T1030 Crear `tests/integration/coverage.test.ts`
+- [X] T1030 Crear `tests/integration/coverage.test.ts`
   - `POST /api/coverage/analyze` → verifica 4 estrategias con datos válidos
   - `GET /api/institutional/analysis?ticker=AAPL` → verifica degradación parcial
 

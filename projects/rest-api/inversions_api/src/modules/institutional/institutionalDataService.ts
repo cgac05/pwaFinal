@@ -227,7 +227,9 @@ export class InstitutionalDataService {
     ticker: string,
     period: InstitutionalAnalysisPeriod
   ): Promise<InstitutionalSourceObservation | null> {
-    const cacheKey = `${source.sourceId}:${ticker}`;
+    // FIC: Include period in cache key so different periods don't share the same observation. (EN)
+    // FIC: Incluir period en la clave de caché para que distintos períodos no compartan la misma observación. (ES)
+    const cacheKey = `${source.sourceId}:${ticker}:${period}`;
 
     // Check cache first
     const cached = this.getFromCache(cacheKey, source.cacheTtlMs ?? this.cacheTtlMs);
