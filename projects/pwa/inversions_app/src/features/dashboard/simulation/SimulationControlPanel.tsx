@@ -151,7 +151,11 @@ export function SimulationControlPanel({ ticket, onResult }: Props) {
       {error && <div style={{ color: "var(--color-sell)", fontSize: "var(--font-size-sm)" }}>Error: {error}</div>}
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <ExecuteSimulationButton loading={loading} onClick={run} />
+        <ExecuteSimulationButton
+          loading={loading}
+          onClick={run}
+          loadingText={coresOn["A_IA"] ? "Calculando Cores e IA..." : undefined}
+        />
       </div>
     </section>
   );
