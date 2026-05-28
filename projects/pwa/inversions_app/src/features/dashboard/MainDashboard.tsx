@@ -54,7 +54,7 @@ export function MainDashboard() {
   const [fundamentalSimulation, setFundamentalSimulation] = useState<AnalysisResult | null>(null);
   const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
   const [evidenceSignal, setEvidenceSignal] = useState<DashboardSignalCard | null>(null);
-  const { selectedInstrument, selectedSignal: storeSelectedRow, runtimeMode, operationalMode } = useSignalStore();
+  const { selectedInstrument, selectedSignal: storeSelectedRow, selectedOptionsStrategy, runtimeMode, operationalMode } = useSignalStore();
   const { analysisCategory } = useAppShellStore();
 
   // FIC: Map analysis category chips to visible dashboard sections.
@@ -84,6 +84,7 @@ export function MainDashboard() {
   }, []);
 
   const selectedSymbol = selectedInstrument?.symbol ?? payload?.cards[0]?.instrument ?? "SPY";
+  const activeStrategy = selectedOptionsStrategy?.name ?? (showFundamental ? "Long Call" : "SIN_ESTRATEGIA");
   const activeCoreCount = useMemo(() => cores.filter((core) => core.enabled).length, [cores]);
 
   const refreshDashboard = useCallback(async () => {
@@ -123,9 +124,9 @@ export function MainDashboard() {
     "Demo";
 
   const mainContent = (
-    <div style={{ padding: "var(--space-lg)", display: "grid", gap: "var(--space-lg)" }}>
+    <div className="dashboard-main-content" style={{ padding: "var(--space-lg)", display: "grid", gap: "var(--space-lg)" }}>
       {/* ── Nav bar row */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className="dashboard-topbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
           <Badge label="FIC" color="var(--color-accent)" size="sm" />
           <span style={{ fontWeight: "var(--font-weight-bold)", fontSize: "var(--font-size-base)" }}>Inversions</span>
@@ -147,7 +148,7 @@ export function MainDashboard() {
 
       {/* ── Filter bar */}
       <div className="card">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: "var(--space-sm)", alignItems: "end" }}>
+        <div className="dashboard-filter-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "var(--space-sm)", alignItems: "end" }}>
           <div>
             <label style={{ display: "block", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "0.35rem", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Instrumentos
@@ -163,7 +164,7 @@ export function MainDashboard() {
             <label style={{ display: "block", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "0.35rem", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Cores
             </label>
-            <div style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.45rem 0.75rem", color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)", whiteSpace: "nowrap" }}>
+          <div className="dashboard-core-count" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.45rem 0.75rem", color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)", whiteSpace: "nowrap" }}>
               {activeCoreCount} / {cores.length} activos
             </div>
           </div>
@@ -180,7 +181,7 @@ export function MainDashboard() {
       {!isTestEnv && (
         <div style={{ display: "grid", gap: "var(--space-sm)" }}>
           <RuntimeModeSwitches />
-          <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-sm)", flexWrap: "wrap" }}>
+          <div className="card dashboard-controls-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-sm)", flexWrap: "wrap" }}>
             <IndicatorsMenu />
             <TimeControls
               symbol={selectedSymbol}
@@ -207,13 +208,13 @@ export function MainDashboard() {
 
       {/* ── Payload views */}
       {payload && (
-        <div style={{ display: "grid", gap: "var(--space-lg)" }}>
+        <div className="dashboard-panel-stack" style={{ display: "grid", gap: "var(--space-lg)" }}>
 
           {/* FIC: SuperChart + simulation — always visible regardless of analysisCategory. */}
           {/* FIC: SuperChart + simulación — siempre visible independientemente de analysisCategory. */}
           {!isTestEnv && (
-            <div style={{ display: "grid", gap: "var(--space-md)", gridTemplateColumns: "1fr" }}>
-              <div className="card" style={{ minHeight: 380 }}>
+            <div className="dashboard-panel-stack" style={{ display: "grid", gap: "var(--space-md)", gridTemplateColumns: "1fr" }}>
+              <div className="card dashboard-chart-card" style={{ minHeight: 380 }}>
                 <SuperChart symbol={selectedSymbol} timeframe={timeframe} startDate={periodRange?.startDate} endDate={periodRange?.endDate} />
               </div>
               <SimulationControlPanel
@@ -240,10 +241,10 @@ export function MainDashboard() {
             </div>
           )}
 
-          {/* FIC: Confluence table — visible for technical, options, institutional and AI. */}
-          {/* FIC: Tabla de confluencia — visible para técnico, opciones, institucional e IA. */}
-          <div style={{ display: (showTechnical || showOptions || showInstitutional || showAI) ? "" : "none" }}>
-            <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} />
+          {/* FIC: Confluence table - visible for technical, options, institutional, fundamental and AI. */}
+          {/* FIC: Tabla de confluencia - visible para tecnico, opciones, institucional, fundamental e IA. */}
+          <div style={{ display: (showTechnical || showOptions || showInstitutional || showFundamental || showAI) ? "" : "none" }}>
+            <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} activeStrategy={activeStrategy} />
           </div>
 
           {/* FIC: Signal overlay and explainability — technical and AI categories. */}

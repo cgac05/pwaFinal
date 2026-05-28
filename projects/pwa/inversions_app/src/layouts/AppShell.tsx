@@ -18,7 +18,7 @@ export function AppShell({ activityBar, leftPanel, main, chatPanel }: AppShellPr
   const { leftPanelCollapsed, chatPanelCollapsed } = useAppShellStore();
 
   const leftWidth = leftPanelCollapsed ? "0px" : "var(--left-panel-width)";
-  const chatWidth = chatPanelCollapsed ? "0px" : "var(--chat-panel-width)";
+  const chatWidth = chatPanelCollapsed ? "0px" : "min(var(--chat-panel-width), calc(100vw - var(--activity-bar-width) - var(--space-md)))";
 
   return (
     <div
@@ -34,7 +34,7 @@ export function AppShell({ activityBar, leftPanel, main, chatPanel }: AppShellPr
       {/* ── 4-zone body ── */}
       <div
         data-testid="app-shell-body"
-        style={{ display: "flex", flex: 1, overflow: "hidden" }}
+        style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative" }}
       >
         {/* Zone 1: Activity Bar — always visible */}
         <div
@@ -71,7 +71,7 @@ export function AppShell({ activityBar, leftPanel, main, chatPanel }: AppShellPr
         {/* Zone 3: Main content — flex:1, resizes when either panel opens/closes */}
         <main
           data-testid="app-shell-main"
-          style={{ flex: 1, overflow: "auto", minWidth: 0 }}
+          style={{ flex: 1, overflow: "auto", minWidth: 0, width: 0 }}
         >
           {main}
         </main>
@@ -81,11 +81,18 @@ export function AppShell({ activityBar, leftPanel, main, chatPanel }: AppShellPr
           data-testid="app-shell-chat-panel"
           style={{
             width: chatWidth,
-            flexShrink: 0,
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: 0,
             overflow: "hidden",
-            transition: "width 0.25s ease",
+            transform: chatPanelCollapsed ? "translateX(100%)" : "translateX(0)",
+            transition: "width 0.25s ease, transform 0.25s ease",
             background: "var(--color-surface)",
             borderLeft: "1px solid var(--color-border)",
+            boxShadow: chatPanelCollapsed ? "none" : "-16px 0 40px rgba(0, 0, 0, 0.32)",
+            pointerEvents: chatPanelCollapsed ? "none" : "auto",
+            zIndex: 30,
           }}
           className="app-shell-chat-panel"
         >
