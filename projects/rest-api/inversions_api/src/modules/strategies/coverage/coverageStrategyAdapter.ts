@@ -6,6 +6,58 @@ import { estimateOptionPremium } from "./coverageTypes";
 
 export type ConfidenceLevel = "ALTA" | "MEDIA" | "BAJA";
 
+// FIC: Institutional context passed from InstitutionalSnapshot to score adjustment. (EN)
+// FIC: Contexto institucional enviado desde InstitutionalSnapshot al ajuste de score. (ES)
+export interface InstitutionalContext {
+  direction: "bullish" | "bearish" | "lateral";
+  continuityProbability: number;
+  institutionalScore: number;
+  hasNearExpiration: boolean;
+}
+
+// FIC: Returns contextual score delta: direction bonus × continuity multiplier ± flat adjustments. (EN)
+// FIC: Retorna delta de score contextual: bonus de dirección × multiplicador de continuidad ± ajustes planos. (ES)
+function computeContextualScoreAdjustment(
+  context: InstitutionalContext,
+  kind: CoverageStrategyContract["kind"]
+): number {
+  let adjustment = 0;
+
+  if (context.direction === "bearish") {
+    if (kind === "protective_put" || kind === "married_put" || kind === "collar_put") {
+      adjustment = 0.15;
+    }
+  } else if (context.direction === "bullish") {
+    if (kind === "covered_straddle") {
+      adjustment = 0.10;
+    }
+  } else if (context.direction === "lateral") {
+    if (kind === "collar_put") {
+      adjustment = 0.15;
+    }
+  }
+
+  // FIC: High-conviction trend amplifies the directional bonus. (EN)
+  // FIC: Tendencia de alta convicción amplifica el bonus direccional. (ES)
+  if (context.continuityProbability > 0.7) {
+    adjustment *= 1.2;
+  }
+
+  // FIC: Near-expiration increases execution risk across all strategies. (EN)
+  // FIC: Expiración cercana incrementa el riesgo de ejecución en todas las estrategias. (ES)
+  if (context.hasNearExpiration) {
+    adjustment -= 0.10;
+  }
+
+  // FIC: Strong institutional score adds reliability bonus to all strategies. (EN)
+  // FIC: Score institucional fuerte añade bono de confiabilidad a todas las estrategias. (ES)
+  if (context.institutionalScore > 0.7) {
+    adjustment += 0.05;
+  }
+
+  return adjustment;
+}
+
 export interface AdaptedStrategyResponse {
   strategyId: string;
   kind: string;
@@ -105,10 +157,19 @@ export function adaptContractToEngine(params: {
   };
 }
 
-// FIC: Map a CoverageStrategyResult to the API response shape with confidence level. (EN)
-// FIC: Mapea un CoverageStrategyResult a la forma de respuesta API con nivel de confianza. (ES)
-export function adaptResultToResponse(result: CoverageStrategyResult): AdaptedStrategyResponse {
-  const confidenceScore = computeAdapterConfidenceScore(result);
+// FIC: Map a CoverageStrategyResult to the API response shape, optionally adjusting score via institutional context. (EN)
+// FIC: Mapea un CoverageStrategyResult a la forma de respuesta API, ajustando opcionalmente el score con contexto institucional. (ES)
+export function adaptResultToResponse(
+  result: CoverageStrategyResult,
+  institutionalContext?: InstitutionalContext
+): AdaptedStrategyResponse {
+  let confidenceScore = computeAdapterConfidenceScore(result);
+
+  if (institutionalContext) {
+    const adjustment = computeContextualScoreAdjustment(institutionalContext, result.kind);
+    confidenceScore = Math.min(1, Math.max(0, confidenceScore + adjustment));
+  }
+
   const rm = result.riskMetrics;
 
   return {

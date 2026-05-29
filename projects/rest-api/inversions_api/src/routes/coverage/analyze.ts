@@ -3,7 +3,7 @@
 
 import { Router, type Request, type Response } from "express";
 import { authContextMiddleware } from "../../middleware/authContext";
-import { adaptContractToEngine, adaptResultToResponse } from "../../modules/strategies/coverage/coverageStrategyAdapter";
+import { adaptContractToEngine, adaptResultToResponse, type InstitutionalContext } from "../../modules/strategies/coverage/coverageStrategyAdapter";
 import { CoverageSimulationEngine } from "../../modules/strategies/coverage/coverageSimulationEngine";
 import type { CoverageStrategyContract } from "../../modules/strategies/coverage/coverageStrategyContract";
 
@@ -73,6 +73,8 @@ coverageAnalyzeRouter.post(
       return res.status(400).json({ code: "INVALID_SHARES" });
     }
 
+    const institutionalContext = body.institutionalContext as InstitutionalContext | undefined;
+
     const simulationEngine = new CoverageSimulationEngine();
     const contracts = buildContracts(body);
 
@@ -82,7 +84,7 @@ coverageAnalyzeRouter.post(
 
     const results = settled
       .filter((s): s is PromiseFulfilledResult<Awaited<ReturnType<typeof simulationEngine.analyze>>> => s.status === "fulfilled")
-      .map((s) => adaptResultToResponse(s.value.strategyResult));
+      .map((s) => adaptResultToResponse(s.value.strategyResult, institutionalContext));
 
     return res.status(200).json({
       results,

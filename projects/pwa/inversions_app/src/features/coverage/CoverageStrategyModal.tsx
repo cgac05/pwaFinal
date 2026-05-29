@@ -10,12 +10,14 @@ import {
   type CoverageStrategyResult,
 } from "../../services/coverage/coverageApi";
 import { useSignalStore } from "../../store/signals";
+import type { InstitutionalAnalysisResponse } from "../../services/institutional/institutionalApi";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   initialTicker?: string;
   initialKind?: "protective_put" | "married_put" | "collar_put" | "covered_straddle";
+  institutionalContext?: InstitutionalAnalysisResponse;
 }
 
 const KIND_LABELS: Record<string, string> = {
@@ -31,7 +33,7 @@ const BADGE_COLORS: Record<string, string> = {
   BAJA: "var(--color-sell)",
 };
 
-export function CoverageStrategyModal({ isOpen, onClose, initialTicker, initialKind }: Props) {
+export function CoverageStrategyModal({ isOpen, onClose, initialTicker, initialKind, institutionalContext }: Props) {
   const { selectedInstrument } = useSignalStore();
 
   const [ticker, setTicker] = useState(initialTicker ?? selectedInstrument?.symbol ?? "SPY");
@@ -79,6 +81,18 @@ export function CoverageStrategyModal({ isOpen, onClose, initialTicker, initialK
         riskTolerancePct: parseFloat(riskPct) / 100,
         ...(putStrike ? { putStrikePrice: parseFloat(putStrike) } : {}),
         ...(callStrike ? { callStrikePrice: parseFloat(callStrike) } : {}),
+        institutionalContext: institutionalContext
+          ? {
+              direction: (
+                institutionalContext.trends?.direction === "bullish" ? "bullish"
+                : institutionalContext.trends?.direction === "bearish" ? "bearish"
+                : "lateral"
+              ) as "bullish" | "bearish" | "lateral",
+              continuityProbability: institutionalContext.trends?.continuityProbability ?? 0.5,
+              institutionalScore: institutionalContext.zones?.institutionalScore ?? 0.5,
+              hasNearExpiration: (institutionalContext.expiration?.events?.length ?? 0) > 0,
+            }
+          : undefined,
       };
       const data = await postCoverageAnalyze(body, abortRef.current.signal);
       setResults(data);

@@ -19,6 +19,12 @@ export interface CoverageRequestBody {
   callStrikePrice?: number;
   iv?: number;
   dte?: number;
+  institutionalContext?: {
+    direction: "bullish" | "bearish" | "lateral";
+    continuityProbability: number;
+    institutionalScore: number;
+    hasNearExpiration: boolean;
+  };
 }
 
 export interface CoverageStrategyResult {

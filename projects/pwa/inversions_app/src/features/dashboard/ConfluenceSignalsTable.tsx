@@ -388,6 +388,9 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
         isOpen={coverageModalOpen}
         onClose={() => setCoverageModalOpen(false)}
         initialTicker={coverageTicker ?? undefined}
+        institutionalContext={coverageTicker
+          ? (institutionalResults[coverageTicker.toUpperCase()] ?? undefined)
+          : undefined}
       />
 
       <InstitutionalDetailModal
