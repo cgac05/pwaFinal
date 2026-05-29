@@ -3,6 +3,7 @@
 
 import React, { useState } from "react";
 import { ContentModal } from "../../components/ui/ContentModal";
+import { MarkdownContent } from "../../components/ui/MarkdownContent";
 import type { InstitutionalAnalysisResponse } from "../../services/institutional/institutionalApi";
 
 interface Props {
@@ -10,15 +11,17 @@ interface Props {
   onClose: () => void;
   ticker: string;
   data: InstitutionalAnalysisResponse | null;
+  resumen?: string;
 }
 
-type Tab = "zones" | "trends" | "expiration" | "positions";
+type Tab = "zones" | "trends" | "expiration" | "positions" | "observaciones";
 
 const TAB_LABELS: Record<Tab, string> = {
   zones: "Zonas S/R",
   trends: "Tendencias",
   expiration: "Vencimientos",
   positions: "Posiciones 13F",
+  observaciones: "Observaciones",
 };
 
 const statusIcon = (status: string) => {
@@ -76,7 +79,7 @@ const trendBadge = (direction: "bullish" | "bearish" | "neutral") => {
   );
 };
 
-export function InstitutionalDetailModal({ isOpen, onClose, ticker, data }: Props) {
+export function InstitutionalDetailModal({ isOpen, onClose, ticker, data, resumen }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("zones");
 
   const subtitle = data
@@ -296,6 +299,18 @@ export function InstitutionalDetailModal({ isOpen, onClose, ticker, data }: Prop
                 </>
               ) : (
                 <p style={{ color: "var(--color-text-muted)" }}>Datos de vencimientos no disponibles.</p>
+              )}
+            </div>
+          )}
+
+          {activeTab === "observaciones" && (
+            <div>
+              {resumen ? (
+                <MarkdownContent content={resumen} />
+              ) : (
+                <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
+                  Sin observaciones disponibles para este análisis.
+                </p>
               )}
             </div>
           )}

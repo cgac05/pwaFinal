@@ -52,6 +52,7 @@ export interface ConfluenceSignalRow {
   disclaimer_id?: string;
   delta_vs_anterior: DeltaPrev;
   observacion: SignalObservation;
+  resumen_analisis?: string;
   optionLeg?: OptionGreeks;
   algorithm_version: string;
   computed_at: string;
@@ -135,7 +136,9 @@ export const CANONICAL_ESTRATEGIAS = [
   "STRADDLE",
   "STRANGLE",
   "BUTTERFLY",
-  "COVERED_CALL"
+  "COVERED_CALL",
+  "CALENDAR_SPREAD",
+  "DIAGONAL_SPREAD",
 ] as const;
 
 export const ALL_CORES: CoreId[] = [

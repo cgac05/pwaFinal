@@ -10,6 +10,8 @@ import { TimeControls } from "./TimeControls";
 import { IndicatorsMenu } from "./IndicatorsMenu";
 import { ConfluenceSignalsTable } from "./ConfluenceSignalsTable";
 import { SimulationControlPanel } from "./simulation/SimulationControlPanel";
+import { SimulatorStrategySection } from "./simulation/SimulatorStrategySection";
+import type { CoverageModalParams } from "./simulation/CoverageParamsModal";
 import { AppShell } from "../../layouts/AppShell";
 import { ActivityBar } from "../../components/ui/ActivityBar";
 import { LeftPanel } from "../sidebar/LeftPanel";
@@ -27,6 +29,7 @@ export function MainDashboard() {
   const [simulationRows, setSimulationRows] = useState<ConfluenceSignalRow[] | undefined>(undefined);
   const [simulationVerdict, setSimulationVerdict] = useState<{ verdict?: unknown; score?: number; degraded?: boolean } | null>(null);
   const [activeSimulationStrategy, setActiveSimulationStrategy] = useState("IRON_CONDOR");
+  const [coverageRequest, setCoverageRequest] = useState<{ params: CoverageModalParams; kind: string } | null>(null);
   const [institutionalCoreWasActive, setInstitutionalCoreWasActive] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
 
@@ -52,6 +55,11 @@ export function MainDashboard() {
     setSimulationRows(result.table);
     setSimulationVerdict(result.verdict);
   }, []);
+
+  const handleCoverageConfirmed = useCallback(
+    (params: CoverageModalParams, kind: string) => setCoverageRequest({ params, kind }),
+    []
+  );
 
   // FIC: Called when user clicks Execute — fires institutional analysis if A_INSTITUCIONAL core is active. (EN)
   // FIC: Llamado cuando el usuario hace clic en Ejecutar — dispara análisis institucional si el core A_INSTITUCIONAL está activo. (ES)
@@ -151,6 +159,7 @@ export function MainDashboard() {
         onResult={handleSimulationResult}
         onExecute={handleSimulationExecute}
         onStrategyChange={setActiveSimulationStrategy}
+        onCoverageParamsConfirmed={handleCoverageConfirmed}
       />
 
       {/* ── Simulation verdict */}
@@ -248,6 +257,15 @@ export function MainDashboard() {
         </section>
       )}
 
+      {/* ── Strategy breakdown section — only visible after simulation has run */}
+      {simulationRows !== undefined && (
+        <SimulatorStrategySection
+          ticker={selectedSymbol}
+          activeStrategy={activeSimulationStrategy}
+          coverageRequest={coverageRequest}
+        />
+      )}
+
       {/* ── Placeholder sections — reserved for other teams */}
       <PlaceholderSection
         title="Análisis Técnico Extendido"
@@ -256,10 +274,6 @@ export function MainDashboard() {
       <PlaceholderSection
         title="Análisis Fundamental"
         description="Métricas financieras, earnings, valuación y comparativa sectorial."
-      />
-      <PlaceholderSection
-        title="Estrategias de Cobertura"
-        description="Análisis de opciones, estrategias de cobertura y PayoffChart interactivo."
       />
       <PlaceholderSection
         title="Noticias y Sentimiento"

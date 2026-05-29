@@ -10,13 +10,13 @@ import {
   type ConfluenceSignalRow,
   type ConfluenceTableResponse
 } from "../../services/signals/confluenceTableApi";
-import { ObservationCell } from "./ObservationCell";
+import type { InstitutionalAnalysisResponse } from "../../services/institutional/institutionalApi";
 import { OptionGreeksRow } from "./OptionGreeksRow";
 import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailModal";
-import { CoverageStrategyModal } from "../coverage/CoverageStrategyModal";
+import { MarkdownContent } from "../../components/ui/MarkdownContent";
 
 // FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
-const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia" | "observacion"; label: string; width: number }> = [
+const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia"; label: string; width: number }> = [
   { key: "ticket",    label: "TICKET",     width: 76  },
   { key: "core",      label: "CORE",       width: 150 },
   { key: "subCore",   label: "SUBCORE",    width: 110 },
@@ -30,8 +30,34 @@ const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia" | "ob
   { key: "invertir",  label: "INVERTIR",   width: 96  },
   { key: "estado",    label: "ESTADO",     width: 118 },
   { key: "estrategia",label: "ESTRATEGIA", width: 170 },
-  { key: "observacion",label: "OBSERVACION",width: 360 }
 ];
+
+function buildResumen(
+  row: ConfluenceSignalRow,
+  instResults: Record<string, InstitutionalAnalysisResponse>
+): string {
+  if (row.core === "A_INSTITUCIONAL") {
+    const result = instResults[row.ticket?.toUpperCase() ?? ""];
+    if (result) {
+      const parts: string[] = [];
+      if (result.trends) {
+        parts.push(`Tendencia: ${result.trends.direction} SMA50=${result.trends.sma50.toFixed(2)} SMA200=${result.trends.sma200.toFixed(2)}`);
+        if (result.trends.crossover) parts.push(`Crossover: ${result.trends.crossover.type} hace ${result.trends.crossover.daysAgo}d`);
+      }
+      if (result.zones) {
+        parts.push(`Zonas: ${result.zones.support.length} soporte, ${result.zones.resistance.length} resistencia`);
+        if (result.zones.support.length) parts.push(`Soporte clave: $${result.zones.support[0].price.toFixed(2)}`);
+        if (result.zones.resistance.length) parts.push(`Resistencia clave: $${result.zones.resistance[0].price.toFixed(2)}`);
+      }
+      if (result.expiration) parts.push(`Vencimiento: régimen=${result.expiration.currentRegime}, ${result.expiration.daysToNextOpex}d para OpEx, sesgo=${result.expiration.expiryBias}`);
+      if (result.metrics) parts.push(`Ownership: ${result.metrics.fundsOwnershipPct.toFixed(1)}%, NetFlow: $${result.metrics.netFlow.toLocaleString()}`);
+      return `[Institucional ${row.ticket}] ${parts.join(". ")}`;
+    }
+  }
+  const obs = row.observacion;
+  const met = Object.entries(obs.metricas ?? {}).map(([k, v]) => `${k}=${v}`).join(", ");
+  return [obs.objetivo, obs.senal, obs.explicacion, met ? `Métricas: ${met}` : ""].filter(Boolean).join(". ");
+}
 
 interface Props {
   symbol?: string;
@@ -57,11 +83,10 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<Omit<ConfluenceTableResponse, "rows"> | null>(null);
-  const [detailRow, setDetailRow] = useState<ConfluenceSignalRow | null>(null);
   const [modalTicker, setModalTicker] = useState<string | null>(null);
-  const [coverageModalOpen, setCoverageModalOpen] = useState(false);
-  const [coverageTicker, setCoverageTicker] = useState<string | null>(null);
+  const [modalResumen, setModalResumen] = useState<string>("");
   const [stubCore, setStubCore] = useState<string | null>(null);
+  const [stubResumen, setStubResumen] = useState<string>("");
 
   const { setSelectedSignal } = useSignalStore();
   const { analysisCategory } = useAppShellStore();
@@ -90,12 +115,15 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
       .finally(() => setLoading(false));
   }, [symbol, rowsProp]);
 
-  const sorted = useMemo(() => {
+  const enrichedSorted = useMemo(() => {
     const order = ["A_INDICADORES", "A_FUNDAMENTAL", "A_TECNICO", "A_INSTITUCIONAL", "A_NOTICIAS", "A_IA"];
-    return [...rows].sort((a, b) => order.indexOf(a.core) - order.indexOf(b.core));
-  }, [rows]);
+    return [...rows]
+      .sort((a, b) => order.indexOf(a.core) - order.indexOf(b.core))
+      .map((row) => ({ ...row, resumen_analisis: buildResumen(row, institutionalResults) }));
+  }, [rows, institutionalResults]);
 
   const totalCols = TABLE_COLUMNS.length + (showInstitutionalColumns ? 4 : 0);
+  const sorted = enrichedSorted;
 
   return (
     <section className="card" style={{ overflow: "hidden" }}>
@@ -122,7 +150,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
       </div>
 
       <div style={{ maxHeight: 500, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
-        <table style={{ width: "100%", minWidth: 1760, borderCollapse: "collapse", tableLayout: "fixed" }}>
+        <table style={{ width: "100%", minWidth: 1400, borderCollapse: "collapse", tableLayout: "fixed" }}>
           <thead>
             <tr>
               {TABLE_COLUMNS.map((col) => (
@@ -153,6 +181,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                   if (row.core === "A_INSTITUCIONAL") {
                     if (showInstitutionalColumns && instData) {
                       setModalTicker(row.ticket ?? null);
+                      setModalResumen(row.resumen_analisis ?? "");
                     } else {
                       setSelectedSignal({
                         id: rowKey,
@@ -168,6 +197,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                     } as SelectedSignal);
                   } else {
                     setStubCore(row.core);
+                    setStubResumen(row.resumen_analisis ?? "");
                   }
                 };
 
@@ -178,40 +208,10 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                 const daysToOpex = instData?.expiration?.daysToNextOpex;
 
                 const cells = (
-                  <tr key={rowKey} onClick={onClick} style={{ cursor: "pointer", opacity: row.estado === "DEGRADADA" ? 0.62 : 1 }}>
+                  <tr key={rowKey} onClick={onClick} data-resumen={row.resumen_analisis ?? ""} style={{ cursor: "pointer", opacity: row.estado === "DEGRADADA" ? 0.62 : 1 }}>
                     {TABLE_COLUMNS.map((col) => {
                       let content: React.ReactNode;
-                      if (col.key === "observacion") {
-                        content = (
-                          <span style={{ display: "flex", gap: "0.4rem" }}>
-                            <button
-                              className="btn-ghost"
-                              type="button"
-                              style={{ padding: "0.28rem 0.7rem", fontSize: "0.72rem" }}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setDetailRow(row);
-                              }}
-                            >
-                              Ver detalle
-                            </button>
-                            {row.core === "A_INSTITUCIONAL" && (
-                              <button
-                                className="btn-ghost"
-                                type="button"
-                                style={{ padding: "0.28rem 0.7rem", fontSize: "0.72rem", color: "var(--color-accent)" }}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setCoverageTicker(row.ticket ?? null);
-                                  setCoverageModalOpen(true);
-                                }}
-                              >
-                                Coberturas
-                              </button>
-                            )}
-                          </span>
-                        );
-                      } else if (col.key === "estrategia") {
+                      if (col.key === "estrategia") {
                         content = <span className="badge badge-hold">{(activeStrategy ?? "N/A").replace(/_/g, " ")}</span>;
                       } else if (col.key === "tipoSenal") {
                         content = <span style={{ color: colorForTipo(row.tipoSenal), fontWeight: 700 }}>{row.tipoSenal}</span>;
@@ -275,79 +275,6 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
         </table>
       </div>
 
-      {detailRow && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.62)",
-            zIndex: 45,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "1.25rem"
-          }}
-          onClick={() => setDetailRow(null)}
-        >
-          <div
-            className="card"
-            style={{
-              width: "min(900px, 96vw)",
-              maxHeight: "88vh",
-              overflowY: "auto",
-              border: "1px solid var(--color-border)",
-              boxShadow: "0 24px 80px rgba(0,0,0,0.55)"
-            }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
-              <div>
-                <h2 style={{ margin: 0 }}>Detalle de Señal</h2>
-                <p style={{ marginTop: "0.25rem", fontSize: "0.8rem" }}>{detailRow.ticket} · {detailRow.core}</p>
-              </div>
-              <button className="btn-ghost" type="button" onClick={() => setDetailRow(null)}>Cerrar</button>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.7rem", marginBottom: "1rem" }}>
-              {[
-                ["Subcore",    detailRow.subCore ?? "-"],
-                ["Precio",     Number.isFinite(detailRow.precio) ? detailRow.precio.toFixed(3) : "-"],
-                ["Señal",      detailRow.tipoSenal],
-                ["Tendencia",  detailRow.tendencia],
-                ["Score",      detailRow.score.toFixed(3)],
-                ["Peso",       detailRow.peso.toFixed(3)],
-                ["Invertir",   detailRow.invertir ? "SI" : "NO"],
-                ["Estado",     detailRow.estado],
-                ["Fecha",      detailRow.fecha],
-                ["Timeframe",  detailRow.timeframe],
-                ["Estrategia", (activeStrategy ?? "N/A").replace(/_/g, " ")]
-              ].map(([label, value]) => (
-                <div key={label} style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.6rem" }}>
-                  <div style={{ color: "var(--color-text-muted)", fontSize: "0.68rem", textTransform: "uppercase" }}>{label}</div>
-                  <strong style={{ fontSize: "0.85rem" }}>{value}</strong>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ marginBottom: "1rem" }}>
-              <h2 style={{ marginBottom: "0.5rem" }}>Observacion</h2>
-              <ObservationCell observation={detailRow.observacion} />
-            </div>
-
-            {detailRow.evidencia_refs?.length ? (
-              <div>
-                <h2 style={{ marginBottom: "0.5rem" }}>Evidencia</h2>
-                <ul style={{ marginLeft: "1rem", color: "var(--color-text-muted)", fontSize: "0.8rem" }}>
-                  {detailRow.evidencia_refs.map((ref, i) => <li key={`${ref}-${i}`}>{ref}</li>)}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      )}
-
       {stubCore && (
         <div
           role="dialog"
@@ -367,37 +294,65 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
           <div
             className="card"
             style={{
-              width: "min(420px, 92vw)",
+              width: "min(560px, 94vw)",
+              maxHeight: "80vh",
+              display: "flex",
+              flexDirection: "column",
               border: "1px solid var(--color-border)",
               boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
-              textAlign: "center",
-              padding: "2rem"
+              padding: "1.75rem"
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ marginBottom: "0.5rem" }}>{stubCore.replace("A_", "")}</h2>
-            <p style={{ color: "var(--color-text-muted)", fontSize: "0.85rem", marginBottom: "1.25rem" }}>
-              Módulo en construcción — próximamente disponible.
+            <h2 style={{ marginBottom: "0.25rem", flexShrink: 0 }}>{stubCore.replace("A_", "")}</h2>
+            <p style={{ color: "var(--color-text-muted)", fontSize: "0.8rem", marginBottom: "1.25rem", flexShrink: 0 }}>
+              Análisis gráfico en construcción — próximamente disponible.
             </p>
-            <button className="btn-ghost" type="button" onClick={() => setStubCore(null)}>Cerrar</button>
+
+            {stubResumen && (
+              <>
+                <div style={{
+                  borderTop: "1px solid rgba(255,255,255,0.08)",
+                  paddingTop: "1rem",
+                  marginBottom: "0.5rem",
+                  flexShrink: 0
+                }}>
+                  <span style={{
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
+                    color: "var(--color-text-muted)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.07em"
+                  }}>
+                    Observaciones
+                  </span>
+                </div>
+                <div style={{
+                  flex: 1,
+                  overflowY: "auto",
+                  background: "rgba(255,255,255,0.03)",
+                  borderRadius: "var(--radius-sm, 6px)",
+                  padding: "0.9rem 1rem",
+                  marginBottom: "1.25rem"
+                }}>
+                  <MarkdownContent content={stubResumen} />
+                </div>
+              </>
+            )}
+
+            <button className="btn-ghost" type="button" onClick={() => setStubCore(null)} style={{ flexShrink: 0, alignSelf: "flex-end" }}>
+              Cerrar
+            </button>
           </div>
         </div>
       )}
-
-      <CoverageStrategyModal
-        isOpen={coverageModalOpen}
-        onClose={() => setCoverageModalOpen(false)}
-        initialTicker={coverageTicker ?? undefined}
-        institutionalContext={coverageTicker
-          ? (institutionalResults[coverageTicker.toUpperCase()] ?? undefined)
-          : undefined}
-      />
 
       <InstitutionalDetailModal
         isOpen={modalTicker !== null}
         onClose={() => setModalTicker(null)}
         ticker={modalTicker ?? ""}
         data={modalTicker ? (institutionalResults[modalTicker.toUpperCase()] ?? null) : null}
+        resumen={modalResumen}
       />
     </section>
   );

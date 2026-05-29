@@ -18,14 +18,9 @@ import { TermStrategyModal, type TermStrategyParams } from "./TermStrategyModal"
 import { CoverageParamsModal, type CoverageModalParams } from "./CoverageParamsModal";
 
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
-const COVERAGE_STRATEGIES = new Set([
-  "IRON_CONDOR", "BULL_CALL_SPREAD", "BEAR_PUT_SPREAD",
-  "BUY_CALL", "BUY_PUT", "SELL_CALL", "SELL_PUT",
-  "STRADDLE", "STRANGLE", "BUTTERFLY", "COVERED_CALL"
-]);
 
 function isTermStrategy(e: string): boolean { return TERM_STRATEGIES.has(e); }
-function isCoverageStrategy(e: string): boolean { return COVERAGE_STRATEGIES.has(e); }
+function isCoverageStrategy(e: string): boolean { return e === "COVERED_CALL"; }
 
 const DEFAULT_TERM_PARAMS: TermStrategyParams = {
   optionStyle: "CALL",
@@ -41,10 +36,8 @@ const DEFAULT_TERM_PARAMS: TermStrategyParams = {
 
 const DEFAULT_COVERAGE_PARAMS: CoverageModalParams = {
   currentPrice: 0,
-  iv: 0.25,
-  dte: 30,
+  shares: 100,
   riskTolerancePct: 0.05,
-  capital: 10000
 };
 
 interface Props {
@@ -54,6 +47,7 @@ interface Props {
   // FIC: Llamado con los IDs de cores activos cuando el usuario hace clic en Ejecutar — antes de que complete la API. (ES)
   onExecute?: (activeCoreIds: CoreId[]) => void;
   onStrategyChange?: (estrategia: string) => void;
+  onCoverageParamsConfirmed?: (params: CoverageModalParams, kind: string) => void;
 }
 
 type Preset = "2A" | "1A" | "6M" | "3M" | "1M";
@@ -68,7 +62,7 @@ function isoPlusDays(days: number): string {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }
 
-export function SimulationControlPanel({ ticket, onResult, onExecute, onStrategyChange }: Props) {
+export function SimulationControlPanel({ ticket, onResult, onExecute, onStrategyChange, onCoverageParamsConfirmed }: Props) {
   const [preset, setPreset] = useState<Preset>("3M");
   const [estrategiaFrom, setEstrategiaFrom] = useState(isoToday());
   const [estrategiaTo, setEstrategiaTo] = useState(isoPlusDays(30));
@@ -213,9 +207,11 @@ export function SimulationControlPanel({ ticket, onResult, onExecute, onStrategy
       <CoverageParamsModal
         open={coverageModalOpen}
         estrategia={estrategia}
+        ticker={ticket}
         params={coverageParams}
         onChange={setCoverageParams}
         onClose={() => setCoverageModalOpen(false)}
+        onConfirm={(params) => onCoverageParamsConfirmed?.(params, estrategia)}
       />
     </section>
   );
