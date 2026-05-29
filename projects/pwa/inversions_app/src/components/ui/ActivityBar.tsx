@@ -1,8 +1,8 @@
-// FIC: ActivityBar — VS Code-style vertical navigation bar with keyboard support, section toggle, and chat panel toggle.
-// FIC: ActivityBar — barra de navegación vertical estilo VS Code con soporte de teclado, toggle de sección y toggle de chat.
+// FIC: ActivityBar — VS Code-style vertical navigation bar with keyboard support and section toggle.
+// FIC: ActivityBar — barra de navegación vertical estilo VS Code con soporte de teclado y toggle de sección.
 
 import React from "react";
-import { List, MessageSquare } from "lucide-react";
+import { List } from "lucide-react";
 import { useAppShellStore } from "../../store/appShell";
 
 const iconButtonStyle = (isActive: boolean): React.CSSProperties => ({
@@ -21,10 +21,9 @@ const iconButtonStyle = (isActive: boolean): React.CSSProperties => ({
 });
 
 export function ActivityBar() {
-  const { leftPanelCollapsed, toggleLeftPanel, chatPanelCollapsed, toggleChatPanel } = useAppShellStore();
+  const { leftPanelCollapsed, toggleLeftPanel } = useAppShellStore();
 
   const isWatchlistActive = !leftPanelCollapsed;
-  const isChatActive = !chatPanelCollapsed;
 
   return (
     <div
@@ -52,22 +51,6 @@ export function ActivityBar() {
           <List size={20} />
         </button>
       </nav>
-
-      {/* Spacer pushes chat icon to bottom */}
-      <div style={{ flex: 1 }} />
-
-      {/* Chat panel toggle — bottom of activity bar */}
-      <button
-        onClick={toggleChatPanel}
-        onMouseDown={(e) => e.preventDefault()}
-        aria-label={isChatActive ? "Cerrar chat IA" : "Abrir chat IA"}
-        aria-pressed={isChatActive}
-        title="Chat IA"
-        tabIndex={0}
-        style={iconButtonStyle(isChatActive)}
-      >
-        <MessageSquare size={20} />
-      </button>
     </div>
   );
 }

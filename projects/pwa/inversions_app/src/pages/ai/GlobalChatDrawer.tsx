@@ -174,7 +174,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
         height: "calc(100vh - 4.5rem)",
         maxHeight: "calc(100vh - 4.5rem)",
         padding: "0.5rem 0",
-        fontFamily: "Outfit, Inter, sans-serif"
+        fontFamily: "var(--font-family)"
       }}>
 
         {/* SIDEBAR LEFT: EVALUATED ASSETS PANEL */}
@@ -432,12 +432,12 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                   width: "56px",
                   height: "56px",
                   borderRadius: "50%",
-                  background: "rgba(56, 139, 253, 0.1)",
-                  border: "1px solid rgba(56, 139, 253, 0.25)",
+                  background: "rgba(73, 79, 223, 0.1)",
+                  border: "1px solid rgba(73, 79, 223, 0.25)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  boxShadow: "0 0 15px rgba(56, 139, 253, 0.15)"
+                  boxShadow: "0 0 15px rgba(73, 79, 223, 0.15)"
                 }}>
                   <Sparkles size={26} color="var(--color-accent)" />
                 </div>
@@ -529,11 +529,11 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                         {msg.modelUsed && (
                           <span style={{
                             fontSize: "0.6rem",
-                            background: "rgba(56, 139, 253, 0.12)",
+                            background: "var(--color-accent-subtle)",
                             color: "var(--color-accent)",
                             padding: "0.05rem 0.35rem",
                             borderRadius: "var(--radius-sm)",
-                            border: "1px solid rgba(56, 139, 253, 0.25)"
+                            border: "1px solid rgba(73, 79, 223, 0.25)"
                           }}>
                             {msg.modelUsed.includes("gemini") ? "Gemini" : msg.modelUsed}
                           </span>
@@ -548,10 +548,10 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                     fontSize: "0.9rem",
                     lineHeight: 1.5,
                     background: msg.role === "user"
-                      ? "linear-gradient(135deg, rgba(56, 139, 253, 0.15) 0%, rgba(56, 139, 253, 0.08) 100%)"
+                      ? "linear-gradient(135deg, rgba(73, 79, 223, 0.15) 0%, rgba(73, 79, 223, 0.08) 100%)"
                       : "rgba(255, 255, 255, 0.03)",
                     border: msg.role === "user"
-                      ? "1px solid rgba(56, 139, 253, 0.3)"
+                      ? "1px solid rgba(73, 79, 223, 0.3)"
                       : "1px solid var(--color-border)",
                     color: "var(--color-text)",
                     boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
@@ -725,7 +725,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           height: "100vh",
           width: "420px",
           maxWidth: "100vw",
-          background: "rgba(10, 15, 26, 0.96)",
+          background: "var(--color-surface)",
           backdropFilter: "blur(20px)",
           borderLeft: "1px solid var(--color-border)",
           boxShadow: "-10px 0 30px rgba(0, 0, 0, 0.6)",
@@ -735,7 +735,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          fontFamily: "Outfit, Inter, sans-serif"
+          fontFamily: "var(--font-family)"
         }}
       >
         {/* Drawer Header */}
@@ -812,13 +812,13 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
         {/* Active ticker banner */}
         <div style={{
           padding: "0.5rem 1.5rem",
-          background: "rgba(255, 212, 59, 0.04)",
+          background: "var(--color-accent-subtle)",
           borderBottom: "1px solid var(--color-border)",
           display: "flex",
           alignItems: "center",
           gap: "0.5rem"
         }}>
-          <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", background: "#4caf50", boxShadow: "0 0 6px #4caf50" }} />
+          <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", background: "var(--color-buy)", boxShadow: "0 0 6px var(--color-buy)" }} />
           <span style={{ fontSize: "0.72rem", color: "var(--color-text-muted)" }}>
             Activo en Dashboard: <strong style={{ color: "var(--color-accent)" }}>{activeTicker}</strong>
           </span>
@@ -938,12 +938,12 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 width: "48px",
                 height: "48px",
                 borderRadius: "50%",
-                background: "rgba(56, 139, 253, 0.1)",
-                border: "1px solid rgba(56, 139, 253, 0.2)",
+                background: "rgba(73, 79, 223, 0.1)",
+                border: "1px solid rgba(73, 79, 223, 0.2)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 0 12px rgba(56, 139, 253, 0.1)"
+                boxShadow: "0 0 12px rgba(73, 79, 223, 0.1)"
               }}>
                 <Sparkles size={22} color="var(--color-accent)" />
               </div>
@@ -1018,7 +1018,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                       {msg.modelUsed && (
                         <span style={{
                           fontSize: "0.55rem",
-                          background: "rgba(56, 139, 253, 0.1)",
+                          background: "rgba(73, 79, 223, 0.1)",
                           color: "var(--color-accent)",
                           padding: "0.02rem 0.25rem",
                           borderRadius: 3
@@ -1036,10 +1036,10 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                   fontSize: "0.85rem",
                   lineHeight: 1.45,
                   background: msg.role === "user"
-                    ? "rgba(56, 139, 253, 0.12)"
+                    ? "var(--color-accent-subtle)"
                     : "rgba(255, 255, 255, 0.025)",
                   border: msg.role === "user"
-                    ? "1px solid rgba(56, 139, 253, 0.25)"
+                    ? "1px solid rgba(73, 79, 223, 0.25)"
                     : "1px solid var(--color-border)",
                   color: "var(--color-text)",
                   boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
@@ -1142,10 +1142,10 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 style={{
                   width: "100%",
                   padding: "0.6rem 1rem",
-                  background: "#161b22",
+                  background: "var(--color-surface-raised)",
                   border: "1px solid var(--color-border)",
                   borderRadius: "var(--radius-sm)",
-                  color: "#ffffff",
+                  color: "var(--color-text)",
                   fontSize: "0.85rem",
                   resize: "none",
                   fontFamily: "inherit",

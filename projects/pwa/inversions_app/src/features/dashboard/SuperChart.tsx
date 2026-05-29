@@ -1,6 +1,3 @@
-// FIC: SuperChart component using TradingView Lightweight Charts
-// FIC: Componente SuperChart usando TradingView Lightweight Charts
-
 import React, { useEffect, useRef, useState } from "react";
 import {
   createChart,
@@ -39,8 +36,21 @@ interface SuperChartProps {
   onSelectSignal?: (signal: any) => void;
 }
 
-// FIC: SuperChart component with professional trading chart (EN)
-// FIC: Componente SuperChart con gráfico profesional de trading (ES)
+function getCSSVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function getChartTheme() {
+  return {
+    bg:     getCSSVar("--color-bg")           || "#000000",
+    text:   getCSSVar("--color-text")         || "#ffffff",
+    border: getCSSVar("--color-border")       || "rgba(255,255,255,0.12)",
+    surface: getCSSVar("--color-surface")     || "#0a0a0a",
+    buy:    getCSSVar("--color-buy")          || "#00a87e",
+    sell:   getCSSVar("--color-sell")         || "#e23b4a",
+  };
+}
+
 export const SuperChart: React.FC<SuperChartProps> = ({
   symbol,
   timeframe = "1d",
@@ -60,43 +70,73 @@ export const SuperChart: React.FC<SuperChartProps> = ({
 
   const { selectedSignal } = useSignalStore();
 
-  // FIC: Initialize chart on mount (EN)
-  // FIC: Inicializar gráfico al montar (ES)
+  // Initialize chart
   useEffect(() => {
     if (!containerRef.current || !symbol) return;
 
     try {
-      // FIC: Create chart instance (EN)
-      // FIC: Crear instancia de gráfico (ES)
+      const theme = getChartTheme();
+
       const chart = createChart(containerRef.current, {
         layout: {
-          textColor: "#1f2937",
-          background: { type: ColorType.Solid, color: "#ffffff" },
+          textColor: theme.text,
+          background: { type: ColorType.Solid, color: theme.bg },
+          fontFamily: getCSSVar("--font-family") || "Inter, sans-serif",
+        },
+        grid: {
+          vertLines: { color: theme.border },
+          horzLines: { color: theme.border },
         },
         width: containerRef.current.clientWidth,
         height: Math.max(containerRef.current.clientHeight, 340),
         timeScale: {
           timeVisible: true,
           secondsVisible: true,
+          borderColor: theme.border,
+        },
+        rightPriceScale: {
+          borderColor: theme.border,
         },
       });
 
       chartRef.current = chart;
 
-      // FIC: Add candlestick series (EN)
-      // FIC: Agregar serie de velas (ES)
       const candleSeries = chart.addSeries(CandlestickSeries, {
-        upColor: "#4ade80",
-        downColor: "#ef4444",
+        upColor: theme.buy,
+        downColor: theme.sell,
         borderVisible: true,
-        wickUpColor: "#4ade80",
-        wickDownColor: "#ef4444",
+        wickUpColor: theme.buy,
+        wickDownColor: theme.sell,
       });
 
       candleSeriesRef.current = candleSeries;
 
-      // FIC: ResizeObserver detects container size changes from CSS transitions (panel open/close) and window resize.
-      // FIC: ResizeObserver detecta cambios de tamaño por transiciones CSS (abrir/cerrar paneles) y resize de ventana.
+      // Re-apply theme when OS color scheme changes
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      const handleThemeChange = () => {
+        if (!chartRef.current) return;
+        const t = getChartTheme();
+        chartRef.current.applyOptions({
+          layout: {
+            textColor: t.text,
+            background: { type: ColorType.Solid, color: t.bg },
+          },
+          grid: {
+            vertLines: { color: t.border },
+            horzLines: { color: t.border },
+          },
+          timeScale: { borderColor: t.border },
+          rightPriceScale: { borderColor: t.border },
+        });
+        candleSeriesRef.current?.applyOptions({
+          upColor: t.buy,
+          downColor: t.sell,
+          wickUpColor: t.buy,
+          wickDownColor: t.sell,
+        });
+      };
+      mediaQuery.addEventListener("change", handleThemeChange);
+
       const resizeObserver = new ResizeObserver((entries) => {
         if (!chartRef.current) return;
         for (const entry of entries) {
@@ -111,6 +151,7 @@ export const SuperChart: React.FC<SuperChartProps> = ({
       resizeObserver.observe(containerRef.current);
 
       return () => {
+        mediaQuery.removeEventListener("change", handleThemeChange);
         resizeObserver.disconnect();
         if (chartRef.current) {
           chartRef.current.remove();
@@ -122,8 +163,7 @@ export const SuperChart: React.FC<SuperChartProps> = ({
     }
   }, [symbol]);
 
-  // FIC: Load OHLC data (EN)
-  // FIC: Cargar datos OHLC (ES)
+  // Load OHLC data
   useEffect(() => {
     if (!symbol || !chartRef.current || !candleSeriesRef.current) return;
 
@@ -143,8 +183,6 @@ export const SuperChart: React.FC<SuperChartProps> = ({
         const data = await response.json();
         const rawCandles: OHLC[] = data.candles || [];
 
-        // FIC: Apply period range filter client-side until backend supports date-range query.
-        // FIC: Aplicar filtro de rango de periodo en cliente mientras backend soporta query por fechas.
         const filteredCandles = rawCandles.filter((candle) => {
           const candleDate = new Date(Number(candle.time) * 1000);
           if (startDate && candleDate < startDate) return false;
@@ -153,9 +191,6 @@ export const SuperChart: React.FC<SuperChartProps> = ({
         });
 
         setCandles(filteredCandles);
-
-        // FIC: Set data to candlestick series (EN)
-        // FIC: Establecer datos en serie de velas (ES)
         candleSeriesRef.current!.setData(filteredCandles);
         chartRef.current!.timeScale().fitContent();
       } catch (err) {
@@ -169,8 +204,7 @@ export const SuperChart: React.FC<SuperChartProps> = ({
     loadOHLC();
   }, [symbol, timeframe, startDate, endDate]);
 
-  // FIC: Load signals overlay (EN)
-  // FIC: Cargar overlay de señales (ES)
+  // Load signals overlay
   useEffect(() => {
     if (!symbol || !candleSeriesRef.current) return;
 
@@ -180,16 +214,15 @@ export const SuperChart: React.FC<SuperChartProps> = ({
           `/api/signals/confluence?symbol=${symbol}`,
           { headers: getAuthHeaders() }
         );
-        if (!response.ok) {
-          throw new Error("Failed to load signals");
-        }
+        if (!response.ok) throw new Error("Failed to load signals");
 
         const data = await response.json();
+        const theme = getChartTheme();
         const signalMarks: SignalMark[] = (data.signals || []).map(
           (sig: any) => ({
             time: sig.timestamp,
             position: sig.direction === "buy" ? "belowBar" : "aboveBar",
-            color: sig.direction === "buy" ? "#4ade80" : "#ef4444",
+            color: sig.direction === "buy" ? theme.buy : theme.sell,
             shape: sig.direction === "buy" ? "arrowUp" : "arrowDown",
             text: `${sig.confidence.toFixed(2)}`,
             signal: sig,
@@ -197,13 +230,8 @@ export const SuperChart: React.FC<SuperChartProps> = ({
         );
 
         setSignals(signalMarks);
-
-        // FIC: Set markers on series (EN)
-        // FIC: Establecer marcadores en serie (ES)
         createSeriesMarkers(candleSeriesRef.current as any, signalMarks as any);
 
-        // FIC: Store for later reference (EN)
-        // FIC: Guardar para referencia posterior (ES)
         signalMarks.forEach((mark) => {
           signalMarkersRef.current!.set(mark.time, mark);
         });
@@ -215,20 +243,13 @@ export const SuperChart: React.FC<SuperChartProps> = ({
     loadSignals();
   }, [symbol]);
 
-  // FIC: Handle signal highlighting (EN)
-  // FIC: Manejar resaltado de señal (ES)
+  // Handle signal highlighting
   useEffect(() => {
     if (!selectedSignal || !candleSeriesRef.current) return;
 
-    // FIC: Find and highlight the selected signal (EN)
-    // FIC: Encontrar y resaltar la señal seleccionada (ES)
     const relevantSignals = signals.map((mark) => {
       if (mark.signal?.id === selectedSignal?.id) {
-        return {
-          ...mark,
-          color: "#fbbf24",
-          shape: "square",
-        };
+        return { ...mark, color: getCSSVar("--color-warning") || "#ec7e00", shape: "square" as const };
       }
       return mark;
     });
@@ -238,43 +259,32 @@ export const SuperChart: React.FC<SuperChartProps> = ({
 
   if (error) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-red-50">
-        <div className="text-center">
-          <p className="text-red-600 font-semibold">Chart Error</p>
-          <p className="text-red-500 text-sm">{error}</p>
+      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--color-surface)" }}>
+        <div style={{ textAlign: "center" }}>
+          <p style={{ color: "var(--color-sell)", fontWeight: "var(--font-weight-bold)" as any }}>Error al cargar el gráfico</p>
+          <p style={{ color: "var(--color-sell)", fontSize: "var(--font-size-sm)" }}>{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full h-full flex flex-col bg-white">
-      {/* FIC: Chart container (EN) */}
-      {/* FIC: Contenedor de gráfico (ES) */}
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "var(--color-bg)" }}>
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-10">
-          <div className="text-center">
-            <p className="text-gray-600">Loading chart...</p>
-          </div>
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", zIndex: 10 }}>
+          <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>Cargando gráfico...</p>
         </div>
       )}
       <div
         ref={containerRef}
-        className="flex-1 w-full"
-        style={{ position: "relative", minHeight: 340 }}
+        style={{ flex: 1, width: "100%", position: "relative", minHeight: 340 }}
       />
-
-      {/* FIC: Chart controls footer (EN) */}
-      {/* FIC: Pie de controles del gráfico (ES) */}
-      <div className="px-4 py-2 border-t border-gray-200 bg-gray-50 text-xs text-gray-600 flex justify-between">
-        <span>
-          {symbol} • {timeframe} •{" "}
-          {candles.length > 0 && `${candles.length} candles`}
-        </span>
+      <div style={{ padding: "0.4rem 1rem", borderTop: "1px solid var(--color-border)", background: "var(--color-surface)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", display: "flex", justifyContent: "space-between" }}>
+        <span>{symbol} · {timeframe}{candles.length > 0 ? ` · ${candles.length} velas` : ""}</span>
         <span>
           {selectedSignal
-            ? `Signal: ${selectedSignal.symbol} @ ${selectedSignal.confidence?.toFixed(2) || "?"}`
-            : "Select a signal from confluence table"}
+            ? `Señal: ${selectedSignal.symbol} @ ${selectedSignal.confidence?.toFixed(2) || "?"}`
+            : "Selecciona una señal de la tabla de confluencia"}
         </span>
       </div>
     </div>

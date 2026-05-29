@@ -9,7 +9,6 @@ export type AnalysisCategory = "technical" | "institutional" | "fundamental" | "
 interface AppShellStoreState {
   activeSection: AppShellSection;
   leftPanelCollapsed: boolean;
-  chatPanelCollapsed: boolean;
   analysisCategory: AnalysisCategory;
 }
 
@@ -30,7 +29,6 @@ function writeLS(key: string, value: string): void {
 const state: AppShellStoreState = {
   activeSection: readLS("inversions.appshell.section", "watchlist") as AppShellSection,
   leftPanelCollapsed: readLS("inversions.appshell.left-collapsed", "false") === "true",
-  chatPanelCollapsed: readLS("inversions.appshell.chat-collapsed", "false") === "true",
   analysisCategory: readLS("inversions.appshell.analysis-cat", "technical") as AnalysisCategory,
 };
 
@@ -86,18 +84,6 @@ export function useAppShellStore() {
     setLeftPanelCollapsed(collapsed: boolean) {
       state.leftPanelCollapsed = collapsed;
       writeLS("inversions.appshell.left-collapsed", String(collapsed));
-      emit();
-    },
-
-    toggleChatPanel() {
-      state.chatPanelCollapsed = !state.chatPanelCollapsed;
-      writeLS("inversions.appshell.chat-collapsed", String(state.chatPanelCollapsed));
-      emit();
-    },
-
-    setChatPanelCollapsed(collapsed: boolean) {
-      state.chatPanelCollapsed = collapsed;
-      writeLS("inversions.appshell.chat-collapsed", String(collapsed));
       emit();
     },
 

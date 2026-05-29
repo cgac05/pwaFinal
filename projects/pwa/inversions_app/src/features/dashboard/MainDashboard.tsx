@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageSquare } from "lucide-react";
 import { GlobalChatDrawer } from "../../pages/ai/GlobalChatDrawer";
 import { SuperChart } from "./SuperChart";
+
 import { TimeControls } from "./TimeControls";
 import { IndicatorsMenu } from "./IndicatorsMenu";
 import { ConfluenceSignalsTable } from "./ConfluenceSignalsTable";
@@ -12,7 +13,6 @@ import { SimulationControlPanel } from "./simulation/SimulationControlPanel";
 import { AppShell } from "../../layouts/AppShell";
 import { ActivityBar } from "../../components/ui/ActivityBar";
 import { LeftPanel } from "../sidebar/LeftPanel";
-import { ChatPanel } from "../chat/ChatPanel";
 import { Badge } from "../../components/ui/Badge";
 import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailModal";
 import type { ConfluenceSignalRow, SimulationResponse, CoreId } from "../../services/signals/confluenceTableApi";
@@ -274,7 +274,6 @@ export function MainDashboard() {
         activityBar={<ActivityBar />}
         leftPanel={<LeftPanel />}
         main={mainContent}
-        chatPanel={<ChatPanel />}
       />
 
       <InstitutionalDetailModal
