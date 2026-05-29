@@ -19,6 +19,20 @@ interface PayoffChartProps {
 // FIC: TIME_BASE mapea precios reales al eje de tiempo interno del chart (evita mostrar "1970"). (ES)
 const TIME_BASE = 1_000_000_000;
 
+function getCSSVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function getPayoffTheme() {
+  return {
+    bg:          getCSSVar("--color-surface")       || "#0a0a0a",
+    text:        getCSSVar("--color-text-muted")    || "rgba(255,255,255,0.6)",
+    gridLine:    getCSSVar("--color-border-subtle") || "rgba(255,255,255,0.04)",
+    border:      getCSSVar("--color-border")        || "rgba(255,255,255,0.08)",
+    accent:      getCSSVar("--color-accent")        || "#494fdf",
+  };
+}
+
 export const PayoffChart: React.FC<PayoffChartProps> = ({
   points,
   breakEvenPrice,
@@ -29,29 +43,50 @@ export const PayoffChart: React.FC<PayoffChartProps> = ({
   useEffect(() => {
     if (!containerRef.current || points.length === 0) return;
 
+    const theme = getPayoffTheme();
+
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
       height,
       layout: {
-        background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "rgba(255,255,255,0.6)",
+        background: { type: ColorType.Solid, color: theme.bg },
+        textColor: theme.text,
       },
       grid: {
-        vertLines: { color: "rgba(255,255,255,0.04)" },
-        horzLines: { color: "rgba(255,255,255,0.04)" },
+        vertLines: { color: theme.gridLine },
+        horzLines: { color: theme.gridLine },
       },
       timeScale: {
         // FIC: tickMarkFormatter converts the internal time back to a readable price. (EN)
         // FIC: tickMarkFormatter convierte el tiempo interno de vuelta a un precio legible. (ES)
         tickMarkFormatter: (time: number) => `$${(time - TIME_BASE).toFixed(0)}`,
-        borderColor: "rgba(255,255,255,0.08)",
+        borderColor: theme.border,
       },
-      rightPriceScale: { borderColor: "rgba(255,255,255,0.08)" },
+      rightPriceScale: { borderColor: theme.border },
       crosshair: { mode: 1 },
     });
 
+    const applyTheme = () => {
+      const t = getPayoffTheme();
+      chart.applyOptions({
+        layout: {
+          background: { type: ColorType.Solid, color: t.bg },
+          textColor: t.text,
+        },
+        grid: {
+          vertLines: { color: t.gridLine },
+          horzLines: { color: t.gridLine },
+        },
+        timeScale: { borderColor: t.border },
+        rightPriceScale: { borderColor: t.border },
+      });
+    };
+
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    mq.addEventListener("change", applyTheme);
+
     const series = chart.addSeries(LineSeries, {
-      color: "var(--color-accent)",
+      color: theme.accent,
       lineWidth: 2,
     });
 
@@ -69,7 +104,7 @@ export const PayoffChart: React.FC<PayoffChartProps> = ({
       position: "absolute",
       padding: "4px 8px",
       backgroundColor: "var(--color-surface-raised)",
-      border: "1px solid rgba(255,255,255,0.12)",
+      border: "1px solid var(--color-border)",
       borderRadius: "4px",
       fontSize: "11px",
       color: "var(--color-text)",
@@ -106,6 +141,7 @@ export const PayoffChart: React.FC<PayoffChartProps> = ({
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      mq.removeEventListener("change", applyTheme);
       resizeObserver.disconnect();
       chart.remove();
       tooltipEl.remove();

@@ -10,6 +10,7 @@ import {
   type CoverageStrategyResult,
 } from "../../services/coverage/coverageApi";
 import { useSignalStore } from "../../store/signals";
+import { getMarketQuotes } from "../../services/signals/marketApi";
 import type { InstitutionalAnalysisResponse } from "../../services/institutional/institutionalApi";
 
 interface Props {
@@ -37,7 +38,9 @@ export function CoverageStrategyModal({ isOpen, onClose, initialTicker, initialK
   const { selectedInstrument } = useSignalStore();
 
   const [ticker, setTicker] = useState(initialTicker ?? selectedInstrument?.symbol ?? "SPY");
-  const [currentPrice, setCurrentPrice] = useState("450");
+  const [currentPrice, setCurrentPrice] = useState("");
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [priceError, setPriceError] = useState(false);
   const [shares, setShares] = useState("100");
   const [putStrike, setPutStrike] = useState("");
   const [callStrike, setCallStrike] = useState("");
@@ -59,11 +62,38 @@ export function CoverageStrategyModal({ isOpen, onClose, initialTicker, initialK
     }
   }, [isOpen, initialTicker, selectedInstrument?.symbol, initialKind]);
 
+  useEffect(() => {
+    if (!isOpen || !ticker) return;
+
+    let cancelled = false;
+    setPriceLoading(true);
+    setPriceError(false);
+
+    getMarketQuotes([ticker])
+      .then((data) => {
+        if (cancelled) return;
+        const quote = data.quotes.find((q) => q.symbol === ticker.toUpperCase());
+        if (quote) {
+          setCurrentPrice(quote.price.toFixed(2));
+        } else {
+          setPriceError(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPriceError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setPriceLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [isOpen, ticker]);
+
   async function handleAnalyze() {
     const price = parseFloat(currentPrice);
     const sharesN = parseInt(shares);
     if (!ticker || isNaN(price) || isNaN(sharesN)) {
-      setError("Ticker, precio y shares son obligatorios.");
+      setError(priceError ? "No se pudo obtener el precio actual. Intenta de nuevo más tarde." : "Ticker, precio y shares son obligatorios.");
       return;
     }
 
@@ -113,14 +143,22 @@ export function CoverageStrategyModal({ isOpen, onClose, initialTicker, initialK
   const breakEven = selectedResult?.summary.breakEvenPrice ?? 0;
 
   const inputStyle: React.CSSProperties = {
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.12)",
+    background: "var(--color-surface)",
+    border: "1px solid var(--color-border)",
     borderRadius: "var(--radius-xs)",
     color: "var(--color-text)",
     fontSize: "var(--font-size-sm)",
     padding: "var(--space-xs) var(--space-sm)",
     width: "100%",
     outline: "none",
+  };
+
+  const readOnlyInputStyle: React.CSSProperties = {
+    ...inputStyle,
+    background: "var(--color-surface-raised)",
+    border: "1px solid var(--color-border-subtle)",
+    color: "var(--color-text-muted)",
+    cursor: "default",
   };
 
   const labelStyle: React.CSSProperties = {
@@ -147,18 +185,36 @@ export function CoverageStrategyModal({ isOpen, onClose, initialTicker, initialK
           gap: "var(--space-sm)",
           marginBottom: "var(--space-lg)",
           padding: "var(--space-md)",
-          backgroundColor: "rgba(255,255,255,0.02)",
+          backgroundColor: "var(--color-surface)",
           borderRadius: "var(--radius-sm)",
-          border: "1px solid rgba(255,255,255,0.06)",
+          border: "1px solid var(--color-border-subtle)",
         }}
       >
         <div>
           <label style={labelStyle}>Ticker</label>
-          <input style={inputStyle} value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())} placeholder="SPY" />
+          <input style={readOnlyInputStyle} value={ticker} readOnly />
         </div>
         <div>
-          <label style={labelStyle}>Precio actual</label>
-          <input style={inputStyle} type="number" value={currentPrice} onChange={(e) => setCurrentPrice(e.target.value)} placeholder="450" />
+          <label style={labelStyle}>
+            Precio actual
+            {priceLoading && (
+              <span style={{ marginLeft: "var(--space-xs)", color: "var(--color-text-muted)", fontStyle: "italic" }}>
+                cargando…
+              </span>
+            )}
+            {priceError && !priceLoading && (
+              <span style={{ marginLeft: "var(--space-xs)", color: "var(--color-sell)" }}>
+                ⚠ no disponible
+              </span>
+            )}
+          </label>
+          <input
+            style={readOnlyInputStyle}
+            type="number"
+            value={currentPrice}
+            readOnly
+            placeholder={priceLoading ? "Cargando…" : "—"}
+          />
         </div>
         <div>
           <label style={labelStyle}>Shares</label>
