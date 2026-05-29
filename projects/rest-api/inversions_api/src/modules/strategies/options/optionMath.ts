@@ -1,5 +1,5 @@
 import type { OptionStrategyInput, OptionStrategyContract, OptionType, OptionDirection, RiskTolerance } from "../optionsStrategyContract";
-
+//Operaciones matematicas relacionadas con opciones, como cálculos de primas, márgenes, probabilidades, etc.
 export const CONTRACT_MULTIPLIER = 100;
 export const DEFAULT_IMPLIED_VOLATILITY = 25;
 export const DEFAULT_INTEREST_RATE = 4;
