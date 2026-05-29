@@ -1,12 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { FundamentalDataService } from "../fundamental/fundamentalDataService";
 import { analyzeFundamental } from "../fundamental/fundamentalAnalyzer";
-import type { FundamentalAnalysisResult, MetricSection } from "../fundamental/fundamentalAnalyzer";
+import type { FundamentalAnalysisResult, FundamentalProjection, MetricSection } from "../fundamental/fundamentalAnalyzer";
 import type { FundamentalAnalysisData } from "../fundamental/fundamentalSourceContract";
 
 export interface CopilotChatRequest {
   ticker: string;
   question: string;
+  strategy?: string;
   userId?: string;
   simulationContext?: CopilotSimulationContext;
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
@@ -55,6 +56,11 @@ export class FundamentalCopilotChat {
 
     let result: FundamentalAnalysisResult | null = null;
     let rawData: FundamentalAnalysisData | null = null;
+    const strategyForAnalysis =
+      request.simulationContext?.strategy ??
+      this.extractStrategyFromQuestion(request.question) ??
+      request.strategy ??
+      "Long Call";
 
     try {
       const fetched = await this.fundamentalService.fetch(ticker, 252);
@@ -64,7 +70,7 @@ export class FundamentalCopilotChat {
           investmentProfile: "Quality",
           horizon: "Mediano plazo",
           selectedMetrics: ALL_METRICS,
-          strategy: request.simulationContext?.strategy ?? "Long Call",
+          strategy: strategyForAnalysis,
           comparisons: [],
           projectionFrom: request.simulationContext?.projectionFrom,
           projectionTo: request.simulationContext?.projectionTo
@@ -82,7 +88,13 @@ export class FundamentalCopilotChat {
       return { answer, sourceContext: [], disclaimer: DISCLAIMER, reasoningTrace };
     }
 
-    const answer = this.buildAnswer(request.question, result, rawData, request.conversationHistory ?? []);
+    const generativeAnswer = this.useProviderModel()
+      ? await this.generateWithModel(request, result, rawData, reasoningTrace)
+      : undefined;
+    const answer = generativeAnswer
+      ?? (!this.useProviderModel() || this.allowLocalFallback()
+        ? this.buildAnalyticalFallback(request, result, rawData)
+        : this.buildAiUnavailableAnswer(result, reasoningTrace));
 
     await this.saveInteractionSummary(request.userId, ticker, request.question, answer);
 
@@ -102,6 +114,411 @@ export class FundamentalCopilotChat {
   // ---------------------------------------------------------------------------
   // Generador de respuesta conversacional
   // ---------------------------------------------------------------------------
+
+  private async generateWithModel(
+    request: CopilotChatRequest,
+    result: FundamentalAnalysisResult,
+    rawData: FundamentalAnalysisData,
+    reasoningTrace: string[]
+  ): Promise<string | undefined> {
+    const openAiKey = process.env.OPENAI_API_KEY;
+    const anthropicKey = process.env.CLAUDE_API_KEY ?? process.env.ANTHROPIC_API_KEY;
+
+    if (openAiKey) {
+      return this.callOpenAI(openAiKey, this.buildGenerativePrompt(request, result, rawData), reasoningTrace);
+    }
+
+    if (anthropicKey) {
+      return this.callAnthropic(anthropicKey, this.buildGenerativePrompt(request, result, rawData), reasoningTrace);
+    }
+
+    reasoningTrace.push("Modelo generativo no configurado.");
+    return undefined;
+  }
+
+  private async callOpenAI(apiKey: string, prompt: string, reasoningTrace: string[]): Promise<string | undefined> {
+    try {
+      const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+      const response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          input: prompt,
+          temperature: 0.4,
+          max_output_tokens: 1600
+        }),
+        signal: AbortSignal.timeout(Number(process.env.AI_MODEL_TIMEOUT_MS ?? process.env.CLAUDE_TIMEOUT_MS ?? 15000))
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => "");
+        const compactError = errorBody.replace(/\s+/g, " ").slice(0, 300);
+        reasoningTrace.push(`OpenAI configurado pero no disponible: HTTP ${response.status}${compactError ? ` - ${compactError}` : ""}.`);
+        return undefined;
+      }
+
+      const payload = (await response.json()) as {
+        output_text?: string;
+        output?: Array<{
+          content?: Array<{ type?: string; text?: string }>;
+        }>;
+      };
+
+      const text = payload.output_text
+        ?? payload.output?.flatMap((item) => item.content ?? []).find((item) => item.type === "output_text" || item.text)?.text;
+
+      if (!text?.trim()) return undefined;
+      reasoningTrace.push(`Respuesta generada con OpenAI ${model}.`);
+      return text.includes(DISCLAIMER) ? text.trim() : `${text.trim()}\n\n*${DISCLAIMER}*`;
+    } catch (err) {
+      reasoningTrace.push(`Error de OpenAI: ${String(err)}.`);
+      return undefined;
+    }
+  }
+
+  private async callAnthropic(apiKey: string, prompt: string, reasoningTrace: string[]): Promise<string | undefined> {
+    try {
+      const model = process.env.CLAUDE_MODEL ?? "claude-haiku-4-5-20251001";
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01"
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1400,
+          messages: [{ role: "user", content: prompt }]
+        }),
+        signal: AbortSignal.timeout(Number(process.env.AI_MODEL_TIMEOUT_MS ?? process.env.CLAUDE_TIMEOUT_MS ?? 12000))
+      });
+
+      if (!response.ok) {
+        reasoningTrace.push(`Anthropic no disponible: HTTP ${response.status}.`);
+        return undefined;
+      }
+
+      const payload = (await response.json()) as {
+        content?: Array<{ type: string; text?: string }>;
+      };
+      const text = payload.content?.find((block) => block.type === "text")?.text?.trim();
+      if (!text) return undefined;
+
+      reasoningTrace.push(`Respuesta generada con ${model}.`);
+      return text.includes(DISCLAIMER) ? text : `${text}\n\n*${DISCLAIMER}*`;
+    } catch (err) {
+      reasoningTrace.push(`Error de Anthropic: ${String(err)}.`);
+      return undefined;
+    }
+  }
+
+  private allowLocalFallback(): boolean {
+    return process.env.AI_CHAT_ALLOW_FALLBACK === "true";
+  }
+
+  private useProviderModel(): boolean {
+    return process.env.AI_CHAT_USE_PROVIDER === "true";
+  }
+
+  private buildAiUnavailableAnswer(result: FundamentalAnalysisResult, reasoningTrace: string[]): string {
+    const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
+    const hasAnthropic = Boolean(process.env.CLAUDE_API_KEY ?? process.env.ANTHROPIC_API_KEY);
+    const providerState = hasOpenAI || hasAnthropic
+      ? "La IA generativa está configurada, pero la llamada al proveedor falló."
+      : "La IA generativa no está configurada en el proceso del backend.";
+
+    return [
+      `${providerState} No voy a usar respuestas predeterminadas para **${result.ticker}**.`,
+      "",
+      hasOpenAI || hasAnthropic
+        ? "Revisa el detalle técnico y corrige el proveedor/modelo/key:"
+        : "Para activar el modo conversacional real, configura una API key en el backend:",
+      "",
+      ...(hasOpenAI || hasAnthropic
+        ? reasoningTrace.slice(-3).map((item) => `- ${item}`)
+        : [
+            "- `OPENAI_API_KEY` para usar OpenAI",
+            "- o `CLAUDE_API_KEY` / `ANTHROPIC_API_KEY` para usar Anthropic"
+          ]),
+      "",
+      "Después reinicia el backend. Con eso el chat usará los fundamentales cargados como contexto y responderá de forma generativa.",
+      "",
+      `*${DISCLAIMER}*`
+    ].join("\n");
+  }
+
+  private buildGenerativePrompt(
+    request: CopilotChatRequest,
+    result: FundamentalAnalysisResult,
+    rawData: FundamentalAnalysisData
+  ): string {
+    const m = rawData.metrics;
+    const projection = result.projection;
+    const history = (request.conversationHistory ?? [])
+      .slice(-8)
+      .map((item) => `${item.role}: ${item.content}`)
+      .join("\n");
+
+    const metrics = result.sections
+      .map((section) => `- ${section.metric}: score ${section.score}/100, señal ${section.tipoSenal}, hallazgo: ${section.finding}`)
+      .join("\n");
+
+    const optionScenarios = projection.scenarios
+      .map((scenario) => `- ${scenario.label}: precio ${scenario.price}, P&L ${scenario.profitLoss}`)
+      .join("\n");
+
+    return [
+      "Eres un copilot de análisis financiero para una app de opciones. Responde en español natural, específico y conversacional.",
+      "No uses una plantilla fija. No repitas siempre la misma estructura. Adapta la respuesta exactamente a la pregunta, al ticker y a la estrategia activa.",
+      "No des órdenes de compra/venta ni prometas resultados. Puedes explicar conveniencia, riesgos y supuestos.",
+      "Si falta un dato, dilo de forma directa y usa el mejor proxy disponible.",
+      "",
+      "Contexto actual:",
+      `Ticker: ${result.ticker}`,
+      `Empresa: ${result.companyName}`,
+      `Estrategia activa: ${request.simulationContext?.strategy ?? request.strategy ?? projection.strategy}`,
+      `Veredicto fundamental: ${result.verdict}`,
+      `Score: ${result.overallScore}/100`,
+      `Precio actual: ${m.priceHistory?.currentPrice ?? "N/D"}`,
+      `Volatilidad anualizada: ${m.volatility?.annualizedVolatility ?? "N/D"}%`,
+      `P/E: ${m.financialRatios?.peRatio ?? "N/D"}`,
+      `ROE: ${m.financialRatios?.roe ?? "N/D"}%`,
+      `Deuda/Patrimonio: ${m.financialRatios?.debtToEquity ?? "N/D"}`,
+      `EPS: ${m.eps?.eps ?? "N/D"}`,
+      "",
+      "Proyección de opciones:",
+      `Strategy: ${projection.strategy}`,
+      `Strike: ${projection.strike}`,
+      `Prima por acción: ${projection.premium}`,
+      `Breakeven: ${projection.breakeven}`,
+      `Máxima pérdida: ${projection.maxLoss}`,
+      `Máxima ganancia: ${projection.maxProfit}`,
+      `Movimiento esperado: ${projection.expectedMove} (${projection.expectedMovePercent}%)`,
+      `Rango temporal: ${projection.projectionFrom} -> ${projection.projectionTo}`,
+      "",
+      "Escenarios:",
+      optionScenarios || "N/D",
+      "",
+      "Métricas analizadas:",
+      metrics,
+      "",
+      history ? `Historial reciente:\n${history}\n` : "",
+      `Pregunta del usuario: ${request.question}`,
+      "",
+      "Responde con el nivel de detalle justo: si la pregunta es corta, responde breve; si pide cálculo o comparación, muestra los números relevantes."
+    ].join("\n");
+  }
+
+  private buildAnalyticalFallback(
+    request: CopilotChatRequest,
+    result: FundamentalAnalysisResult,
+    rawData: FundamentalAnalysisData
+  ): string {
+    const m = rawData.metrics;
+    const projection = result.projection;
+    const question = request.question.toLowerCase();
+    const activeStrategy = request.simulationContext?.strategy ?? request.strategy ?? projection.strategy;
+    const price = m.priceHistory?.currentPrice;
+    const volatility = m.volatility?.annualizedVolatility;
+    const pe = m.financialRatios?.peRatio;
+    const roe = m.financialRatios?.roe;
+    const debtToEquity = m.financialRatios?.debtToEquity;
+    const eps = m.eps?.eps;
+    const revenueGrowth = m.sales?.revenueGrowthPercent;
+
+    const strongMetrics = [...result.sections]
+      .filter((section) => section.score >= 65)
+      .sort((a, b) => b.score - a.score);
+    const weakMetrics = [...result.sections]
+      .filter((section) => section.score < 45)
+      .sort((a, b) => a.score - b.score);
+    const relevantMetrics = this.pickRelevantMetrics(question, result.sections);
+    const strategyFit = this.describeStrategyFit(activeStrategy, result, volatility);
+    const asksStrategy = /conviene|buena idea|mala idea|recomend|sirve|usar|estrategia|call|put|prima|breakeven/i.test(question);
+    const asksRisk = /riesgo|perder|p[eé]rdida|escenario|m[aá]xima|drawdown|volatil/i.test(question);
+    const asksMetric = /p\/e|pe\b|roe|deuda|eps|ventas|crecimiento|rentabilidad|flujo|valoraci|margen|beta/i.test(question);
+    const asksWhy = /por\s?qu[eé]|porque|raz[oó]n|explica|fundamento/i.test(question);
+
+    const lines: string[] = [];
+    lines.push(`Estoy viendo **${result.companyName} (${result.ticker})** con score fundamental **${result.overallScore}/100 (${result.verdict})**.`);
+    lines.push(`Estrategia activa: **${activeStrategy}**.`);
+    lines.push("");
+
+    if (asksStrategy || asksWhy) {
+      lines.push("**Lectura sobre la estrategia**");
+      lines.push(this.answerQuestionDirectly(question, activeStrategy, result, projection));
+      lines.push(`La razón práctica es esta: ${strategyFit}`);
+      lines.push("");
+      lines.push(`Números clave: strike **$${projection.strike}**, prima **$${projection.premium}/acción** (~$${(projection.premium * 100).toFixed(0)} por contrato), breakeven **$${projection.breakeven}**.`);
+      lines.push(`Máxima pérdida: **${this.formatMoneyOrText(projection.maxLoss)}**. Máxima ganancia: **${this.formatMoneyOrText(projection.maxProfit)}**.`);
+    }
+
+    if (asksMetric || asksWhy || (!asksStrategy && !asksRisk)) {
+      lines.push("");
+      lines.push("**Fundamentales que pesan más**");
+      relevantMetrics.forEach((section) => {
+        lines.push(`- **${section.metric} (${section.score}/100)**: ${section.finding}`);
+      });
+      if (pe !== undefined) lines.push(`- P/E **${pe.toFixed(1)}x**: ${this.explainPe(pe)}`);
+      if (roe !== undefined) lines.push(`- ROE **${roe.toFixed(1)}%**: ${this.explainRoe(roe)}`);
+      if (debtToEquity !== undefined) lines.push(`- Deuda/Patrimonio **${debtToEquity.toFixed(2)}**: ${this.explainDebt(debtToEquity)}`);
+      if (revenueGrowth !== undefined) lines.push(`- Crecimiento de ingresos **${revenueGrowth.toFixed(1)}%**: ${this.explainGrowth(revenueGrowth)}`);
+    }
+
+    if (asksRisk) {
+      lines.push("");
+      lines.push("**Riesgo y escenarios**");
+      if (price !== undefined) lines.push(`Precio actual usado: **$${price.toFixed(2)}**.`);
+      if (volatility !== undefined) lines.push(`Volatilidad anualizada **${volatility.toFixed(1)}%**: ${this.explainVolatility(volatility)}`);
+      lines.push(`Movimiento esperado: **±$${projection.expectedMove} (${projection.expectedMovePercent.toFixed(1)}%)**.`);
+      projection.scenarios.forEach((scenario) => {
+        const sign = scenario.profitLoss >= 0 ? "+" : "";
+        lines.push(`- ${scenario.label}: precio $${scenario.price} → P&L ${sign}$${scenario.profitLoss}.`);
+      });
+    }
+
+    const support = strongMetrics.slice(0, 2).map((s) => `${s.metric} (${s.score}/100)`);
+    const pressure = weakMetrics.slice(0, 2).map((s) => `${s.metric} (${s.score}/100)`);
+    if (support.length || pressure.length) {
+      lines.push("");
+      if (support.length) lines.push(`A favor: ${support.join(", ")}.`);
+      if (pressure.length) lines.push(`En contra: ${pressure.join(", ")}.`);
+    }
+
+    lines.push("");
+    lines.push(`*${DISCLAIMER}*`);
+    return lines.join("\n");
+  }
+
+  private pickRelevantMetrics(question: string, sections: MetricSection[]): MetricSection[] {
+    const keywordByMetric: Record<string, string[]> = {
+      "Valoración": ["p/e", "pe", "valoraci", "caro", "barato", "precio"],
+      "Crecimiento": ["crec", "ventas", "ingres", "eps"],
+      "Rentabilidad": ["roe", "rentab", "margen", "ganancia"],
+      "Salud Financiera": ["deuda", "balance", "apalanc", "patrimonio"],
+      "Flujo de Caja": ["flujo", "cash", "caja"],
+      "Riesgo": ["riesgo", "volatil", "beta", "perder", "pérdida"],
+      "Ventaja Competitiva": ["moat", "ventaja", "compet"]
+    };
+
+    const picked = sections.filter((section) => {
+      const keywords = keywordByMetric[section.metric] ?? [];
+      return keywords.some((keyword) => question.includes(keyword));
+    });
+
+    if (picked.length > 0) return picked.slice(0, 4);
+    return [...sections].sort((a, b) => Math.abs(b.score - 50) - Math.abs(a.score - 50)).slice(0, 3);
+  }
+
+  private describeStrategyFit(strategy: string, result: FundamentalAnalysisResult, volatility?: number): string {
+    const s = strategy.toLowerCase();
+    const score = result.overallScore;
+    const highVol = (volatility ?? 0) >= 35;
+
+    if (s.includes("long call")) {
+      return score >= 65
+        ? "Long Call queda alineado con fundamentos positivos, pero necesita que el precio supere breakeven antes del vencimiento."
+        : "Long Call exige un catalizador alcista claro; con fundamentos mixtos o débiles, el riesgo principal es perder la prima por falta de movimiento.";
+    }
+    if (s.includes("long put")) {
+      return score < 45
+        ? "Long Put queda más alineado con debilidad fundamental o necesidad de cobertura."
+        : "Long Put funciona más como cobertura; si los fundamentos son fuertes, va contra el sesgo principal.";
+    }
+    if (s.includes("short call")) {
+      return highVol
+        ? "Short Call cobra prima alta por volatilidad, pero mantiene riesgo ilimitado si el precio sube fuerte."
+        : "Short Call cobra poca prima relativa y conserva riesgo ilimitado; la relación riesgo/beneficio puede ser pobre.";
+    }
+    if (s.includes("short put")) {
+      return score >= 55
+        ? "Short Put puede tener sentido si aceptarías comprar el activo al precio efectivo del breakeven."
+        : "Short Put es delicado con fundamentos débiles porque podrías quedar asignado en una acción deteriorándose.";
+    }
+    return "La conveniencia depende de si la estrategia coincide con el sesgo fundamental, la volatilidad y el breakeven.";
+  }
+
+  private answerQuestionDirectly(
+    question: string,
+    strategy: string,
+    result: FundamentalAnalysisResult,
+    projection: FundamentalProjection
+  ): string {
+    const asksWhy = /por\s?qu[eé]|porque|raz[oó]n|explica/.test(question);
+    const asksGoodIdea = /conviene|buena idea|mala idea|recomend|sirve|usar/.test(question);
+    const asksRisk = /riesgo|perder|p[eé]rdida|escenario/.test(question);
+
+    if (asksRisk) {
+      return `En riesgo puro, lo primero a mirar es que **${strategy}** tiene pérdida máxima de **${this.formatMoneyOrText(projection.maxLoss)}** y breakeven en **$${projection.breakeven}**; si el precio no llega a ese nivel favorable, la estrategia se deteriora.`;
+    }
+
+    if (asksGoodIdea || asksWhy) {
+      const favorable = this.isStrategyDirectionallyAligned(strategy, result.overallScore);
+      return favorable
+        ? `Mi lectura: **sí puede tener sentido**, pero no por la estrategia en abstracto; tiene sentido porque el score ${result.overallScore}/100 y el breakeven $${projection.breakeven} no contradicen el sesgo fundamental actual.`
+        : `Mi lectura: **no es la idea más limpia ahora mismo**; la estrategia ${strategy} no está completamente alineada con el score fundamental ${result.overallScore}/100 o exige un movimiento que los datos todavía no justifican.`;
+    }
+
+    return `En resumen: no evaluaría **${strategy}** solo por la prima. La decisión depende de si el precio puede superar o defender el breakeven **$${projection.breakeven}** con apoyo de las métricas fundamentales.`;
+  }
+
+  private isStrategyDirectionallyAligned(strategy: string, score: number): boolean {
+    const s = strategy.toLowerCase();
+    if (s.includes("call") && s.includes("long")) return score >= 55;
+    if (s.includes("put") && s.includes("long")) return score < 50;
+    if (s.includes("put") && s.includes("short")) return score >= 50;
+    if (s.includes("call") && s.includes("short")) return score < 55;
+    return score >= 50;
+  }
+
+  private formatMoneyOrText(value: number | string): string {
+    return typeof value === "number" ? `$${value.toFixed(2)}` : value;
+  }
+
+  private explainPe(pe: number): string {
+    if (pe <= 0) return "No permite una lectura clara de valuación.";
+    if (pe < 15) return "Puede indicar valuación baja, aunque también expectativas moderadas.";
+    if (pe < 30) return "Está en una zona razonable para muchas empresas grandes si el crecimiento acompaña.";
+    return "Es exigente: el mercado ya está pagando crecimiento futuro.";
+  }
+
+  private explainRoe(roe: number): string {
+    if (roe >= 20) return "Señala alta eficiencia generando ganancias sobre capital.";
+    if (roe >= 10) return "Es aceptable, aunque no extraordinario.";
+    return "Sugiere rentabilidad débil o presión operativa.";
+  }
+
+  private explainDebt(debtToEquity: number): string {
+    if (debtToEquity < 0.5) return "Balance conservador.";
+    if (debtToEquity < 1.5) return "Apalancamiento manejable, pero debe monitorearse.";
+    return "Apalancamiento alto; aumenta sensibilidad a tasas y caídas de ingresos.";
+  }
+
+  private explainGrowth(growth: number): string {
+    if (growth >= 15) return "Crecimiento fuerte que puede sostener múltiplos altos.";
+    if (growth >= 0) return "Crecimiento positivo, pero no necesariamente explosivo.";
+    return "Contracción: es un punto de alerta.";
+  }
+
+  private explainVolatility(volatility: number): string {
+    if (volatility >= 40) return "Alta volatilidad: sube primas y riesgo de movimientos bruscos.";
+    if (volatility >= 20) return "Volatilidad moderada: útil para estrategias de opciones, sin ser extrema.";
+    return "Volatilidad baja: primas más baratas, pero menor movimiento esperado.";
+  }
+
+  private extractStrategyFromQuestion(question: string): string | undefined {
+    const q = question.toLowerCase();
+    if (q.includes("short call")) return "Short Call";
+    if (q.includes("short put")) return "Short Put";
+    if (q.includes("long call")) return "Long Call";
+    if (q.includes("long put")) return "Long Put";
+    return undefined;
+  }
 
   private buildAnswer(
     question: string,

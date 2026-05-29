@@ -19,6 +19,7 @@ export interface ChatResponse {
 export interface FundamentalCopilotRequest {
   ticker: string;
   question: string;
+  strategy?: string;
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
 }
 

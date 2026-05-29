@@ -87,6 +87,12 @@ interface MarketQuoteResponse {
   }>;
 }
 
+interface FundamentalProfileResponse {
+  metrics?: {
+    volatility?: number;
+  };
+}
+
 interface InstrumentCatalogItem {
   symbol: string;
   name: string;
@@ -113,7 +119,7 @@ const FALLBACK_INSTRUMENTS: InstrumentCatalogItem[] = [
 ];
 
 export function StrategiesView() {
-  const { selectedOptionsStrategy, setSelectedOptionsStrategy } = useSignalStore();
+  const { selectedOptionsStrategy, setSelectedInstrument, setSelectedOptionsStrategy } = useSignalStore();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [forms, setForms] = useState<Record<string, StrategyForm>>({});
   const [results, setResults] = useState<Record<string, StrategyResult>>({});
@@ -165,8 +171,20 @@ export function StrategiesView() {
     setForms((prev) => ({ ...prev, [id]: { ...getForm(id), [field]: value } }));
   };
 
+  const setActiveTickerContext = (ticker: string) => {
+    const symbol = ticker.trim().toUpperCase();
+    if (!symbol) return;
+    const instrument = instruments.find((item) => item.symbol === symbol);
+    setSelectedInstrument({
+      symbol,
+      name: instrument?.name,
+      category: instrument?.category ?? "options"
+    });
+  };
+
   const setTickerField = (id: string, value: string) => {
     const ticker = value.toUpperCase();
+    setActiveTickerContext(ticker);
     setForms((prev) => {
       const form = prev[id] ?? getForm(id);
       return {
@@ -186,6 +204,7 @@ export function StrategiesView() {
     const ticker = form.ticker.trim().toUpperCase();
     if (!ticker) return;
 
+    setActiveTickerContext(ticker);
     setQuoteLoadingId(id);
     setErrors((prev) => ({ ...prev, [id]: "" }));
 
@@ -201,6 +220,20 @@ export function StrategiesView() {
         throw new Error("La API no devolvió precio para ese ticker.");
       }
 
+      let volatilityEstimate = "";
+      try {
+        const fundamentalRes = await fetch(`/api/team-03/fundamental/${encodeURIComponent(ticker)}`);
+        if (fundamentalRes.ok) {
+          const fundamentalData = (await fundamentalRes.json()) as FundamentalProfileResponse;
+          const volatility = fundamentalData.metrics?.volatility;
+          if (typeof volatility === "number" && Number.isFinite(volatility) && volatility > 0) {
+            volatilityEstimate = volatility.toFixed(2);
+          }
+        }
+      } catch {
+        // Keep the user's current volatility assumption when fundamentals are unavailable.
+      }
+
       setForms((prev) => {
         const nextForm = prev[id] ?? getForm(id);
         return {
@@ -209,7 +242,8 @@ export function StrategiesView() {
             ...nextForm,
             ticker,
             currentPrice: quote.price.toFixed(2),
-            strikePrice: Math.round(quote.price).toString()
+            strikePrice: Math.round(quote.price).toString(),
+            impliedVolatility: volatilityEstimate || nextForm.impliedVolatility
           }
         };
       });
@@ -226,6 +260,9 @@ export function StrategiesView() {
   const calculate = async (strategy: StrategyConfig) => {
     setSelectedOptionsStrategy({ id: strategy.id, name: strategy.name });
     const form = getForm(strategy.id);
+    if (form.ticker.trim()) {
+      setActiveTickerContext(form.ticker);
+    }
     if (!form.strikePrice || !form.premium || !form.quantity || !form.expirationDate || !form.availableCapital) {
       setErrors((prev) => ({ ...prev, [strategy.id]: "Strike, prima, contratos, expiración y capital son requeridos." }));
       return;
@@ -475,7 +512,7 @@ export function StrategiesView() {
                   </summary>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.3rem", marginTop: "0.4rem" }}>
                     <label style={{ display: "flex", flexDirection: "column", gap: "0.15rem", fontSize: "var(--font-size-xs)" }}>
-                      <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Vol. implícita %</span>
+                      <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Vol. implícita/est. %</span>
                       <input
                         type="number"
                         value={form.impliedVolatility}

@@ -38,10 +38,15 @@ function saveHistory(messages: ChatMessage[]): void {
   }
 }
 
+function extractTickerFromText(text: string): string | null {
+  const match = text.toUpperCase().match(/\b[A-Z]{1,5}(?:[.=][A-Z])?\b/);
+  return match?.[0] ?? null;
+}
+
 export function ChatPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>(() => loadHistory());
   const [pending, setPending] = useState(false);
-  const { selectedInstrument } = useSignalStore();
+  const { selectedInstrument, selectedOptionsStrategy } = useSignalStore();
   const { analysisCategory, setChatPanelCollapsed } = useAppShellStore();
 
   // FIC: Persist history to sessionStorage on every change.
@@ -64,6 +69,11 @@ export function ChatPanel() {
   }, []);
 
   const conversationHistoryRef = React.useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
+
+  useEffect(() => {
+    conversationHistoryRef.current = [];
+    setMessages([]);
+  }, [selectedInstrument?.symbol, selectedOptionsStrategy?.name, analysisCategory]);
 
   const handleSend = useCallback(async (text: string) => {
     if (pending) return;
@@ -98,11 +108,15 @@ export function ChatPanel() {
       let responseContent: string;
 
       if (analysisCategory === "fundamental") {
-        const ticker = selectedInstrument?.symbol ?? "SPY";
+        const ticker = selectedInstrument?.symbol ?? extractTickerFromText(text);
+        if (!ticker) {
+          throw new Error("Selecciona una empresa o escribe el ticker en tu pregunta para analizar fundamentales.");
+        }
         const history = conversationHistoryRef.current;
         const response = await sendFundamentalCopilotMessage({
           ticker,
           question: text,
+          strategy: selectedOptionsStrategy?.name,
           conversationHistory: history,
         });
         responseContent = response.answer;
