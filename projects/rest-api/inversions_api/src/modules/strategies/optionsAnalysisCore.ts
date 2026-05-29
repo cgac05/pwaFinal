@@ -1,11 +1,16 @@
 /**
  * Options Analysis Core — Motor determinístico de Q&A para estrategias de opciones.
+ * Options Analysis Core — Deterministic Q&A engine for options strategies.
  *
- * Sin IA. Las respuestas se derivan exclusivamente de los datos calculados
- * por los evaluadores de estrategia (shortPut, longPut, shortCall, longCall).
+ * Sin IA. Las respuestas se derivan de los datos calculados por los evaluadores
+ * de estrategia (shortPut, longPut, shortCall, longCall) + contexto enriquecido
+ * del dashboard (análisis fundamental, señales de confluencia, tendencia OHLC).
  *
- * Diseñado para ser consumido por el chat u otros equipos vía HTTP.
- * Contrato estable: recibe StrategiesSnapshot + pregunta, devuelve OptionsQAResponse.
+ * No AI. Responses are derived from calculated strategy data + enriched dashboard
+ * context (fundamental analysis, confluence signals, OHLC trend).
+ *
+ * Contrato estable: recibe StrategiesSnapshot + pregunta + DashboardContext opcional,
+ * devuelve OptionsQAResponse con contexto integrado del dashboard.
  */
 
 import type { OptionStrategyOutput } from "./optionsStrategyContract";
@@ -21,12 +26,69 @@ export interface StrategiesSnapshot {
   shortPut: OptionStrategyOutput;
 }
 
+// ─── Contexto enriquecido del dashboard ──────────────────────────────────────
+// Dashboard enriched context — fed from frontend (fundamental, confluence, OHLC)
+
+export interface FundamentalCtx {
+  verdict: "VIABLE" | "NEUTRAL" | "NOT_VIABLE";
+  overallScore: number;
+  recommendation: string;
+  /** Fuente de datos (ej: "finviz", "fmp", "yahoo_finance") / Data source */
+  source?: string;
+  sector?: string;
+  industry?: string;
+  marketCap?: number;
+  pe?: number;
+  pb?: number;
+  ps?: number;
+  roe?: number;
+  debtToEquity?: number;
+  eps?: number;
+  epsGrowth?: number;
+  dividendYield?: number;
+  revenueGrowth?: number;
+  volatility?: number;
+  beta?: number;
+  change52w?: number;
+}
+
+export interface ConfluenceSignalCtx {
+  core: string;
+  subCore?: string;
+  tipoSenal: "CALL" | "PUT" | "HOLD";
+  score: number;
+  observacionSummary: string;
+}
+
+export interface ConfluenceCtx {
+  callCount: number;
+  putCount: number;
+  holdCount: number;
+  avgScore: number;
+  dominantTrend: "ALCISTA" | "BAJISTA" | "LATERAL";
+  topSignals: ConfluenceSignalCtx[];
+}
+
+export interface OhlcCtx {
+  timeframe: string;
+  lastClose: number;
+  recentTrend: "ALCISTA" | "BAJISTA" | "LATERAL";
+}
+
+export interface DashboardContext {
+  fundamental?: FundamentalCtx;
+  confluence?: ConfluenceCtx;
+  ohlc?: OhlcCtx;
+}
+
 export interface OptionsQARequest {
   ticker: string;
   question: string;
   strategies: StrategiesSnapshot;
   selectedStrategy?: StrategyKey;
   currentPrice: number;
+  /** Contexto enriquecido del dashboard para análisis más completo / Enriched dashboard context */
+  dashboardContext?: DashboardContext;
 }
 
 export type IntentType =
@@ -344,13 +406,31 @@ function answerComparacion(ticker: string, snap: StrategiesSnapshot): string {
   return lines.join("\n");
 }
 
-function answerRecomendacion(ticker: string, snap: StrategiesSnapshot): string {
+function answerRecomendacion(ticker: string, snap: StrategiesSnapshot, ctx?: DashboardContext): string {
   // Ranking por ratio ajustado: excluir Short Call (unlimited loss), ordenar por riskAdjustedReturn
   const ranked = allFour(snap)
     .filter((x) => !isUnlimitedLoss(x.out))
     .sort((a, b) => b.out.riskAdjustedReturn - a.out.riskAdjustedReturn);
 
-  const top = ranked[0];
+  const bias = ctx ? dashboardBias(ctx) : 0;
+  let top = ranked[0];
+
+  // Dashboard bias modulates the top pick: bullish bias → prefer Long Call, bearish → Long Put
+  if (ctx && Math.abs(bias) >= 2) {
+    const bullishPick = ranked.find((r) => r.key === "LONG_CALL");
+    const bearishPick = ranked.find((r) => r.key === "LONG_PUT");
+    if (bias >= 2 && bullishPick) top = bullishPick;
+    if (bias <= -2 && bearishPick) top = bearishPick;
+  }
+
+  const biasNote = ctx
+    ? bias >= 2
+      ? "📈 El análisis del dashboard sugiere sesgo **alcista** — se refuerza la selección de estrategias compradoras."
+      : bias <= -2
+      ? "📉 El análisis del dashboard sugiere sesgo **bajista** — se refuerza la selección de estrategias vendedoras."
+      : "📊 El análisis del dashboard muestra señales **mixtas** — el ratio riesgo/recompensa es el criterio primario."
+    : null;
+
   const lines = [
     `**Recomendación de estrategia — ${ticker}:**`,
     "",
@@ -359,8 +439,15 @@ function answerRecomendacion(ticker: string, snap: StrategiesSnapshot): string {
     `→ **${STRATEGY_LABEL[top.key]}** tiene el mejor ratio riesgo/recompensa: **${top.out.riskAdjustedReturn.toFixed(2)}**.`,
     `  Prima: ${fmt(top.out.premium)}/acción | Breakeven: ${fmt(top.out.breakEvenPrice)} | P(ITM): ${fmtPct(top.out.probabilityItm)}`,
     "",
-    "**Resumen por perfil de riesgo:**",
   ];
+
+  if (biasNote) {
+    lines.push(biasNote);
+    lines.push("");
+  }
+
+  lines.push("**Resumen por perfil de riesgo:**");
+
 
   // Long Call: alcista, riesgo limitado
   const lc = snap.longCall;
@@ -500,7 +587,7 @@ function answerEspecifico(ticker: string, snap: StrategiesSnapshot, key: Strateg
   return lines.join("\n");
 }
 
-function answerGeneral(ticker: string, snap: StrategiesSnapshot, currentPrice?: number): string {
+function answerGeneral(ticker: string, snap: StrategiesSnapshot, currentPrice?: number, ctx?: DashboardContext): string {
   const best = rankBestStrategy(snap);
   const s = getStrategyOutput(snap, best);
   const lines = [
@@ -516,6 +603,24 @@ function answerGeneral(ticker: string, snap: StrategiesSnapshot, currentPrice?: 
   }
   lines.push("");
   lines.push(`→ Estrategia con mejor R/R actual: **${STRATEGY_LABEL[best]}** (ratio ${s.riskAdjustedReturn.toFixed(2)}).`);
+
+  if (ctx) {
+    const bias = dashboardBias(ctx);
+    if (ctx.fundamental) {
+      const icon = ctx.fundamental.verdict === "VIABLE" ? "✅" : ctx.fundamental.verdict === "NOT_VIABLE" ? "❌" : "⚠️";
+      lines.push(`${icon} Fundamental: **${ctx.fundamental.verdict}** (${ctx.fundamental.overallScore}/100)`);
+    }
+    if (ctx.confluence) {
+      lines.push(`📊 Confluencia: ${ctx.confluence.callCount} CALL / ${ctx.confluence.putCount} PUT — tendencia **${ctx.confluence.dominantTrend}**`);
+    }
+    if (ctx.ohlc) {
+      lines.push(`🕯️ Velas (${ctx.ohlc.timeframe}): tendencia reciente **${ctx.ohlc.recentTrend}** @ ${fmt(ctx.ohlc.lastClose)}`);
+    }
+    if (bias >= 2) lines.push("→ Sesgo global: **ALCISTA** — favorece Long Call / Short Put");
+    if (bias <= -2) lines.push("→ Sesgo global: **BAJISTA** — favorece Long Put");
+    lines.push("");
+  }
+
   lines.push("Puedes preguntar por: máxima ganancia, máxima pérdida, breakeven, escenarios, margen, riesgo, o comparar estrategias.");
   return lines.join("\n");
 }
@@ -528,12 +633,169 @@ function rankBestStrategy(snap: StrategiesSnapshot): StrategyKey {
     .sort((a, b) => b.out.riskAdjustedReturn - a.out.riskAdjustedReturn)[0].key;
 }
 
+// ─── Sección de contexto del dashboard ───────────────────────────────────────
+// Dashboard context section — appended to answers when enriched context is available
+
+/**
+ * Razonamiento fundamental valor-por-valor: explica cómo cada métrica de la fuente
+ * (Finviz, FMP, etc.) empuja el sesgo y por qué sustenta una estrategia.
+ * Fundamental value-by-value reasoning: explains how each source metric drives bias and strategy.
+ */
+function fundamentalReasoning(f: FundamentalCtx): string[] {
+  const out: string[] = [];
+  const push = (label: string, value: string, why: string) =>
+    out.push(`- **${label}: ${value}** → ${why}`);
+
+  if (f.pe !== undefined) {
+    push("P/E", f.pe.toFixed(2),
+      f.pe <= 0 ? "ganancias negativas: empresa sin beneficios, sesgo bajista / cautela."
+      : f.pe < 15 ? "valoración baja: posible infravaloración, favorece sesgo alcista (Long Call / Short Put)."
+      : f.pe > 35 ? "valoración exigente: riesgo de corrección, favorece sesgo bajista (Long Put)."
+      : "valoración moderada: neutral.");
+  }
+  if (f.pb !== undefined) {
+    push("P/B", f.pb.toFixed(2),
+      f.pb < 1 ? "cotiza bajo valor en libros: posible value, sesgo alcista."
+      : f.pb > 5 ? "muy por encima de libros: caro, sesgo cauteloso." : "razonable, neutral.");
+  }
+  if (f.ps !== undefined) {
+    push("P/S", f.ps.toFixed(2),
+      f.ps > 10 ? "ventas caras frente a precio: riesgo de múltiplo, cautela." : "aceptable, neutral.");
+  }
+  if (f.roe !== undefined) {
+    push("ROE", `${f.roe.toFixed(2)}%`,
+      f.roe > 15 ? "alta rentabilidad sobre capital: negocio fuerte, refuerza sesgo alcista."
+      : f.roe < 0 ? "destruye capital: sesgo bajista." : "rentabilidad media, neutral.");
+  }
+  if (f.debtToEquity !== undefined) {
+    push("Deuda/Capital", f.debtToEquity.toFixed(2),
+      f.debtToEquity > 2 ? "apalancamiento alto: fragilidad ante caídas, eleva el riesgo de estrategias short."
+      : f.debtToEquity < 0.5 ? "balance sano: soporta sesgo alcista." : "endeudamiento moderado.");
+  }
+  if (f.eps !== undefined) {
+    push("EPS", f.eps.toFixed(2),
+      f.eps > 0 ? "beneficio positivo por acción: base sólida." : "pérdidas por acción: sesgo bajista.");
+  }
+  if (f.epsGrowth !== undefined) {
+    push("Crecimiento EPS", `${f.epsGrowth.toFixed(2)}%`,
+      f.epsGrowth > 10 ? "beneficios crecientes: momentum alcista, favorece Long Call."
+      : f.epsGrowth < 0 ? "beneficios en contracción: favorece Long Put." : "crecimiento plano, neutral.");
+  }
+  if (f.revenueGrowth !== undefined) {
+    push("Crecimiento ingresos", `${f.revenueGrowth.toFixed(2)}%`,
+      f.revenueGrowth > 10 ? "ventas en expansión: refuerza alcista."
+      : f.revenueGrowth < 0 ? "ventas cayendo: refuerza bajista." : "estable, neutral.");
+  }
+  if (f.dividendYield !== undefined && f.dividendYield > 0) {
+    push("Dividend Yield", `${f.dividendYield.toFixed(2)}%`,
+      "paga dividendo: amortigua caídas, hace atractivo el Short Put (cobrar prima sobre acción estable).");
+  }
+  if (f.beta !== undefined) {
+    push("Beta", f.beta.toFixed(2),
+      f.beta > 1.3 ? "más volátil que el mercado: primas más caras, mayor potencial pero más riesgo."
+      : f.beta < 0.8 ? "defensiva: movimientos suaves, favorece estrategias de cobro de prima." : "se mueve con el mercado.");
+  }
+  if (f.volatility !== undefined) {
+    push("Volatilidad", `${f.volatility.toFixed(2)}%`,
+      f.volatility > 40 ? "vol. alta: primas infladas, favorece estrategias vendedoras (Short Put/Call) si se busca cobrar prima."
+      : f.volatility < 15 ? "vol. baja: primas baratas, favorece compradoras (Long Call/Put)." : "vol. media.");
+  }
+  if (f.change52w !== undefined) {
+    push("Cambio 52sem", `${f.change52w.toFixed(2)}%`,
+      f.change52w > 0 ? "tendencia anual positiva: contexto alcista." : "tendencia anual negativa: contexto bajista.");
+  }
+  return out;
+}
+
+function buildContextSectionMD(ctx: DashboardContext, ticker: string): string {
+  const lines: string[] = ["", "---", `**Contexto del Dashboard — ${ticker}:**`, ""];
+
+  if (ctx.fundamental) {
+    const f = ctx.fundamental;
+    const verdictIcon = f.verdict === "VIABLE" ? "✅" : f.verdict === "NOT_VIABLE" ? "❌" : "⚠️";
+    lines.push(`**Análisis Fundamental${f.source ? ` (fuente: ${f.source})` : ""}:**`);
+    lines.push(`- Veredicto: ${verdictIcon} **${f.verdict}** (Score ${f.overallScore}/100)`);
+    lines.push(`- Recomendación: ${f.recommendation}`);
+    if (f.sector) lines.push(`- Sector: ${f.sector}${f.industry ? ` / ${f.industry}` : ""}`);
+
+    // Razonamiento valor-por-valor: cómo se llegó al pensamiento y por qué la estrategia.
+    const reasoning = fundamentalReasoning(f);
+    if (reasoning.length > 0) {
+      lines.push("");
+      lines.push(`**Cómo se llegó a este pensamiento (valor por valor de ${f.source ?? "la fuente"}):**`);
+      lines.push(...reasoning);
+
+      // Síntesis del sesgo derivado de los fundamentales.
+      const fb = dashboardBias({ fundamental: f });
+      const conclusion = fb >= 2
+        ? "Los fundamentales en conjunto apuntan **alcista** → estrategias compradoras alcistas (Long Call) o cobro de prima alcista (Short Put)."
+        : fb <= -2
+        ? "Los fundamentales en conjunto apuntan **bajista** → protección/especulación bajista (Long Put)."
+        : "Los fundamentales son **mixtos** → priorizar el ratio riesgo/recompensa de cada estrategia.";
+      lines.push("", `→ **Conclusión fundamental:** ${conclusion}`);
+    }
+    lines.push("");
+  }
+
+  if (ctx.confluence) {
+    const c = ctx.confluence;
+    const total = c.callCount + c.putCount + c.holdCount;
+    lines.push(`**Señales de Confluencia (${total} señales activas):**`);
+    lines.push(`- CALL: ${c.callCount} | PUT: ${c.putCount} | HOLD: ${c.holdCount}`);
+    lines.push(`- Score promedio: ${c.avgScore.toFixed(1)} | Tendencia dominante: **${c.dominantTrend}**`);
+    if (c.topSignals.length > 0) {
+      lines.push(`- Señales principales:`);
+      for (const s of c.topSignals.slice(0, 4)) {
+        lines.push(`  • ${s.core}${s.subCore ? `/${s.subCore}` : ""}: ${s.tipoSenal} (score ${s.score.toFixed(1)}) — ${s.observacionSummary}`);
+      }
+    }
+    lines.push("");
+  }
+
+  if (ctx.ohlc) {
+    const o = ctx.ohlc;
+    lines.push(`**Gráfico de Velas (${o.timeframe}):**`);
+    lines.push(`- Último cierre: $${o.lastClose.toFixed(2)} | Tendencia reciente: **${o.recentTrend}**`);
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Derive a directional bias score from dashboard context.
+ * Returns positive for bullish, negative for bearish.
+ * Used to modulate recommendations.
+ */
+function dashboardBias(ctx: DashboardContext): number {
+  let bias = 0;
+
+  if (ctx.fundamental) {
+    if (ctx.fundamental.verdict === "VIABLE")     bias += 2;
+    if (ctx.fundamental.verdict === "NOT_VIABLE") bias -= 2;
+    if (ctx.fundamental.beta !== undefined && ctx.fundamental.beta < 1) bias += 0.5;
+  }
+
+  if (ctx.confluence) {
+    bias += (ctx.confluence.callCount - ctx.confluence.putCount) * 0.5;
+    if (ctx.confluence.dominantTrend === "ALCISTA") bias += 1;
+    if (ctx.confluence.dominantTrend === "BAJISTA") bias -= 1;
+  }
+
+  if (ctx.ohlc) {
+    if (ctx.ohlc.recentTrend === "ALCISTA") bias += 1;
+    if (ctx.ohlc.recentTrend === "BAJISTA") bias -= 1;
+  }
+
+  return bias;
+}
+
 // ─── Punto de entrada público ────────────────────────────────────────────────
 
 export function generateOptionsAnswer(request: OptionsQARequest): OptionsQAResponse {
   const intent = classifyIntent(request.question, request.selectedStrategy);
   const focus = strategyFocusFromIntent(intent, request.selectedStrategy);
-  const { ticker, strategies: snap, currentPrice } = request;
+  const { ticker, strategies: snap, currentPrice, dashboardContext } = request;
 
   let answer: string;
 
@@ -545,14 +807,20 @@ export function generateOptionsAnswer(request: OptionsQARequest): OptionsQARespo
     case "MARGEN":                answer = answerMargen(ticker, snap, focus); break;
     case "ROI":                   answer = answerROI(ticker, snap, focus); break;
     case "COMPARACION":           answer = answerComparacion(ticker, snap); break;
-    case "RECOMENDACION":         answer = answerRecomendacion(ticker, snap); break;
+    case "RECOMENDACION":         answer = answerRecomendacion(ticker, snap, dashboardContext); break;
     case "RIESGO":                answer = answerRiesgo(ticker, snap, focus); break;
     case "RENTABILIDAD":          answer = answerRentabilidad(ticker, snap, focus, currentPrice); break;
     case "ESPECIFICO_LONG_CALL":  answer = answerEspecifico(ticker, snap, "LONG_CALL", request.question); break;
     case "ESPECIFICO_LONG_PUT":   answer = answerEspecifico(ticker, snap, "LONG_PUT", request.question); break;
     case "ESPECIFICO_SHORT_CALL": answer = answerEspecifico(ticker, snap, "SHORT_CALL", request.question); break;
     case "ESPECIFICO_SHORT_PUT":  answer = answerEspecifico(ticker, snap, "SHORT_PUT", request.question); break;
-    default:                      answer = answerGeneral(ticker, snap, currentPrice); break;
+    default:                      answer = answerGeneral(ticker, snap, currentPrice, dashboardContext); break;
+  }
+
+  // Append dashboard context section for intents that benefit from full context
+  const contextIntents: IntentType[] = ["RECOMENDACION", "GENERAL", "COMPARACION", "RENTABILIDAD", "RIESGO"];
+  if (dashboardContext && contextIntents.includes(intent)) {
+    answer += buildContextSectionMD(dashboardContext, ticker);
   }
 
   return {

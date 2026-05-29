@@ -106,7 +106,7 @@ const toggleKnobStyle = (active: boolean): React.CSSProperties => ({
 });
 
 export function SimulationControlPanel({ ticket, onResult, onFundamentalRows, onProjectionResult, isFundamentalMode = false }: Props) {
-  const { selectedOptionsStrategy } = useSignalStore();
+  const { selectedOptionsStrategy, setSelectedInstrument, setDashboardContext, dashboardContext } = useSignalStore();
   const [preset, setPreset] = useState<Preset>("3M");
   const [estrategiaFrom, setEstrategiaFrom] = useState(isoToday());
   const [estrategiaTo, setEstrategiaTo] = useState(isoPlusDays(30));
@@ -202,6 +202,43 @@ export function SimulationControlPanel({ ticket, onResult, onFundamentalRows, on
         onFundamentalRows(data.confluenceRows as unknown as ConfluenceSignalRow[]);
       }
       onProjectionResult?.(data);
+
+      // FIC: Vincular ticker del análisis fundamental con el instrumento activo (alimenta StrategiesView).
+      // FIC: Link the fundamental analysis ticker to the active instrument (feeds StrategiesView ticker).
+      const analyzedTicker = (data.ticker ?? fundamentalTicker ?? ticket ?? "").toUpperCase();
+      if (analyzedTicker) {
+        setSelectedInstrument({
+          symbol: analyzedTicker,
+          name: data.companyName,
+          category: "stocks",
+        });
+      }
+
+      // FIC: Empujar datos fundamentales al store para enriquecer el chat / cerebro de opciones.
+      // FIC: Push fundamental data to store to enrich chat / options brain.
+      const fd = data.fundamentalData ?? {};
+      setDashboardContext({
+        ...(dashboardContext ?? {}),
+        fundamentalVerdict: data.verdict,
+        fundamentalScore: data.overallScore,
+        fundamentalRecommendation: data.recommendation,
+        fundamentalSource: src?.sourceId ?? dataSource,
+        fundamentalSector: fd.sector,
+        fundamentalIndustry: fd.industry,
+        fundamentalMarketCap: fd.marketCap,
+        fundamentalPE: fd.pe,
+        fundamentalPB: fd.pb,
+        fundamentalPS: fd.ps,
+        fundamentalROE: fd.roe,
+        fundamentalDebtToEquity: fd.debtToEquity,
+        fundamentalEPS: fd.eps,
+        fundamentalEPSGrowth: fd.epsGrowth,
+        fundamentalDividendYield: fd.dividendYield,
+        fundamentalRevenueGrowth: fd.revenueGrowth,
+        fundamentalVolatility: fd.volatility,
+        fundamentalBeta: fd.beta,
+        fundamentalChange52w: fd.change52w,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "fundamental_failed");
     } finally {

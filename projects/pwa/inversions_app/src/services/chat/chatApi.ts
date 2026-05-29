@@ -16,6 +16,50 @@ export interface ChatResponse {
   cached?: boolean;
 }
 
+/** Contexto del dashboard para enriquecer análisis de opciones / Dashboard context to enrich options analysis */
+export interface OptionsAnalysisDashboardContext {
+  fundamental?: {
+    verdict: "VIABLE" | "NEUTRAL" | "NOT_VIABLE";
+    overallScore: number;
+    recommendation: string;
+    source?: string;
+    sector?: string;
+    industry?: string;
+    marketCap?: number;
+    pe?: number;
+    pb?: number;
+    ps?: number;
+    roe?: number;
+    debtToEquity?: number;
+    eps?: number;
+    epsGrowth?: number;
+    dividendYield?: number;
+    revenueGrowth?: number;
+    volatility?: number;
+    beta?: number;
+    change52w?: number;
+  };
+  confluence?: {
+    callCount: number;
+    putCount: number;
+    holdCount: number;
+    avgScore: number;
+    dominantTrend: "ALCISTA" | "BAJISTA" | "LATERAL";
+    topSignals: Array<{
+      core: string;
+      subCore?: string;
+      tipoSenal: "CALL" | "PUT" | "HOLD";
+      score: number;
+      observacionSummary: string;
+    }>;
+  };
+  ohlc?: {
+    timeframe: string;
+    lastClose: number;
+    recentTrend: "ALCISTA" | "BAJISTA" | "LATERAL";
+  };
+}
+
 export interface OptionsAnalysisQARequest {
   ticker: string;
   question: string;
@@ -31,6 +75,8 @@ export interface OptionsAnalysisQARequest {
     timeDecayModel?: "LINEAR" | "EXPONENTIAL";
     interestRate?: number;
   };
+  /** Contexto estructurado del dashboard para análisis determinístico enriquecido */
+  dashboardContext?: OptionsAnalysisDashboardContext;
 }
 
 export interface OptionsAnalysisQAResponse {

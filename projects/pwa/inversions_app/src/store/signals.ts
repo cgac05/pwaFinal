@@ -1,5 +1,5 @@
-// FIC: Lightweight global store for dashboard signal selection and runtime modes.
-// FIC: Store global ligero para seleccion de senales y modos runtime del dashboard.
+// FIC: Lightweight global store for dashboard signal selection, runtime modes, and dashboard context.
+// FIC: Store global ligero para seleccion de senales, modos runtime y contexto del dashboard.
 
 import { useSyncExternalStore } from "react";
 
@@ -40,6 +40,47 @@ export interface OptionsStrategyParams {
 type RuntimeMode = "online" | "offline";
 type OperationalMode = "demo" | "real";
 
+/**
+ * Snapshot liviano del contexto del dashboard para enriquecer el chat.
+ * Lightweight snapshot of dashboard context to enrich the chat.
+ */
+export interface DashboardContextSnapshot {
+  fundamentalVerdict?: "VIABLE" | "NEUTRAL" | "NOT_VIABLE";
+  fundamentalScore?: number;
+  fundamentalRecommendation?: string;
+  fundamentalSource?: string;
+  fundamentalSector?: string;
+  fundamentalIndustry?: string;
+  fundamentalMarketCap?: number;
+  fundamentalPE?: number;
+  fundamentalPB?: number;
+  fundamentalPS?: number;
+  fundamentalROE?: number;
+  fundamentalDebtToEquity?: number;
+  fundamentalEPS?: number;
+  fundamentalEPSGrowth?: number;
+  fundamentalDividendYield?: number;
+  fundamentalRevenueGrowth?: number;
+  fundamentalVolatility?: number;
+  fundamentalBeta?: number;
+  fundamentalChange52w?: number;
+  confluenceCallCount?: number;
+  confluencePutCount?: number;
+  confluenceHoldCount?: number;
+  confluenceAvgScore?: number;
+  confluenceDominantTrend?: "ALCISTA" | "BAJISTA" | "LATERAL";
+  topSignals?: Array<{
+    core: string;
+    subCore?: string;
+    tipoSenal: "CALL" | "PUT" | "HOLD";
+    score: number;
+    observacionSummary: string;
+  }>;
+  ohlcTrend?: "ALCISTA" | "BAJISTA" | "LATERAL";
+  ohlcLastClose?: number;
+  ohlcTimeframe?: string;
+}
+
 interface SignalStoreState {
   selectedInstrument?: SelectedInstrument;
   selectedSignal?: SelectedSignal;
@@ -47,6 +88,10 @@ interface SignalStoreState {
   optionsStrategyParams?: OptionsStrategyParams;
   runtimeMode: RuntimeMode;
   operationalMode: OperationalMode;
+  /** Contexto enriquecido del dashboard — se llena desde los componentes de confluencia y fundamental */
+  dashboardContext?: DashboardContextSnapshot;
+  /** MD de la señal activa para enviar como contexto al chat / Active signal MD for chat context */
+  signalContextMD?: string;
 }
 
 type Listener = () => void;
@@ -69,7 +114,9 @@ const state: SignalStoreState = {
   selectedOptionsStrategy: undefined,
   optionsStrategyParams: undefined,
   runtimeMode: initialRuntimeMode,
-  operationalMode: initialOperationalMode
+  operationalMode: initialOperationalMode,
+  dashboardContext: undefined,
+  signalContextMD: undefined,
 };
 
 function emit() {
@@ -121,6 +168,14 @@ export function useSignalStore() {
         window.localStorage.setItem("inversions.runtime.operational", mode);
       }
       emit();
-    }
+    },
+    setDashboardContext: (ctx: DashboardContextSnapshot | undefined) => {
+      state.dashboardContext = ctx;
+      emit();
+    },
+    setSignalContextMD: (md: string | undefined) => {
+      state.signalContextMD = md;
+      emit();
+    },
   };
 }

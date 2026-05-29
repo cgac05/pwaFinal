@@ -1,7 +1,7 @@
 // FIC: StrategiesView — options strategy calculator cards (Short Put, Long Put, Short Call, Long Call).
 // FIC: StrategiesView — cards de calculadora de estrategias de opciones (Short Put, Long Put, Short Call, Long Call).
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Shield, ArrowDown } from "lucide-react";
 import { useSignalStore } from "../../../store/signals";
 
@@ -119,7 +119,10 @@ const FALLBACK_INSTRUMENTS: InstrumentCatalogItem[] = [
 ];
 
 export function StrategiesView() {
-  const { selectedOptionsStrategy, setSelectedInstrument, setSelectedOptionsStrategy, setOptionsStrategyParams } = useSignalStore();
+  const { selectedInstrument, selectedOptionsStrategy, setSelectedInstrument, setSelectedOptionsStrategy, setOptionsStrategyParams } = useSignalStore();
+  // FIC: Último símbolo sincronizado; evita auto-fetch en cambios originados por el propio tipeo local.
+  // FIC: Last synced symbol; prevents auto-fetch on changes originating from local typing.
+  const syncedSymbolRef = useRef<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [forms, setForms] = useState<Record<string, StrategyForm>>({});
   const [results, setResults] = useState<Record<string, StrategyResult>>({});
@@ -174,6 +177,8 @@ export function StrategiesView() {
   const setActiveTickerContext = (ticker: string) => {
     const symbol = ticker.trim().toUpperCase();
     if (!symbol) return;
+    // Marcar como ya-sincronizado: este cambio nace localmente, no debe disparar auto-fetch del efecto.
+    syncedSymbolRef.current = symbol;
     const instrument = instruments.find((item) => item.symbol === symbol);
     setSelectedInstrument({
       symbol,
@@ -199,9 +204,9 @@ export function StrategiesView() {
     });
   };
 
-  const fetchQuote = async (id: string): Promise<void> => {
+  const fetchQuote = async (id: string, overrideTicker?: string): Promise<void> => {
     const form = getForm(id);
-    const ticker = form.ticker.trim().toUpperCase();
+    const ticker = (overrideTicker ?? form.ticker).trim().toUpperCase();
     if (!ticker) return;
 
     setActiveTickerContext(ticker);
@@ -256,6 +261,32 @@ export function StrategiesView() {
       setQuoteLoadingId(null);
     }
   };
+
+  // FIC: Sincroniza el ticker del instrumento activo (watchlist/fundamental/dashboard) con los formularios.
+  // FIC: Syncs the active instrument ticker (watchlist/fundamental/dashboard) into the strategy forms.
+  useEffect(() => {
+    const sym = selectedInstrument?.symbol?.toUpperCase();
+    if (!sym) return;
+    if (syncedSymbolRef.current === sym) return;
+    syncedSymbolRef.current = sym;
+
+    setForms((prev) => {
+      const next = { ...prev };
+      for (const s of STRATEGIES) {
+        const form = next[s.id] ?? getForm(s.id);
+        if (form.ticker.toUpperCase() !== sym) {
+          // Cambió el ticker: limpiar precio/strike para recargarlos del nuevo símbolo.
+          next[s.id] = { ...form, ticker: sym, currentPrice: "", strikePrice: "" };
+        }
+      }
+      return next;
+    });
+
+    // Auto-cargar precio para la estrategia expandida (o la primera) con el nuevo ticker.
+    const target = expandedId ?? STRATEGIES[0].id;
+    void fetchQuote(target, sym);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedInstrument?.symbol]);
 
   const calculate = async (strategy: StrategyConfig) => {
     setSelectedOptionsStrategy({ id: strategy.id, name: strategy.name });

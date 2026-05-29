@@ -29,6 +29,7 @@ import {
   type OptionsQARequest,
   type StrategyKey,
   type StrategiesSnapshot,
+  type DashboardContext,
 } from "../../modules/strategies/optionsAnalysisCore";
 import type { OptionStrategyOutput } from "../../modules/strategies/optionsStrategyContract";
 
@@ -49,6 +50,7 @@ export function createOptionsAnalysisQARouter(supabaseClient: SupabaseClient): R
       availableCapital,
       riskTolerance,
       assumptions,
+      dashboardContext,
     } = req.body;
 
     // ── Validación básica ─────────────────────────────────────────────────
@@ -134,6 +136,7 @@ export function createOptionsAnalysisQARouter(supabaseClient: SupabaseClient): R
       strategies: snapshot,
       selectedStrategy: resolvedStrategy,
       currentPrice,
+      dashboardContext: dashboardContext as DashboardContext | undefined,
     };
 
     // ── Generar respuesta determinística ──────────────────────────────────
