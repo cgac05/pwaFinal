@@ -4,6 +4,7 @@ import { initializeEnvironment } from "./config/environment";
 import { printValidationResult, validateEnvironment } from "./config/envValidator";
 import { createAuditHistoryRouter } from "./routes/audit/history";
 import { createOperationDetailRouter } from "./routes/audit/operationDetail";
+import { registerAuditRoutes } from "./routes/auditRoutes";
 import { createApprovalRouter } from "./routes/execution/approve";
 import { createExecutionRouter } from "./routes/execution/execute";
 import { AuditHistoryService } from "./modules/audit/historyService";
@@ -32,6 +33,13 @@ import { chatExplainRouter } from "./routes/indicators/chatExplain";
 import { confluenceTableRouter } from "./routes/signals/confluenceTable";
 import { simulationRunRouter } from "./routes/simulation/run";
 import { indicatorsRateLimit, chatRateLimit } from "./middleware/indicatorsRateLimit";
+import { createCompanyProfileRouter } from "./routes/fundamental/companyProfile";
+import { createSp500ScreenerRouter } from "./routes/fundamental/sp500Screener";
+import { createFundamentalAnalyzeRouter } from "./routes/fundamental/analyze";
+import { createOptionsRouter } from "./routes/strategies/optionsRouter";
+import { createOptionsAnalysisQARouter } from "./routes/strategies/optionsAnalysisQARouter";
+import { createFundamentalCopilotRouter } from "./routes/ai/fundamentalCopilot";
+import { supabaseClient } from "./database/supabase/client";
 
 const envValidation = validateEnvironment();
 if (!envValidation.isValid) {
@@ -47,6 +55,9 @@ initializeEnvironment();
 
 const app = express();
 app.use(express.json());
+
+// T017-T020: Registrar rutas de auditoría y trazabilidad
+registerAuditRoutes(app);
 
 const auditHistoryService = new AuditHistoryService();
 const approvalService = new ApprovalService();
@@ -78,6 +89,12 @@ app.use("/api/indicators", indicatorsRateLimit, bollingerRouter);
 app.use("/api/indicators", indicatorsRateLimit, indicatorsConfluenceRouter);
 app.use("/api/indicators", indicatorsHealthRouter);
 app.use("/api/chat", chatRateLimit, chatExplainRouter);
+app.use("/api/team-03/fundamental", createFundamentalAnalyzeRouter(supabaseClient));
+app.use("/api/team-03/fundamental", createCompanyProfileRouter(supabaseClient));
+app.use("/api/team-03/screener/sp500", createSp500ScreenerRouter(supabaseClient));
+app.use("/api/team-03/options", createOptionsRouter(supabaseClient));
+app.use("/api/team-03/options", createOptionsAnalysisQARouter(supabaseClient));
+app.use("/api/team-03/ai", createFundamentalCopilotRouter(supabaseClient));
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });

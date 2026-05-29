@@ -215,21 +215,24 @@ ALTER TABLE evidencia_operacion ENABLE ROW LEVEL SECURITY;
 
 -- FIC: RLS Policy: senal_confluente - public read (signals are operational data)
 -- FIC: Política RLS: senal_confluente - lectura pública (las señales son datos operacionales)
-CREATE POLICY IF NOT EXISTS "senal_confluente_read_all"
+DROP POLICY IF EXISTS "senal_confluente_read_all" ON senal_confluente;
+CREATE POLICY "senal_confluente_read_all"
   ON senal_confluente
   FOR SELECT
   USING (true);
 
 -- FIC: RLS Policy: senal_confluente - insert only by service role (via backend)
 -- FIC: Política RLS: senal_confluente - insertar solo por rol de servicio (vía backend)
-CREATE POLICY IF NOT EXISTS "senal_confluente_insert_service"
+DROP POLICY IF EXISTS "senal_confluente_insert_service" ON senal_confluente;
+CREATE POLICY "senal_confluente_insert_service"
   ON senal_confluente
   FOR INSERT
   WITH CHECK (auth.role() = 'service_role');
 
 -- FIC: RLS Policy: decision_humana - read own decisions or all (based on role)
 -- FIC: Política RLS: decision_humana - leer decisiones propias o todas (basado en rol)
-CREATE POLICY IF NOT EXISTS "decision_humana_read_own"
+DROP POLICY IF EXISTS "decision_humana_read_own" ON decision_humana;
+CREATE POLICY "decision_humana_read_own"
   ON decision_humana
   FOR SELECT
   USING (
@@ -239,14 +242,16 @@ CREATE POLICY IF NOT EXISTS "decision_humana_read_own"
 
 -- FIC: RLS Policy: decision_humana - insert own decisions
 -- FIC: Política RLS: decision_humana - insertar propias decisiones
-CREATE POLICY IF NOT EXISTS "decision_humana_insert_own"
+DROP POLICY IF EXISTS "decision_humana_insert_own" ON decision_humana;
+CREATE POLICY "decision_humana_insert_own"
   ON decision_humana
   FOR INSERT
   WITH CHECK (auth.uid() = decidido_por);
 
 -- FIC: RLS Policy: intento_ejecucion - read based on decision ownership
 -- FIC: Política RLS: intento_ejecucion - leer basado en propiedad de decisión
-CREATE POLICY IF NOT EXISTS "intento_ejecucion_read_own"
+DROP POLICY IF EXISTS "intento_ejecucion_read_own" ON intento_ejecucion;
+CREATE POLICY "intento_ejecucion_read_own"
   ON intento_ejecucion
   FOR SELECT
   USING (
@@ -258,28 +263,32 @@ CREATE POLICY IF NOT EXISTS "intento_ejecucion_read_own"
 
 -- FIC: RLS Policy: evento_auditoria - read all (audit is shared view)
 -- FIC: Política RLS: evento_auditoria - leer todas (auditoría es vista compartida)
-CREATE POLICY IF NOT EXISTS "evento_auditoria_read_all"
+DROP POLICY IF EXISTS "evento_auditoria_read_all" ON evento_auditoria;
+CREATE POLICY "evento_auditoria_read_all"
   ON evento_auditoria
   FOR SELECT
   USING (true);
 
 -- FIC: RLS Policy: evento_auditoria - insert only by service role
 -- FIC: Política RLS: evento_auditoria - insertar solo por rol de servicio
-CREATE POLICY IF NOT EXISTS "evento_auditoria_insert_service"
+DROP POLICY IF EXISTS "evento_auditoria_insert_service" ON evento_auditoria;
+CREATE POLICY "evento_auditoria_insert_service"
   ON evento_auditoria
   FOR INSERT
   WITH CHECK (auth.role() = 'service_role');
 
 -- FIC: RLS Policy: evidencia_operacion - read all (evidence is operational)
 -- FIC: Política RLS: evidencia_operacion - leer todas (evidencia es operacional)
-CREATE POLICY IF NOT EXISTS "evidencia_operacion_read_all"
+DROP POLICY IF EXISTS "evidencia_operacion_read_all" ON evidencia_operacion;
+CREATE POLICY "evidencia_operacion_read_all"
   ON evidencia_operacion
   FOR SELECT
   USING (true);
 
 -- FIC: RLS Policy: evidencia_operacion - insert only by service role
 -- FIC: Política RLS: evidencia_operacion - insertar solo por rol de servicio
-CREATE POLICY IF NOT EXISTS "evidencia_operacion_insert_service"
+DROP POLICY IF EXISTS "evidencia_operacion_insert_service" ON evidencia_operacion;
+CREATE POLICY "evidencia_operacion_insert_service"
   ON evidencia_operacion
   FOR INSERT
   WITH CHECK (auth.role() = 'service_role');

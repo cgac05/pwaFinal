@@ -7,7 +7,7 @@ coverage/
 .env
 .env.*
 !.env.example
-
+.claude/
 __pycache__/
 *.pyc
 .venv/
@@ -21,6 +21,5 @@ Thumbs.db
 *:Zone.Identifier
 .vscode/
 .idea/
-.claude/
 
 .tmp-ai-drfic/

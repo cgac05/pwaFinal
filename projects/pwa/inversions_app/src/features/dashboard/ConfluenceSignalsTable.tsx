@@ -1,6 +1,7 @@
-// FIC: Canonical confluence signals table — Revolut design tokens applied to all visual elements.
-// FIC: Tabla canónica de señales de confluencia — tokens de diseño Revolut aplicados a todos los elementos visuales.
-// FIC: Phase 5 T095 — tabla canonica con columnas del PDF "DASBOARD Y TABLA v1".
+// FIC: Canonical confluence signals table - Revolut design tokens applied to all visual elements.
+// FIC: Tabla canonica de senales de confluencia - tokens de diseno Revolut aplicados a todos los elementos visuales.
+// FIC: Phase 5 T095 - tabla canonica con columnas del PDF "DASBOARD Y TABLA v1".
+// FIC: Reemplaza la tabla v0 (symbol/direction/confidence/timestamp) por el contrato del PDF.
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useSignalStore, type SelectedSignal } from "../../store/signals";
@@ -12,27 +13,29 @@ import {
 import { ObservationCell } from "./ObservationCell";
 import { OptionGreeksRow } from "./OptionGreeksRow";
 
-// FIC: 13 columnas canonicas del PDF v1 (US5).
-const PDF_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "observacion"; label: string }> = [
-  { key: "ticket", label: "TICKET" },
-  { key: "core", label: "CORE" },
-  { key: "subCore", label: "SUBCORE" },
-  { key: "precio", label: "PRECIO" },
-  { key: "tipoSenal", label: "TIPO SEÑAL" },
-  { key: "fecha", label: "FECHA" },
-  { key: "timeframe", label: "TIMEFRAME" },
-  { key: "tendencia", label: "TENDENCIA" },
-  { key: "score", label: "SCORE" },
-  { key: "peso", label: "PESO" },
-  { key: "invertir", label: "INVERTIR" },
-  { key: "estado", label: "ESTADO" },
-  { key: "observacion", label: "OBSERVACION" }
+// FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
+const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia" | "observacion"; label: string; width: number }> = [
+  { key: "ticket", label: "TICKET", width: 76 },
+  { key: "core", label: "CORE", width: 150 },
+  { key: "subCore", label: "SUBCORE", width: 110 },
+  { key: "precio", label: "PRECIO", width: 96 },
+  { key: "tipoSenal", label: "TIPO SEÑAL", width: 108 },
+  { key: "fecha", label: "FECHA", width: 110 },
+  { key: "timeframe", label: "TIMEFRAME", width: 112 },
+  { key: "tendencia", label: "TENDENCIA", width: 128 },
+  { key: "score", label: "SCORE", width: 86 },
+  { key: "peso", label: "PESO", width: 82 },
+  { key: "invertir", label: "INVERTIR", width: 96 },
+  { key: "estado", label: "ESTADO", width: 118 },
+  { key: "estrategia", label: "ESTRATEGIA", width: 170 },
+  { key: "observacion", label: "OBSERVACION", width: 360 }
 ];
 
 interface Props {
   symbol?: string;
   /** FIC: Permite sobrescribir las filas (por ejemplo desde una corrida de simulacion). */
   rows?: ConfluenceSignalRow[];
+  activeStrategy?: string;
 }
 
 function colorForTipo(tipo: string): string {
@@ -47,11 +50,12 @@ function colorForEstado(estado: string): string {
   return "var(--color-buy, #2ec27e)";
 }
 
-export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
+export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy }: Props) {
   const [rows, setRows] = useState<ConfluenceSignalRow[]>(rowsProp ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<Omit<ConfluenceTableResponse, "rows"> | null>(null);
+  const [detailRow, setDetailRow] = useState<ConfluenceSignalRow | null>(null);
   const { setSelectedSignal } = useSignalStore();
 
   useEffect(() => {
@@ -87,7 +91,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
         <h2 style={{ margin: 0 }}>Tabla de Confluencia de Señales</h2>
         {meta && (
           <span style={{ color: "var(--color-text-muted)", fontSize: "0.75rem" }}>
-            {meta.ticket} · {meta.timeframe} · v{meta.algorithm_version}
+            {meta.ticket} - {meta.timeframe} - v{meta.algorithm_version}
           </span>
         )}
       </div>
@@ -98,12 +102,19 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
         </div>
       )}
 
-      <div style={{ maxHeight: 540, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+        <span className="badge badge-medium">Vista compacta</span>
+        <span className="badge badge-hold" style={{ fontSize: "0.72rem" }}>
+          Estrategia: {(activeStrategy ?? "SIN_ESTRATEGIA").replace(/_/g, " ")}
+        </span>
+      </div>
+
+      <div style={{ maxHeight: 500, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
+        <table style={{ width: "100%", minWidth: 1760, borderCollapse: "collapse", tableLayout: "fixed" }}>
           <thead>
             <tr>
-              {PDF_COLUMNS.map((col) => (
-                <th key={col.key} style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.5rem", textAlign: "left", fontSize: "0.7rem", borderBottom: "1px solid var(--color-border)" }}>
+              {TABLE_COLUMNS.map((col) => (
+                <th key={col.key} style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", width: col.width }}>
                   {col.label}
                 </th>
               ))}
@@ -111,9 +122,9 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
           </thead>
           <tbody>
             {loading && rows.length === 0 ? (
-              <tr><td colSpan={PDF_COLUMNS.length} style={{ padding: "1rem", textAlign: "center" }}>Cargando…</td></tr>
+              <tr><td colSpan={TABLE_COLUMNS.length} style={{ padding: "1rem", textAlign: "center" }}>Cargando...</td></tr>
             ) : sorted.length === 0 ? (
-              <tr><td colSpan={PDF_COLUMNS.length} style={{ padding: "1rem", textAlign: "center", color: "var(--color-text-muted)" }}>Sin datos para mostrar</td></tr>
+              <tr><td colSpan={TABLE_COLUMNS.length} style={{ padding: "1rem", textAlign: "center", color: "var(--color-text-muted)" }}>Sin datos para mostrar</td></tr>
             ) : (
               sorted.flatMap((row, idx) => {
                 const rowKey = `${row.core}-${row.subCore ?? "agg"}-${idx}`;
@@ -124,11 +135,25 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
                     metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
                   } as SelectedSignal);
                 const cells = (
-                  <tr key={rowKey} onClick={onClick} style={{ cursor: "pointer", opacity: row.estado === "DEGRADADA" ? 0.55 : 1 }}>
-                    {PDF_COLUMNS.map((col) => {
+                  <tr key={rowKey} onClick={onClick} style={{ cursor: "pointer", opacity: row.estado === "DEGRADADA" ? 0.62 : 1 }}>
+                    {TABLE_COLUMNS.map((col) => {
                       let content: React.ReactNode;
                       if (col.key === "observacion") {
-                        content = <ObservationCell observation={row.observacion} />;
+                        content = (
+                          <button
+                            className="btn-ghost"
+                            type="button"
+                            style={{ padding: "0.28rem 0.7rem", fontSize: "0.72rem" }}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setDetailRow(row);
+                            }}
+                          >
+                            Ver detalle
+                          </button>
+                        );
+                      } else if (col.key === "estrategia") {
+                        content = <span className="badge badge-hold">{(activeStrategy ?? "N/A").replace(/_/g, " ")}</span>;
                       } else if (col.key === "tipoSenal") {
                         content = <span style={{ color: colorForTipo(row.tipoSenal), fontWeight: 700 }}>{row.tipoSenal}</span>;
                       } else if (col.key === "estado") {
@@ -150,7 +175,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
                         content = v == null ? "-" : String(v);
                       }
                       return (
-                        <td key={col.key} style={{ padding: "0.4rem 0.5rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.8rem", verticalAlign: "top" }}>
+                        <td key={col.key} style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {content}
                         </td>
                       );
@@ -158,7 +183,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
                   </tr>
                 );
                 if (row.optionLeg) {
-                  return [cells, <OptionGreeksRow key={`${rowKey}-greeks`} greeks={row.optionLeg} colSpan={PDF_COLUMNS.length} />];
+                  return [cells, <OptionGreeksRow key={`${rowKey}-greeks`} greeks={row.optionLeg} colSpan={TABLE_COLUMNS.length} />];
                 }
                 return [cells];
               })
@@ -166,6 +191,79 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
           </tbody>
         </table>
       </div>
+
+      {detailRow && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.62)",
+            zIndex: 45,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1.25rem"
+          }}
+          onClick={() => setDetailRow(null)}
+        >
+          <div
+            className="card"
+            style={{
+              width: "min(900px, 96vw)",
+              maxHeight: "88vh",
+              overflowY: "auto",
+              border: "1px solid var(--color-border)",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.55)"
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+              <div>
+                <h2 style={{ margin: 0 }}>Detalle de Señal</h2>
+                <p style={{ marginTop: "0.25rem", fontSize: "0.8rem" }}>{detailRow.ticket} - {detailRow.core}</p>
+              </div>
+              <button className="btn-ghost" type="button" onClick={() => setDetailRow(null)}>Cerrar</button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.7rem", marginBottom: "1rem" }}>
+              {[
+                ["Subcore", detailRow.subCore ?? "-"],
+                ["Precio", Number.isFinite(detailRow.precio) ? detailRow.precio.toFixed(3) : "-"],
+                ["Señal", detailRow.tipoSenal],
+                ["Tendencia", detailRow.tendencia],
+                ["Score", detailRow.score.toFixed(3)],
+                ["Peso", detailRow.peso.toFixed(3)],
+                ["Invertir", detailRow.invertir ? "SI" : "NO"],
+                ["Estado", detailRow.estado],
+                ["Fecha", detailRow.fecha],
+                ["Timeframe", detailRow.timeframe],
+                ["Estrategia", (activeStrategy ?? "N/A").replace(/_/g, " ")]
+              ].map(([label, value]) => (
+                <div key={label} style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.6rem" }}>
+                  <div style={{ color: "var(--color-text-muted)", fontSize: "0.68rem", textTransform: "uppercase" }}>{label}</div>
+                  <strong style={{ fontSize: "0.85rem" }}>{value}</strong>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <h2 style={{ marginBottom: "0.5rem" }}>Observacion</h2>
+              <ObservationCell observation={detailRow.observacion} />
+            </div>
+
+            {detailRow.evidencia_refs?.length ? (
+              <div>
+                <h2 style={{ marginBottom: "0.5rem" }}>Evidencia</h2>
+                <ul style={{ marginLeft: "1rem", color: "var(--color-text-muted)", fontSize: "0.8rem" }}>
+                  {detailRow.evidencia_refs.map((ref, i) => <li key={`${ref}-${i}`}>{ref}</li>)}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
