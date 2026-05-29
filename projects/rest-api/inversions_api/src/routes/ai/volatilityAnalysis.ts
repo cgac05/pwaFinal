@@ -55,6 +55,54 @@ function simulateFollowUpChat(result: {
   return `Como analista senior con 24 años de experiencia, considero que para ${ticker}, ante tu consulta "${question}", la recomendación adecuada es revisar si la estructura ${strategy} mantiene un margen de seguridad suficiente. ${result.analysisSummary ?? ''} POP aproximada: ${popText}.${warningText}`;
 }
 
+// Helper to simulate global chat replies about multiple volatility results when Gemini is not enabled
+function simulateGlobalChat(question: string, results: any[]): string {
+  const q = question.toLowerCase();
+  
+  if (results.length === 0) {
+    return "Hola. Actualmente no he detectado ningún reporte de evaluación en mi historial local. Te sugiero ir al Panel de Análisis de Volatilidad y realizar algunas corridas primero para que yo pueda analizar su viabilidad y darte respuestas detalladas.";
+  }
+
+  // Check if the user is asking about a specific ticker in the database
+  const foundResult = results.find(r => q.includes(r.ticker.toLowerCase()));
+  
+  if (foundResult) {
+    const strategy = foundResult.scores.toLowerCase().includes('condor') ? 'Iron Condor' : 'Butterfly Spread';
+    if (q.includes('por qué') || q.includes('porque') || q.includes('justific') || q.includes('razon')) {
+      return `Analizando el reporte para **${foundResult.ticker}**: La decisión de viabilidad fue **${foundResult.decision}**. 
+Esto se determinó debido a que los scores ingresados (${foundResult.scores.replace(/\n/g, ', ')}) mostraron que ${foundResult.decision === 'SÍ' ? 'la volatilidad implícita está en niveles óptimos para una estrategia de rango (recolectar prima), con bajo riesgo de ruptura.' : 'existe un fuerte momentum direccional o riesgo de noticias macro inminente que anula la premisa de rango lateral.'} 
+Esta justificación técnica es exactamente la que figura en el reporte PDF exportado.`;
+    }
+    
+    if (q.includes('riesgo') || q.includes('cobertura') || q.includes('indicador')) {
+      return `Para el reporte de **${foundResult.ticker}** con viabilidad **${foundResult.decision}**, el principal indicador a vigilar es el balance de scores. 
+Con los scores actuales, se determinó un perfil de riesgo ${foundResult.decision === 'SÍ' ? 'favorable' : 'desfavorable'}. 
+En caso de operar un ${strategy}, se aconseja establecer stops basados en delta del activo subyacente o cobertura con puts/calls externas en las colas.`;
+    }
+
+    return `He localizado el reporte de **${foundResult.ticker}** en el historial (de fecha ${new Date(foundResult.date).toLocaleDateString()}). 
+Su estado es **VIABLE: ${foundResult.decision}** y la justificación técnica fue: "${foundResult.justification}". 
+¿Deseas profundizar en alguna métrica en particular o revisar cómo optimizar los stops para este activo?`;
+  }
+
+  // General questions about the history or volatility
+  if (q.includes('resumen') || q.includes('compar') || q.includes('historial') || q.includes('cuántos') || q.includes('cuantos') || q.includes('tabla') || q.includes('evalua')) {
+    const siCount = results.filter(r => r.decision === 'SÍ').length;
+    const noCount = results.filter(r => r.decision === 'NO').length;
+    return `Revisando el historial de reportes de la tabla de evaluación (que contienen los mismos datos exportados a PDF):
+- He analizado un total de **${results.length} activos**.
+- **${siCount}** resultaron con veredicto **SÍ (Viable)**.
+- **${noCount}** resultaron con veredicto **NO (No Viable)**.
+
+Los activos evaluados son: ${results.map(r => `${r.ticker} (${r.decision})`).join(', ')}.
+¿Hay algún activo en particular del que desees que comparemos los scores técnicos o las justificaciones?`;
+  }
+
+  return `Hola. Como analista cuantitativo con 24 años de experiencia en mercados y coberturas, he revisado el historial de reportes. Veo que tenemos reportes de volatilidad para: ${results.map(r => r.ticker).join(', ')}. 
+Ante tu pregunta: "${question}", te recomiendo evaluar si los scores de opciones superan el percentil 75 para considerar viable la venta de prima, tal como sugieren los principios de la rúbrica estricta. ¿Te gustaría saber más sobre las desviaciones técnicas de alguno de estos activos?`;
+}
+
+
 // 1. Obtener el prompt actual
 router.get('/prompts', (_req: Request, res: Response) => {
   res.json({ success: true, data: mockDb.prompts[0] });
@@ -213,6 +261,78 @@ router.post('/results/:id/chat', async (req: Request, res: Response) => {
 // Helper to get instruments (seed options for volatility simulation)
 router.get('/instruments', (_req: Request, res: Response) => {
   res.json({ success: true, data: mockDb.instruments });
+});
+
+// 6. Chat global interactivo basado en todo el historial (reportes / PDFs de la tabla de evaluación)
+router.post('/global-chat', async (req: Request, res: Response) => {
+  try {
+    const { message, model } = req.body;
+    if (!message) {
+      return res.status(400).json({ error: 'El mensaje es requerido' });
+    }
+
+    const modelType = model === 'fallback' ? 'fallback' : 'primary';
+
+    // Compilar el historial de reportes de la tabla de evaluación (que son los mismos datos del PDF)
+    const results = mockDb.results;
+    let resultsContext = '';
+    
+    if (results.length === 0) {
+      resultsContext = 'No hay reportes de análisis previos registrados aún en la tabla de evaluación.';
+    } else {
+      resultsContext = results.map((r, i) => {
+        return `Reporte #${i+1}:
+- Símbolo (Ticker): ${r.ticker}
+- Fecha: ${new Date(r.date).toLocaleString()}
+- Scores Analizados: ${r.scores.replace(/\n/g, ' | ')}
+- Decisión de Viabilidad: ${r.decision}
+- Justificación Técnica: ${r.justification}
+- Chat de Seguimiento Previo: ${r.chatHistory.length === 0 ? 'Ninguna' : r.chatHistory.map(h => `${h.role === 'user' ? 'Usuario' : 'IA'}: ${h.content}`).join(' | ')}`;
+      }).join('\n\n');
+    }
+
+    const contextPrompt = `Eres un analista financiero cuantitativo y desarrollador senior con 24 años de experiencia.
+A continuación se presenta el historial de resultados de tus análisis de volatilidad realizados (estos datos corresponden a los reportes que el usuario analiza y puede exportar como PDFs en la interfaz en la pestaña /ai/evaluacion-tabla).
+El usuario te hará preguntas sobre este historial o temas relacionados en el Chat IA Coberturas. Tu misión es responder con un tono experto, profesional y en español.
+Para optimizar el uso de tokens y la velocidad de respuesta, apóyate exclusivamente en este contexto resumido de reportes y responde directamente sin rodeos.
+
+HISTORIAL DE EVALUACIÓN DE VOLATILIDAD (DATOS DE LOS REPORTES/PDFs):
+${resultsContext}
+
+PREGUNTA DEL USUARIO:
+${message}`;
+
+    let replyText = '';
+    let usedModel = '';
+    const geminiService = getGeminiService();
+
+    if (!geminiService.isEnabled()) {
+      replyText = simulateGlobalChat(message, results);
+      usedModel = modelType === 'primary' ? 'Gemma 4 31B (Simulado)' : 'Gemma 4 26B (Simulado Fallback)';
+    } else {
+      try {
+        const response = await geminiService.generateSimpleResponse(contextPrompt, modelType);
+        replyText = response.text || '';
+        usedModel = response.model;
+      } catch (err: any) {
+        console.warn('Error en generateSimpleResponse, activando fallback interactivo:', err);
+        replyText = simulateGlobalChat(message, results);
+        usedModel = `${modelType === 'primary' ? 'Gemma 4 31B' : 'Gemma 4 26B'} (Simulado por Error)`;
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        text: replyText,
+        model: usedModel
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en global-chat:', error);
+    res.status(500).json({ success: false, error: 'Error en el chat global de volatilidad' });
+  }
 });
 
 export default router;

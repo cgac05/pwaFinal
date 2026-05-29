@@ -6,9 +6,10 @@ interface Props {
   loading: boolean;
   onClick: () => void;
   disabled?: boolean;
+  loadingText?: string;
 }
 
-export function ExecuteSimulationButton({ loading, onClick, disabled }: Props) {
+export function ExecuteSimulationButton({ loading, onClick, disabled, loadingText }: Props) {
   return (
     <button
       type="button"
@@ -28,7 +29,7 @@ export function ExecuteSimulationButton({ loading, onClick, disabled }: Props) {
         boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
       }}
     >
-      {loading ? "Ejecutando…" : "▶ Ejecutar Simulacion"}
+      {loading ? (loadingText || "Ejecutando…") : "▶ Ejecutar Simulacion"}
     </button>
   );
 }

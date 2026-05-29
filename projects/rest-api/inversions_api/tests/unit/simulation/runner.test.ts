@@ -55,8 +55,8 @@ describe("validateSimulationRequest", () => {
 });
 
 describe("runSimulation", () => {
-  it("returns verdict + table + inputs_echo + algorithm_version", () => {
-    const result = runSimulation(buildRequest());
+  it("returns verdict + table + inputs_echo + algorithm_version", async () => {
+    const result = await runSimulation(buildRequest());
     expect(result.verdict.symbol).toBe("AAPL");
     expect(Array.isArray(result.table)).toBe(true);
     expect(result.table.length).toBeGreaterThan(0);
@@ -64,22 +64,22 @@ describe("runSimulation", () => {
     expect(result.algorithm_version).toBeDefined();
   });
 
-  it("filters rows to only enabled cores", () => {
-    const result = runSimulation(buildRequest({ coresHabilitados: ["A_INDICADORES"] }));
+  it("filters rows to only enabled cores", async () => {
+    const result = await runSimulation(buildRequest({ coresHabilitados: ["A_INDICADORES"] }));
     const cores = new Set(result.table.map((r) => r.core));
     expect([...cores]).toEqual(["A_INDICADORES"]);
   });
 
-  it("flags verdict.degraded when not all 6 cores are enabled", () => {
-    const result = runSimulation(buildRequest({ coresHabilitados: ["A_INDICADORES"] }));
+  it("flags verdict.degraded when not all 6 cores are enabled", async () => {
+    const result = await runSimulation(buildRequest({ coresHabilitados: ["A_INDICADORES"] }));
     expect(result.verdict.degraded).toBe(true);
     expect(result.verdict.missing.some((m) => m.startsWith("core:"))).toBe(true);
   });
 
-  it("is idempotent: same request -> same source_input_hash", () => {
+  it("is idempotent: same request -> same source_input_hash", async () => {
     const fixed = new Date("2026-01-15T00:00:00Z");
-    const a = runSimulation(buildRequest(), { now: fixed });
-    const b = runSimulation(buildRequest(), { now: fixed });
+    const a = await runSimulation(buildRequest(), { now: fixed });
+    const b = await runSimulation(buildRequest(), { now: fixed });
     expect(a.verdict.source_input_hash).toBe(b.verdict.source_input_hash);
     expect(a.verdict.score).toBe(b.verdict.score);
   });

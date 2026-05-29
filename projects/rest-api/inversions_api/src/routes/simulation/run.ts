@@ -17,7 +17,7 @@ simulationRunRouter.post("/run", async (req, res) => {
   const request = req.body as SimulationRequest;
 
   try {
-    const result = runSimulation(request);
+    const result = await runSimulation(request);
     // FIC: T088 — best-effort persistence; never blocks the response.
     void persistSimulationRun(result, req.authContext?.userId);
     return res.status(200).json(result);

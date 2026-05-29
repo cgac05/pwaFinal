@@ -216,6 +216,11 @@ export function SimulationControlPanel({ ticket, onResult, onFundamentalRows, on
     }
   };
 
+  const projectionDays =
+    projectionFrom && projectionTo
+      ? Math.round((new Date(projectionTo).getTime() - new Date(projectionFrom).getTime()) / 86_400_000)
+      : 0;
+
   return (
     <section className="card" style={{ display: "grid", gap: "0.75rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
@@ -346,14 +351,11 @@ export function SimulationControlPanel({ ticket, onResult, onFundamentalRows, on
                 );
               })}
             </div>
-            {projectionFrom && projectionTo && (() => {
-              const days = Math.round((new Date(projectionTo).getTime() - new Date(projectionFrom).getTime()) / 86_400_000);
-              return days > 0 ? (
-                <p style={{ fontSize: "0.72rem", color: "var(--color-text-muted)", marginTop: "0.35rem" }}>
-                  Proyección de <strong style={{ color: "var(--color-accent, #ffd43b)" }}>{days} días</strong> ({projectionFrom} → {projectionTo})
-                </p>
-              ) : null;
-            })()}
+            {projectionDays > 0 && (
+              <p style={{ fontSize: "0.72rem", color: "var(--color-text-muted)", marginTop: "0.35rem" }}>
+                Proyección de <strong style={{ color: "var(--color-accent, #ffd43b)" }}>{projectionDays} días</strong> ({projectionFrom} → {projectionTo})
+              </p>
+            )}
           </div>
 
           {/* Métricas Fundamentales */}
@@ -415,7 +417,11 @@ export function SimulationControlPanel({ ticket, onResult, onFundamentalRows, on
             {loading ? "Ejecutando…" : "▶ Ejecutar Simulacion"}
           </button>
         ) : (
-          <ExecuteSimulationButton loading={loading} onClick={run} />
+          <ExecuteSimulationButton
+            loading={loading}
+            onClick={run}
+            loadingText={coresOn["A_IA"] ? "Calculando Cores e IA..." : undefined}
+          />
         )}
       </div>
     </section>

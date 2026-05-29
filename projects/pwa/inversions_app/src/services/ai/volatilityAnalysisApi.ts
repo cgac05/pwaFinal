@@ -116,3 +116,17 @@ export async function sendFollowUpChat(resultId: string, message: string): Promi
   const body = await res.json();
   return body.data;
 }
+
+export async function sendGlobalChat(message: string, model: 'primary' | 'fallback'): Promise<{ text: string; model: string }> {
+  const res = await fetch(`${BASE_URL}/global-chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify({ message, model })
+  });
+  if (!res.ok) throw new Error('Error al enviar mensaje al chat global');
+  const body = await res.json();
+  return body.data;
+}

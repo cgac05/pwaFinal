@@ -169,4 +169,30 @@ export class GeminiAgentService {
       };
     }
   }
+
+  /**
+   * Generates a conversational plain text response from Gemini without strict JSON constraints.
+   * Can target either primary or fallback models, with automatic cross-fallback on failure.
+   */
+  public async generateSimpleResponse(prompt: string, modelType: 'primary' | 'fallback' = 'primary'): Promise<{ model: string; text: string }> {
+    if (!this.ai) {
+      throw new Error("Gemini is not configured. Set GEMINI_API_KEY to enable AI agent execution.");
+    }
+
+    const targetModel = modelType === 'fallback' ? this.fallbackModel : this.primaryModel;
+
+    try {
+      const text = await backoffRetry(() => this.callModel(prompt, targetModel), 3, 400);
+      return { model: targetModel, text };
+    } catch (primaryError) {
+      const fallback = targetModel === this.primaryModel ? this.fallbackModel : this.primaryModel;
+      if (fallback === targetModel) {
+        throw primaryError;
+      }
+      
+      console.warn(`Selected model ${targetModel} failed. Conmuting to fallback ${fallback}. Error:`, primaryError);
+      const text = await backoffRetry(() => this.callModel(prompt, fallback), 3, 800);
+      return { model: fallback, text };
+    }
+  }
 }

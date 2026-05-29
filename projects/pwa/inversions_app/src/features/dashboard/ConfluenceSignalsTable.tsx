@@ -134,23 +134,25 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                     symbol: row.ticket,
                     metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
                   } as SelectedSignal);
+                const isIaRow = row.core === "A_IA" || (row.core as string) === "_IA";
                 const cells = (
-                  <tr key={rowKey} onClick={onClick} style={{ cursor: "pointer", opacity: row.estado === "DEGRADADA" ? 0.62 : 1 }}>
+                  <tr
+                    key={rowKey}
+                    onClick={onClick}
+                    style={{
+                      cursor: "pointer",
+                      opacity: row.estado === "DEGRADADA" ? 0.55 : 1,
+                      borderLeft: isIaRow ? "4px solid var(--color-accent, #ffd43b)" : undefined,
+                      background: isIaRow ? "rgba(255, 212, 59, 0.05)" : undefined
+                    }}
+                  >
                     {TABLE_COLUMNS.map((col) => {
                       let content: React.ReactNode;
                       if (col.key === "observacion") {
                         content = (
-                          <button
-                            className="btn-ghost"
-                            type="button"
-                            style={{ padding: "0.28rem 0.7rem", fontSize: "0.72rem" }}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setDetailRow(row);
-                            }}
-                          >
-                            Ver detalle
-                          </button>
+                          <div style={{ maxHeight: "150px", overflowY: "auto", whiteSpace: "pre-wrap" }}>
+                            <ObservationCell observation={row.observacion} />
+                          </div>
                         );
                       } else if (col.key === "estrategia") {
                         content = <span className="badge badge-hold">{(activeStrategy ?? "N/A").replace(/_/g, " ")}</span>;
@@ -163,12 +165,28 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                       } else if (col.key === "score" || col.key === "peso" || col.key === "precio") {
                         const v = row[col.key] as number;
                         content = Number.isFinite(v) ? v.toFixed(3) : "-";
-                      } else if (col.key === "core" && row.core === "A_IA") {
+                      } else if (col.key === "core" && (row.core === "A_IA" || (row.core as string) === "_IA")) {
                         content = (
-                          <span>
-                            {row.core}{" "}
-                            <span title={row.disclaimer_id} style={{ background: "var(--color-accent, #ffd43b)", color: "#000", borderRadius: 3, padding: "0 4px", fontSize: "0.6rem", fontWeight: 700 }}>IA</span>
-                          </span>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                            <span>{row.core}</span>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.2rem" }}>
+                              <span title={row.disclaimer_id} style={{ background: "var(--color-accent, #ffd43b)", color: "#000", borderRadius: 3, padding: "0 4px", fontSize: "0.6rem", fontWeight: 700 }}>IA</span>
+                              <span
+                                style={{
+                                  background: "rgba(255, 212, 59, 0.15)",
+                                  color: "var(--color-accent, #ffd43b)",
+                                  border: "1px solid var(--color-accent, #ffd43b)",
+                                  borderRadius: 3,
+                                  padding: "0 4px",
+                                  fontSize: "0.6rem",
+                                  fontWeight: 700,
+                                  textTransform: "uppercase"
+                                }}
+                              >
+                                Evaluación Gemini 31B
+                              </span>
+                            </div>
+                          </div>
                         );
                       } else {
                         const v = (row as any)[col.key];
