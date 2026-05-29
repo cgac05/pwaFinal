@@ -17,6 +17,8 @@ import { IndicatorsMenu } from "./IndicatorsMenu";
 import { RuntimeModeSwitches } from "./RuntimeModeSwitches";
 import { ConfluenceSignalsTable } from "./ConfluenceSignalsTable";
 import { SimulationControlPanel } from "./simulation/SimulationControlPanel";
+import { ProjectionSimulationPanel } from "./simulation/ProjectionSimulationPanel";
+import type { AnalysisResult } from "./simulation/FundamentalAnalysisModal";
 import { AppShell } from "../../layouts/AppShell";
 import { ActivityBar } from "../../components/ui/ActivityBar";
 import { LeftPanel } from "../sidebar/LeftPanel";
@@ -49,9 +51,10 @@ export function MainDashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [simulationRows, setSimulationRows] = useState<ConfluenceSignalRow[] | undefined>(undefined);
   const [simulationVerdict, setSimulationVerdict] = useState<any | null>(null);
+  const [fundamentalSimulation, setFundamentalSimulation] = useState<AnalysisResult | null>(null);
   const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
   const [evidenceSignal, setEvidenceSignal] = useState<DashboardSignalCard | null>(null);
-  const { selectedInstrument, selectedSignal: storeSelectedRow, runtimeMode, operationalMode, setDashboardSnapshot } = useSignalStore();
+  const { selectedInstrument, selectedSignal: storeSelectedRow, selectedOptionsStrategy, runtimeMode, operationalMode, setDashboardSnapshot } = useSignalStore();
   const { analysisCategory } = useAppShellStore();
 
   // FIC: Map analysis category chips to visible dashboard sections.
@@ -68,7 +71,20 @@ export function MainDashboard() {
     setSimulationVerdict(result.verdict);
   }, []);
 
+  const handleFundamentalRows = useCallback((rows: ConfluenceSignalRow[]) => {
+    setSimulationRows((prev) => {
+      const existing = prev ?? [];
+      const withoutFundamental = existing.filter((r) => r.core !== "A_FUNDAMENTAL");
+      return [...withoutFundamental, ...rows];
+    });
+  }, []);
+
+  const handleProjectionResult = useCallback((result: AnalysisResult) => {
+    setFundamentalSimulation(result);
+  }, []);
+
   const selectedSymbol = selectedInstrument?.symbol ?? payload?.cards[0]?.instrument ?? "SPY";
+  const activeStrategy = selectedOptionsStrategy?.name ?? (showFundamental ? "Long Call" : "SIN_ESTRATEGIA");
   const activeCoreCount = useMemo(() => cores.filter((core) => core.enabled).length, [cores]);
 
   const refreshDashboard = useCallback(async () => {
@@ -108,20 +124,10 @@ export function MainDashboard() {
     operationalMode === "real" ? "Real" :
     "Demo";
 
-  // FIC: "En construcción" block shown for categories without dashboard sections yet.
-  // FIC: Bloque "En construcción" para categorías sin secciones del dashboard disponibles aún.
-  const ComingSoonBlock = ({ category }: { category: string }) => (
-    <div style={{ textAlign: "center", padding: "4rem 2rem", color: "var(--color-text-muted)" }}>
-      <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>🚧</div>
-      <p style={{ fontWeight: "var(--font-weight-emphasis)" }}>Esta sección estará disponible próximamente</p>
-      <p style={{ fontSize: "var(--font-size-sm)", marginTop: "0.5rem" }}>Categoría: {category}</p>
-    </div>
-  );
-
   const mainContent = (
-    <div style={{ padding: "var(--space-lg)", display: "grid", gap: "var(--space-lg)" }}>
+    <div className="dashboard-main-content" style={{ padding: "var(--space-lg)", display: "grid", gap: "var(--space-lg)" }}>
       {/* ── Nav bar row */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className="dashboard-topbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
           <Badge label="FIC" color="var(--color-accent)" size="sm" />
           <span style={{ fontWeight: "var(--font-weight-bold)", fontSize: "var(--font-size-base)" }}>Inversions</span>
@@ -143,7 +149,7 @@ export function MainDashboard() {
 
       {/* ── Filter bar */}
       <div className="card">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: "var(--space-sm)", alignItems: "end" }}>
+        <div className="dashboard-filter-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "var(--space-sm)", alignItems: "end" }}>
           <div>
             <label style={{ display: "block", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "0.35rem", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Instrumentos
@@ -159,7 +165,7 @@ export function MainDashboard() {
             <label style={{ display: "block", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "0.35rem", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Cores
             </label>
-            <div style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.45rem 0.75rem", color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)", whiteSpace: "nowrap" }}>
+          <div className="dashboard-core-count" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.45rem 0.75rem", color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)", whiteSpace: "nowrap" }}>
               {activeCoreCount} / {cores.length} activos
             </div>
           </div>
@@ -176,7 +182,7 @@ export function MainDashboard() {
       {!isTestEnv && (
         <div style={{ display: "grid", gap: "var(--space-sm)" }}>
           <RuntimeModeSwitches />
-          <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-sm)", flexWrap: "wrap" }}>
+          <div className="card dashboard-controls-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-sm)", flexWrap: "wrap" }}>
             <IndicatorsMenu />
             <TimeControls
               symbol={selectedSymbol}
@@ -203,16 +209,22 @@ export function MainDashboard() {
 
       {/* ── Payload views */}
       {payload && (
-        <div style={{ display: "grid", gap: "var(--space-lg)" }}>
+        <div className="dashboard-panel-stack" style={{ display: "grid", gap: "var(--space-lg)" }}>
 
           {/* FIC: SuperChart + simulation — always visible regardless of analysisCategory. */}
           {/* FIC: SuperChart + simulación — siempre visible independientemente de analysisCategory. */}
           {!isTestEnv && (
-            <div style={{ display: "grid", gap: "var(--space-md)", gridTemplateColumns: "1fr" }}>
-              <div className="card" style={{ minHeight: 380 }}>
+            <div className="dashboard-panel-stack" style={{ display: "grid", gap: "var(--space-md)", gridTemplateColumns: "1fr" }}>
+              <div className="card dashboard-chart-card" style={{ minHeight: 380 }}>
                 <SuperChart symbol={selectedSymbol} timeframe={timeframe} startDate={periodRange?.startDate} endDate={periodRange?.endDate} />
               </div>
-              <SimulationControlPanel ticket={selectedSymbol} onResult={handleSimulationResult} />
+              <SimulationControlPanel
+                ticket={selectedSymbol}
+                onResult={handleSimulationResult}
+                onFundamentalRows={handleFundamentalRows}
+                onProjectionResult={handleProjectionResult}
+                isFundamentalMode={showFundamental}
+              />
               {simulationVerdict && (
                 <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
                   <strong>Verdict derivado:</strong>
@@ -222,13 +234,18 @@ export function MainDashboard() {
                   </span>
                 </div>
               )}
+              {/* FIC: Projection panel shown after fundamental analysis execution. */}
+              {/* FIC: Panel de proyección visible tras ejecución de análisis fundamental. */}
+              {showFundamental && fundamentalSimulation?.projection && (
+                <ProjectionSimulationPanel projection={fundamentalSimulation.projection} />
+              )}
             </div>
           )}
 
-          {/* FIC: Confluence table — visible for technical, options, institutional and AI. */}
-          {/* FIC: Tabla de confluencia — visible para técnico, opciones, institucional e IA. */}
-          <div style={{ display: (showTechnical || showOptions || showInstitutional || showAI) ? "" : "none" }}>
-            <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} />
+          {/* FIC: Confluence table - visible for technical, options, institutional, fundamental and AI. */}
+          {/* FIC: Tabla de confluencia - visible para tecnico, opciones, institucional, fundamental e IA. */}
+          <div style={{ display: (showTechnical || showOptions || showInstitutional || showFundamental || showAI) ? "" : "none" }}>
+            <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} activeStrategy={activeStrategy} />
           </div>
 
           {/* FIC: Signal overlay and explainability — technical and AI categories. */}
@@ -281,9 +298,14 @@ export function MainDashboard() {
             </div>
           )}
 
-          {/* ── Coming soon for Fundamental and News */}
-          {showFundamental && <ComingSoonBlock category="Fundamental" />}
-          {showNews && <ComingSoonBlock category="Noticias" />}
+          {/* FIC: News section placeholder. */}
+          {showNews && (
+            <div style={{ textAlign: "center", padding: "4rem 2rem", color: "var(--color-text-muted)" }}>
+              <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>🚧</div>
+              <p style={{ fontWeight: "var(--font-weight-emphasis)" }}>Esta sección estará disponible próximamente</p>
+              <p style={{ fontSize: "var(--font-size-sm)", marginTop: "0.5rem" }}>Categoría: Noticias</p>
+            </div>
+          )}
         </div>
       )}
 

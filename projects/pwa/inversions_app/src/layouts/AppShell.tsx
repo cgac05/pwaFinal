@@ -18,7 +18,7 @@ export function AppShell({ activityBar, leftPanel, main, chatPanel }: AppShellPr
   const { leftPanelCollapsed, chatPanelCollapsed } = useAppShellStore();
 
   const leftWidth = leftPanelCollapsed ? "0px" : "var(--left-panel-width)";
-  const chatWidth = chatPanelCollapsed ? "0px" : "var(--chat-panel-width)";
+  const chatWidth = chatPanelCollapsed ? "0px" : "min(var(--chat-panel-width), calc(100vw - var(--activity-bar-width) - var(--space-md)))";
 
   return (
     <div
@@ -34,7 +34,7 @@ export function AppShell({ activityBar, leftPanel, main, chatPanel }: AppShellPr
       {/* ── 4-zone body ── */}
       <div
         data-testid="app-shell-body"
-        style={{ display: "flex", flex: 1, overflow: "hidden" }}
+        style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative" }}
       >
         {/* Zone 1: Activity Bar — always visible */}
         <div
@@ -71,7 +71,7 @@ export function AppShell({ activityBar, leftPanel, main, chatPanel }: AppShellPr
         {/* Zone 3: Main content — flex:1, resizes when either panel opens/closes */}
         <main
           data-testid="app-shell-main"
-          style={{ flex: 1, overflow: "auto", minWidth: 0 }}
+          style={{ flex: 1, overflow: "auto", minWidth: 0, width: 0 }}
         >
           {main}
         </main>

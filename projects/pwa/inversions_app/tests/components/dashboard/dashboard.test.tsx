@@ -1,5 +1,5 @@
 import React from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { CoreSelector } from "../../../src/features/dashboard/CoreSelector";
 import { SignalOverlay } from "../../../src/features/dashboard/SignalOverlay";
@@ -28,6 +28,23 @@ vi.mock("../../../src/services/signals/signalApi", () => ({
 }));
 
 describe("dashboard components", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        rows: [],
+        generated_at: new Date().toISOString(),
+        algorithm_version: "test",
+        ticket: "AAPL",
+        timeframe: "1d"
+      })
+    })));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("renders CoreSelector and toggles selected core", () => {
     const onToggle = vi.fn();
     render(
@@ -101,6 +118,17 @@ describe("dashboard components", () => {
     });
 
     expect(screen.getByText(/Dashboard de Confluencia/i)).toBeTruthy();
-    expect(screen.getByText(/Cores analíticos/i)).toBeTruthy();
+    expect(screen.getByText(/Cores anal/i)).toBeTruthy();
+  });
+
+  it("keeps the confluence table visible in the Fundamental category", async () => {
+    await act(async () => {
+      render(<MainDashboard />);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /lisis/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Fundamental/i }));
+
+    expect(screen.getByRole("heading", { name: /Tabla de Confluencia/i })).toBeTruthy();
   });
 });

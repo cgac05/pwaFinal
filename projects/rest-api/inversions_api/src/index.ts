@@ -39,6 +39,14 @@ import { chatExplainRouter } from "./routes/indicators/chatExplain.js";
 import { confluenceTableRouter } from "./routes/signals/confluenceTable.js";
 import { simulationRunRouter } from "./routes/simulation/run.js";
 import { indicatorsRateLimit, chatRateLimit } from "./middleware/indicatorsRateLimit.js";
+import { createCompanyProfileRouter } from "./routes/fundamental/companyProfile.js";
+import { createSp500ScreenerRouter } from "./routes/fundamental/sp500Screener.js";
+import { createFundamentalAnalyzeRouter } from "./routes/fundamental/analyze.js";
+import { createOptionsRouter } from "./routes/strategies/optionsRouter.js";
+import { createOptionsAnalysisQARouter } from "./routes/strategies/optionsAnalysisQARouter.js";
+import { createFundamentalCopilotRouter } from "./routes/ai/fundamentalCopilot.js";
+import { supabaseClient } from "./database/supabase/client.js";
+import { registerAuditRoutes } from "./routes/auditRoutes.js";
 
 const envValidation = validateEnvironment();
 if (!envValidation.isValid) {
@@ -54,6 +62,9 @@ initializeEnvironment();
 
 const app = express();
 app.use(express.json());
+
+// T017-T020: Registrar rutas de auditoría y trazabilidad
+registerAuditRoutes(app);
 
 const auditHistoryService = new AuditHistoryService();
 const approvalService = new ApprovalService();
@@ -92,6 +103,12 @@ app.use("/api/indicators", indicatorsRateLimit, bollingerRouter);
 app.use("/api/indicators", indicatorsRateLimit, indicatorsConfluenceRouter);
 app.use("/api/indicators", indicatorsHealthRouter);
 app.use("/api/chat", chatRateLimit, chatExplainRouter);
+app.use("/api/team-03/fundamental", createFundamentalAnalyzeRouter(supabaseClient));
+app.use("/api/team-03/fundamental", createCompanyProfileRouter(supabaseClient));
+app.use("/api/team-03/screener/sp500", createSp500ScreenerRouter(supabaseClient));
+app.use("/api/team-03/options", createOptionsRouter(supabaseClient));
+app.use("/api/team-03/options", createOptionsAnalysisQARouter(supabaseClient));
+app.use("/api/team-03/ai", createFundamentalCopilotRouter(supabaseClient));
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });

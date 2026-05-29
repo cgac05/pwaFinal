@@ -62,37 +62,50 @@ export interface DashboardConfluencePayload {
   cards: DashboardSignalCard[];
 }
 
-function buildOperationalMetadata(index: number, direction: SignalDirection): DashboardSignalCard["metadata"] {
-  const bullish = direction !== "SELL";
+function buildOperationalMetadata(
+  index: number,
+  direction: SignalDirection,
+  basePrice: number = 100
+): DashboardSignalCard["metadata"] {
+  const bullish  = direction !== "SELL";
+  const spread   = Math.max(parseFloat((basePrice * 0.0005).toFixed(2)), 0.05);
+  const stopDist = basePrice * 0.03;
+  const targDist = basePrice * 0.06;
+  const strike   = Math.round(basePrice / 5) * 5 + (index % 3) * 5 * (bullish ? 1 : -1);
+
+  const bid  = Number((basePrice - spread).toFixed(2));
+  const ask  = Number((basePrice + spread).toFixed(2));
+  const stop = Number((basePrice - stopDist - index * stopDist * 0.05).toFixed(2));
+  const targ = Number((basePrice + targDist + index * targDist * 0.03).toFixed(2));
 
   return {
-    timing_d: bullish ? "bullish" : "bearish",
-    timing_h: index % 2 === 0 ? "confirm" : "watch",
-    pre_senal: bullish ? "alcista" : "bajista",
-    senal_real_activada: index % 3 === 0,
-    stop: Number((96 + index * 0.3).toFixed(2)),
-    objetivo: Number((107 + index * 0.4).toFixed(2)),
-    divergencia: index % 4 === 0 ? "RSI" : "none",
-    z_extrema: Number((1.1 + index * 0.05).toFixed(2)),
-    cantidad_sugerida: 1 + (index % 4),
-    vencimiento: new Date(Date.now() + (index + 10) * 86_400_000).toISOString(),
-    precio_ejercicio: Number((100 + index).toFixed(2)),
-    tipo_opcion: bullish ? "call" : "put",
-    duracion: 3 + (index % 10),
-    bid: Number((99.5 + index * 0.25).toFixed(2)),
-    ask: Number((100 + index * 0.25).toFixed(2)),
-    zona_apertura: "100-101",
-    zona_cierre: "104-105",
-    stoploss_sugerido: Number((97 + index * 0.2).toFixed(2)),
-    alerta_configurada: index % 2 === 0,
-    referencia_maximos: Number((112 + index * 0.4).toFixed(2)),
-    referencia_minimos: Number((91 - index * 0.2).toFixed(2)),
-    variantes_ataque: "breakout/retest",
+    timing_d:              bullish ? "bullish" : "bearish",
+    timing_h:              index % 2 === 0 ? "confirm" : "watch",
+    pre_senal:             bullish ? "alcista" : "bajista",
+    senal_real_activada:   index % 3 === 0,
+    stop,
+    objetivo:              targ,
+    divergencia:           index % 4 === 0 ? "RSI" : "none",
+    z_extrema:             Number((1.1 + index * 0.05).toFixed(2)),
+    cantidad_sugerida:     1 + (index % 4),
+    vencimiento:           new Date(Date.now() + (index + 10) * 86_400_000).toISOString(),
+    precio_ejercicio:      strike,
+    tipo_opcion:           bullish ? "call" : "put",
+    duracion:              3 + (index % 10),
+    bid,
+    ask,
+    zona_apertura:         `${Number((basePrice * 0.995).toFixed(2))}-${Number((basePrice * 1.005).toFixed(2))}`,
+    zona_cierre:           `${Number((basePrice * 1.02).toFixed(2))}-${Number((basePrice * 1.025).toFixed(2))}`,
+    stoploss_sugerido:     stop,
+    alerta_configurada:    index % 2 === 0,
+    referencia_maximos:    Number((basePrice * 1.08).toFixed(2)),
+    referencia_minimos:    Number((basePrice * 0.92).toFixed(2)),
+    variantes_ataque:      "breakout/retest",
     recolocacion_stoploss: "trail 1R",
-    liquidez: index % 2 === 0 ? "alta" : "media",
-    riesgo: bullish ? "bajo" : "medio",
-    retorno_maximo: Number((8 + index * 0.3).toFixed(2)),
-    perdida_maxima: Number((3 + index * 0.15).toFixed(2))
+    liquidez:              index % 2 === 0 ? "alta" : "media",
+    riesgo:                bullish ? "bajo" : "medio",
+    retorno_maximo:        Number(targDist.toFixed(2)),
+    perdida_maxima:        Number(stopDist.toFixed(2))
   };
 }
 
@@ -150,7 +163,7 @@ function resolveRiskLevel(confidence: number, confluenceScore: number): "LOW" | 
  */
 export function buildDashboardConfluencePayload(
   sources: SourceConfig[],
-  input: Array<{ instrument: string; verdicts: SourceVerdict[] }>
+  input: Array<{ instrument: string; verdicts: SourceVerdict[]; basePrice?: number }>
 ): DashboardConfluencePayload {
   const cards = input.map((item, index) => {
     const confluence = evaluateConfluence(sources, item.verdicts);
@@ -165,7 +178,7 @@ export function buildDashboardConfluencePayload(
       activeCores: sources.filter((source) => source.enabled).map((source) => source.name),
       updatedAt: new Date().toISOString(),
       evidence: item.verdicts,
-      metadata: buildOperationalMetadata(index, confluence.signal)
+      metadata: buildOperationalMetadata(index, confluence.signal, item.basePrice)
     } satisfies DashboardSignalCard;
   });
 

@@ -6,6 +6,9 @@ import { useSignalStore } from "../../store/signals";
 
 export function ChatContextBadge() {
   const { selectedInstrument } = useSignalStore();
+  const title = selectedInstrument?.name
+    ? `${selectedInstrument.symbol} - ${selectedInstrument.name}`
+    : selectedInstrument?.symbol;
 
   if (!selectedInstrument?.symbol) {
     return (
@@ -29,6 +32,7 @@ export function ChatContextBadge() {
   return (
     <span
       data-testid="chat-context-badge"
+      title={title}
       style={{
         fontSize: "var(--font-size-xs)",
         color: "var(--color-accent)",

@@ -111,6 +111,7 @@ ALTER TABLE confluence_column_configs ENABLE ROW LEVEL SECURITY;
 
 -- FIC: RLS policy: everyone can read column configs (EN)
 -- FIC: Política RLS: todos pueden leer configuraciones de columnas (ES)
+DROP POLICY IF EXISTS confluence_column_configs_read ON confluence_column_configs;
 CREATE POLICY confluence_column_configs_read ON confluence_column_configs
   FOR SELECT
   TO authenticated
@@ -118,6 +119,7 @@ CREATE POLICY confluence_column_configs_read ON confluence_column_configs
 
 -- FIC: RLS policy: only admins can modify (EN)
 -- FIC: Política RLS: solo admins pueden modificar (ES)
+DROP POLICY IF EXISTS confluence_column_configs_admin_modify ON confluence_column_configs;
 CREATE POLICY confluence_column_configs_admin_modify ON confluence_column_configs
   FOR UPDATE
   TO authenticated

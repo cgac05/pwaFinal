@@ -1,8 +1,8 @@
-// FIC: Tests T103 — ConfluenceSignalsTable renderiza columnas del PDF v1 desde filas inyectadas.
+// FIC: Tests T103 - ConfluenceSignalsTable renderiza columnas del PDF v1 desde filas inyectadas.
 
 import React from "react";
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { ConfluenceSignalsTable } from "../../../src/features/dashboard/ConfluenceSignalsTable";
 import type { ConfluenceSignalRow } from "../../../src/services/signals/confluenceTableApi";
 
@@ -32,11 +32,12 @@ const sampleRow = (overrides: Partial<ConfluenceSignalRow> = {}): ConfluenceSign
 });
 
 describe("ConfluenceSignalsTable (PDF v1)", () => {
-  it("renders 13 canonical column headers", () => {
-    render(<ConfluenceSignalsTable rows={[sampleRow()]} />);
-    for (const label of ["TICKET", "CORE", "SUBCORE", "PRECIO", "TIPO SEÑAL", "FECHA", "TIMEFRAME", "TENDENCIA", "SCORE", "PESO", "INVERTIR", "ESTADO", "OBSERVACION"]) {
+  it("renders canonical column headers including strategy", () => {
+    render(<ConfluenceSignalsTable rows={[sampleRow()]} activeStrategy="Long Call" />);
+    for (const label of ["TICKET", "CORE", "SUBCORE", "PRECIO", "TIPO SEÑAL", "FECHA", "TIMEFRAME", "TENDENCIA", "SCORE", "PESO", "INVERTIR", "ESTADO", "ESTRATEGIA", "OBSERVACION"]) {
       expect(screen.getByText(label)).toBeTruthy();
     }
+    expect(screen.getByText("Estrategia: Long Call")).toBeTruthy();
   });
 
   it("renders SI when invertir=true and HOLD signals in muted color", () => {
@@ -55,5 +56,15 @@ describe("ConfluenceSignalsTable (PDF v1)", () => {
   it("renders DEGRADADA rows with reduced opacity but still visible", () => {
     render(<ConfluenceSignalsTable rows={[sampleRow({ estado: "DEGRADADA", invertir: false, tipoSenal: "HOLD" })]} />);
     expect(screen.getByText("DEGRADADA")).toBeTruthy();
+  });
+
+  it("opens observation details from the compact table", () => {
+    render(<ConfluenceSignalsTable rows={[sampleRow()]} activeStrategy="Short Put" />);
+    fireEvent.click(screen.getByRole("button", { name: /Ver detalle/i }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeTruthy();
+    expect(screen.getByText("Detalle de Señal")).toBeTruthy();
+    expect(screen.getByText("RSI 65")).toBeTruthy();
+    expect(within(dialog).getByText("Short Put")).toBeTruthy();
   });
 });

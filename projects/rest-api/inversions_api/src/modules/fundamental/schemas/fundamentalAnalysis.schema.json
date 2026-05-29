@@ -1,0 +1,351 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Fundamental Analysis Data Schema",
+  "description": "T003-T077: JSON Schema para datos de análisis fundamental - v1.0. Preserva integridad de datos y precisión numérica.",
+  "version": "1.0",
+  "type": "object",
+  "required": [
+    "ticker",
+    "companyName",
+    "metrics",
+    "metadata"
+  ],
+  "properties": {
+    "ticker": {
+      "type": "string",
+      "pattern": "^[A-Z]{1,5}$",
+      "description": "Stock ticker symbol (e.g., AAPL, MSFT)"
+    },
+    "companyName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "marketCap": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Market cap in USD, precision 0.01"
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": ["value", "currency", "timestamp"]
+        },
+        "sales": {
+          "type": "object",
+          "properties": {
+            "annualRevenue": {
+              "type": "number",
+              "minimum": 0
+            },
+            "quarterlyRevenue": {
+              "type": "number",
+              "minimum": 0
+            },
+            "revenueGrowthPercent": {
+              "type": "number",
+              "description": "YoY growth %, precision 0.01"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": ["annualRevenue", "timestamp"]
+        },
+        "dividend": {
+          "type": "object",
+          "properties": {
+            "annualDividendPerShare": {
+              "type": "number",
+              "minimum": 0,
+              "description": "USD, precision 0.01"
+            },
+            "dividendYieldPercent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "%, precision 0.01"
+            },
+            "payoutRatio": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "lastPaymentDate": {
+              "type": "string",
+              "format": "date"
+            },
+            "exDividendDate": {
+              "type": "string",
+              "format": "date"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": ["timestamp"]
+        },
+        "priceHistory": {
+          "type": "object",
+          "properties": {
+            "currentPrice": {
+              "type": "number",
+              "minimum": 0,
+              "description": "USD, precision 0.01 (CRITICAL)"
+            },
+            "priceChange52WeekPercent": {
+              "type": "number",
+              "description": "%, precision 0.01"
+            },
+            "priceHigh52Week": {
+              "type": "number",
+              "minimum": 0
+            },
+            "priceLow52Week": {
+              "type": "number",
+              "minimum": 0
+            },
+            "avgVolume10Day": {
+              "type": "number",
+              "minimum": 0
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": ["currentPrice", "timestamp"]
+        },
+        "financialRatios": {
+          "type": "object",
+          "properties": {
+            "roe": {
+              "type": "number",
+              "description": "Return on Equity %, precision 0.01"
+            },
+            "peRatio": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Price-to-Earnings, precision 0.01"
+            },
+            "pbRatio": {
+              "type": "number",
+              "minimum": 0
+            },
+            "psRatio": {
+              "type": "number",
+              "minimum": 0
+            },
+            "debtToEquity": {
+              "type": "number",
+              "minimum": 0,
+              "description": "D/E ratio, precision 0.01"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": ["timestamp"]
+        },
+        "employees": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "countEstimated": {
+              "type": "boolean"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "beta": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Beta vs. S&P 500, precision 0.01"
+            },
+            "confidenceLevel": {
+              "type": "string",
+              "enum": ["HIGH", "MEDIUM", "LOW"]
+            },
+            "calculationMethod": {
+              "type": "string"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "eps": {
+          "type": "object",
+          "properties": {
+            "eps": {
+              "type": "number",
+              "description": "Earnings per share USD, precision 0.01"
+            },
+            "epsGrowthYoYPercent": {
+              "type": "number",
+              "description": "%, precision 0.01"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "volatility": {
+          "type": "object",
+          "properties": {
+            "annualizedVolatility": {
+              "type": "number",
+              "minimum": 0,
+              "description": "%, precision 0.01 (CRITICAL)"
+            },
+            "lookbackDays": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "calculationMethod": {
+              "type": "string",
+              "description": "e.g., 'historical', 'iv_implied'"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": ["annualizedVolatility", "lookbackDays", "timestamp"]
+        },
+        "sector": {
+          "type": "object",
+          "properties": {
+            "sector": {
+              "type": "string"
+            },
+            "industry": {
+              "type": "string"
+            },
+            "subIndustry": {
+              "type": "string"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "country": {
+          "type": "object",
+          "properties": {
+            "isoCode": {
+              "type": "string",
+              "pattern": "^[A-Z]{2}$"
+            },
+            "primaryListing": {
+              "type": "string"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["sourceId", "fetchTimestamp", "dataVersion", "assumptions", "quality"],
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "description": "Data source identifier (finviz, yahoo_finance, alphavantage, etc.)"
+        },
+        "fetchTimestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When data was fetched"
+        },
+        "dataVersion": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+$",
+          "description": "Schema version (e.g., v1.0)"
+        },
+        "assumptions": {
+          "type": "object",
+          "properties": {
+            "volatilityCalculationMethod": {
+              "type": "string"
+            },
+            "lookbackPeriod": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "riskFreeRate": {
+              "type": "number",
+              "description": "% for Black-Scholes calculations"
+            },
+            "marketIndexBench": {
+              "type": "string"
+            }
+          },
+          "required": ["volatilityCalculationMethod", "lookbackPeriod"]
+        },
+        "quality": {
+          "type": "object",
+          "properties": {
+            "completenessPercent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "% of fields populated"
+            },
+            "lastValidation": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": ["completenessPercent"]
+        }
+      }
+    },
+    "auditTrail": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastUpdated": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
