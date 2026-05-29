@@ -59,8 +59,8 @@ export function ContentModal({
     >
       <div
         style={{
-          backgroundColor: "var(--color-surface-raised)",
-          border: "1px solid rgba(255,255,255,0.08)",
+          backgroundColor: "var(--color-surface)",
+          border: "1px solid var(--color-border)",
           borderRadius: "var(--radius-md)",
           width: "100%",
           maxWidth: width,
@@ -77,7 +77,7 @@ export function ContentModal({
             alignItems: "flex-start",
             justifyContent: "space-between",
             padding: "var(--space-lg)",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            borderBottom: "1px solid var(--color-border)",
             flexShrink: 0,
           }}
         >

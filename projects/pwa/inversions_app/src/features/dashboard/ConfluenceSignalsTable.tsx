@@ -330,8 +330,8 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                 <div style={{
                   flex: 1,
                   overflowY: "auto",
-                  background: "rgba(255,255,255,0.03)",
-                  borderRadius: "var(--radius-sm, 6px)",
+                  background: "var(--color-surface-raised)",
+                  borderRadius: "var(--radius-sm)",
                   padding: "0.9rem 1rem",
                   marginBottom: "1.25rem"
                 }}>

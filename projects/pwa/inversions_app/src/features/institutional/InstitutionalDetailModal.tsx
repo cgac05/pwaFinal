@@ -38,7 +38,7 @@ const strengthBar = (value: number) => {
         style={{
           width: 60,
           height: 6,
-          backgroundColor: "rgba(255,255,255,0.1)",
+          backgroundColor: "var(--color-surface-raised)",
           borderRadius: 3,
           overflow: "hidden",
         }}
@@ -108,14 +108,14 @@ export function InstitutionalDetailModal({ isOpen, onClose, ticker, data, resume
     fontWeight: 600,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
-    borderBottom: "1px solid rgba(255,255,255,0.06)",
+    borderBottom: "1px solid var(--color-border)",
   };
 
   const tdStyle: React.CSSProperties = {
     padding: "var(--space-xs) var(--space-sm)",
     fontSize: "var(--font-size-sm)",
     color: "var(--color-text)",
-    borderBottom: "1px solid rgba(255,255,255,0.04)",
+    borderBottom: "1px solid var(--color-border-subtle)",
   };
 
   return (
@@ -138,7 +138,7 @@ export function InstitutionalDetailModal({ isOpen, onClose, ticker, data, resume
               display: "flex",
               gap: 0,
               marginBottom: "var(--space-lg)",
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              borderBottom: "1px solid var(--color-border)",
             }}
           >
             {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
@@ -287,7 +287,7 @@ export function InstitutionalDetailModal({ isOpen, onClose, ticker, data, resume
                           justifyContent: "space-between",
                           alignItems: "center",
                           padding: "var(--space-xs) var(--space-sm)",
-                          backgroundColor: "rgba(255,255,255,0.03)",
+                          backgroundColor: "var(--color-surface-raised)",
                           borderRadius: "var(--radius-xs)",
                         }}
                       >
