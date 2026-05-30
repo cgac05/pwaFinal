@@ -137,7 +137,9 @@ export type MetricKey =
   | "SOPORTES"
   | "RESISTENCIAS"
   | "ATR"
-  | "CANDLES_ANALYZED";
+  | "CANDLES_ANALYZED"
+  | "PREPROMPT"
+  | "VALOR_ENTRADA";
 
 // FIC: Observacion estructurada que reemplaza el texto libre de la confluencia v1.
 // FIC: Replaces the free-form metadata bag with a typed observation (FR-020).

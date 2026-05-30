@@ -12,7 +12,8 @@ import {
 import type { InstitutionalAnalysisResponse } from "../../services/institutional/institutionalApi";
 import { OptionGreeksRow } from "./OptionGreeksRow";
 import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailModal";
-import { ObservationsTab } from "./ObservationsTab";
+import { AiDetailModal } from "../ai/AiDetailModal";
+import type { ModalRowData } from "../institutional/types";
 import { MarkdownContent } from "../../components/ui/MarkdownContent";
 
 // FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
@@ -91,6 +92,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
   // FIC: Full row stored for A_TECNICO structured detail panel. (EN)
   // FIC: Fila completa almacenada para el panel de detalle estructurado de A_TECNICO. (ES)
   const [stubRow, setStubRow] = useState<ConfluenceSignalRow | null>(null);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
 
   const { setSelectedSignal } = useSignalStore();
   const { results: institutionalResults } = useInstitutionalStore();
@@ -200,8 +202,13 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                   } else {
                     setStubCore(row.core);
                     setStubResumen(row.resumen_analisis ?? "");
-                    // FIC: Store full row for A_TECNICO structured panel; null for others. (EN)
                     setStubRow(row.core === "A_TECNICO" ? row : null);
+                    if (row.core === "A_IA") {
+                      setStubRow(row);
+                      setAiModalOpen(true);
+                      setStubCore(null); // Clear stubCore so the right panel doesn't open
+                      setStubResumen("");
+                    }
                   }
                 };
 
@@ -361,15 +368,14 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
               );
             })() : null}
 
-            {/* FIC: Non-A_TECNICO: ObservationsTab when stubRow available (upstream), else plain stubResumen. (EN) */}
-            {/* FIC: No-A_TECNICO: ObservationsTab si stubRow disponible (upstream), si no texto plano. (ES) */}
-            {stubCore !== "A_TECNICO" && stubRow && (
+            {/* FIC: Non-A_TECNICO/A_IA: ObservationsTab when stubRow available (upstream), else plain stubResumen. (EN) */}
+            {stubCore !== "A_TECNICO" && stubCore !== "A_IA" && stubRow && (
               <div style={{ flex: 1, overflowY: "auto", marginBottom: "1.25rem" }}>
                 <ObservationsTab row={stubRow} activeStrategy={activeStrategy} />
               </div>
             )}
 
-            {stubCore !== "A_TECNICO" && !stubRow && stubResumen && (
+            {stubCore !== "A_TECNICO" && stubCore !== "A_IA" && !stubRow && stubResumen && (
               <>
                 <div style={{
                   borderTop: "1px solid var(--color-border-subtle)",
@@ -414,6 +420,14 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
         data={modalTicker ? (institutionalResults[modalTicker.toUpperCase()] ?? null) : null}
         resumen={modalResumen}
         signalRow={modalRow ?? undefined}
+      />
+
+      <AiDetailModal
+        isOpen={aiModalOpen}
+        onClose={() => { setAiModalOpen(false); setStubRow(null); }}
+        ticker={symbol}
+        signalRow={stubRow ?? undefined}
+        activeStrategy={activeStrategy}
       />
     </section>
   );

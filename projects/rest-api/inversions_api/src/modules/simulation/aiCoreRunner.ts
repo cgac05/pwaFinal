@@ -122,7 +122,9 @@ Por favor, entrega tu análisis incluyendo la decisión y justificación técnic
         senal: `Decisión consolidada: ${aiResult.decision}`,
         explicacion: aiResult.justificacion,
         metricas: {
-          MODEL_VERSION: "gemini-2.5-flash"
+          MODEL_VERSION: "gemini-2.5-flash",
+          PREPROMPT: currentPrompt,
+          VALOR_ENTRADA: rowsContext
         }
       },
       algorithm_version: ALGORITHM_VERSION,
