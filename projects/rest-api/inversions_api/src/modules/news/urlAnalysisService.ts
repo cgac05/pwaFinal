@@ -1,7 +1,12 @@
-// src/modules/news/urlAnalysisService.ts
-// Servicio para analizar contenido de URLs financieras personalizadas
+// FIC: Custom URL analysis — fetches a news URL, extracts text, and scores its impact on an instrument.
+// FIC: Analisis de URL personalizada — obtiene una URL, extrae texto y evalua su impacto en un instrumento.
 
-import Anthropic from '@anthropic-ai/sdk';
+import {
+  createSentimentAnalyzerForRuntime,
+  type NewsSentimentAnalyzer
+} from "./sentimentService";
+import { resolveVerdict } from "./investmentAdvisor";
+import { NEWS_DISCLAIMER, type NewsArticle, type SourceAnalysisResult } from "./types";
 
 export interface URLContent {
   url: string;
@@ -11,438 +16,122 @@ export interface URLContent {
   fetchedAt: string;
 }
 
-export interface SourceAnalysisResult {
-  url: string;
-  company: string;
-  verdict: 'BUY' | 'SELL' | 'HOLD';
-  score: number;
-  confidence: number;
-  reasoning: string;
-  keyPoints: string[];
-  warnings?: string[];
-  timestamp: string;
+export interface URLAnalysisOptions {
+  analyzer?: NewsSentimentAnalyzer;
+  timeoutMs?: number;
+  maxChars?: number;
+  fetchImpl?: typeof fetch;
 }
+
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
 export class URLAnalysisService {
-  private client: Anthropic | null = null;
-  private readonly MAX_CONTENT_LENGTH = 5000;
+  private analyzer: NewsSentimentAnalyzer;
+  private timeoutMs: number;
+  private maxChars: number;
+  private fetchImpl: typeof fetch;
 
-  private getClient(): Anthropic {
-    const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-
-    if (!apiKey) {
-      throw new Error(
-        'ANTHROPIC_API_KEY no esta configurada. Agrega tu API key de Anthropic en projects/rest-api/inversions_api/.env y reinicia el backend.'
-      );
-    }
-
-    this.client ??= new Anthropic({ apiKey });
-    return this.client;
+  constructor(opts: URLAnalysisOptions = {}) {
+    this.analyzer = opts.analyzer ?? createSentimentAnalyzerForRuntime();
+    this.timeoutMs = opts.timeoutMs ?? 15000;
+    this.maxChars = opts.maxChars ?? 5000;
+    this.fetchImpl = opts.fetchImpl ?? fetch;
   }
 
-  private hasAnthropicApiKey(): boolean {
-    return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
-  }
-
+  // FIC: Fetch and extract readable text from a URL. Throws on network/HTTP failure.
+  // FIC: Obtiene y extrae texto legible de una URL. Lanza ante fallo de red/HTTP.
   async fetchURLContent(url: string, company: string): Promise<URLContent> {
-    const candidateUrls = this.buildCandidateUrls(url, company);
-    const errors: string[] = [];
-
-    for (const candidateUrl of candidateUrls) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      try {
-        const response = await fetch(candidateUrl, {
-          signal: controller.signal,
-          headers: {
-            'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-            'Cache-Control': 'no-cache',
-          },
-        });
-        clearTimeout(timeoutId);
-
-        if (response.status < 200 || response.status >= 300) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const parsed = this.extractRelevantContent(
-          candidateUrl,
-          await response.text(),
-          company
-        );
-
-        if (parsed.content.length < 120) {
-          throw new Error('contenido insuficiente');
-        }
-
-        return {
-          url: candidateUrl,
-          title: parsed.title,
-          content: parsed.content,
-          source: new URL(candidateUrl).hostname,
-          fetchedAt: new Date().toISOString(),
-        };
-      } catch (error) {
-        clearTimeout(timeoutId);
-        errors.push(`${candidateUrl}: ${(error as Error).message}`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const res = await this.fetchImpl(url, {
+        headers: { "User-Agent": BROWSER_UA },
+        signal: controller.signal
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} al obtener ${url}`);
       }
+      const html = await res.text();
+      return {
+        url,
+        title: extractTitle(html) || company,
+        content: extractRelevantContent(html, this.maxChars),
+        source: hostnameOf(url),
+        fetchedAt: new Date().toISOString()
+      };
+    } finally {
+      clearTimeout(timer);
     }
-
-    throw new Error(`Error fetching ${url}. Intentos fallidos: ${errors.join(' | ')}`);
   }
 
-  private buildCandidateUrls(input: string, company: string): string[] {
-    const normalizedUrl = input.startsWith('http') ? input : `https://${input}`;
-    const baseUrl = new URL(normalizedUrl);
-    const companyQuery = encodeURIComponent(company.trim());
-    const ticker = this.getTickerForCompany(company);
-    const host = baseUrl.hostname.replace(/^www\./, '');
-
-    if (baseUrl.pathname !== '/' || baseUrl.search) {
-      return [baseUrl.toString()];
-    }
-
-    const candidates = [
-      baseUrl.toString(),
-      `${baseUrl.origin}/search?q=${companyQuery}`,
-      `${baseUrl.origin}/search?query=${companyQuery}`,
-      `${baseUrl.origin}/search/?query=${companyQuery}`,
-      `${baseUrl.origin}/news/search?q=${companyQuery}`,
-    ];
-
-    if (ticker) {
-      candidates.push(`${baseUrl.origin}/quote/${ticker}`);
-      candidates.push(`${baseUrl.origin}/quote/${ticker}/news`);
-    }
-
-    if (host === 'cnbc.com') {
-      candidates.unshift(`${baseUrl.origin}/search/?query=${companyQuery}`);
-    }
-
-    if (host === 'reuters.com') {
-      candidates.unshift(`${baseUrl.origin}/site-search/?query=${companyQuery}`);
-    }
-
-    if (host === 'finance.yahoo.com' && ticker) {
-      candidates.unshift(`${baseUrl.origin}/quote/${ticker}/news`);
-    }
-
-    if (host === 'nasdaq.com' && ticker) {
-      candidates.unshift(
-        `${baseUrl.origin}/market-activity/stocks/${ticker.toLowerCase()}/news-headlines`
-      );
-    }
-
-    if (host === 'investing.com') {
-      candidates.unshift(`${baseUrl.origin}/search/?q=${companyQuery}`);
-    }
-
-    return [...new Set(candidates)];
-  }
-
-  private extractRelevantContent(
-    url: string,
-    html: string,
-    company: string
-  ): { title: string; content: string } {
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    const title = titleMatch ? this.decodeHtml(titleMatch[1]) : 'Noticia del sitio';
-    const companyPatterns = [
-      new RegExp(this.escapeRegExp(company), 'gi'),
-      new RegExp(this.getTickerPatterns(company), 'gi'),
-    ];
-
-    const content = this.decodeHtml(html)
-      .replace(/<script[^>]*>.*?<\/script>/gi, '')
-      .replace(/<style[^>]*>.*?<\/style>/gi, '')
-      .replace(/<nav[^>]*>.*?<\/nav>/gi, '')
-      .replace(/<footer[^>]*>.*?<\/footer>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    const sentences = content.split(/[.!?]+/).filter((s) => s.trim().length > 20);
-    const relevantSentences = sentences.filter((sentence) =>
-      companyPatterns.some((pattern) => pattern.test(sentence))
-    );
-    const finalContent =
-      relevantSentences.length > 0
-        ? relevantSentences.slice(0, 12).join('. ')
-        : content.substring(0, this.MAX_CONTENT_LENGTH * 2);
+  // FIC: Analyze fetched content as a single-article sentiment in the company's context.
+  // FIC: Analiza el contenido obtenido como sentimiento de un solo articulo en el contexto de la empresa.
+  async analyzeSourceImpact(urlContent: URLContent, company: string): Promise<SourceAnalysisResult> {
+    const pseudoArticle: NewsArticle = {
+      id: urlContent.url,
+      headline: urlContent.title,
+      summary: urlContent.content,
+      author: "",
+      source: urlContent.source,
+      url: urlContent.url,
+      symbols: [company.toUpperCase()],
+      createdAt: urlContent.fetchedAt
+    };
+    const sentiment = await this.analyzer.analyzeNewsSentiment(company.toUpperCase(), [pseudoArticle]);
+    const warnings: string[] = [];
+    if (sentiment.degraded) warnings.push("Analisis degradado: se uso el evaluador determinista de respaldo.");
+    if (urlContent.content.length < 200) warnings.push("Contenido extraido muy corto; la señal puede ser debil.");
 
     return {
-      title,
-      content: `URL analizada: ${url}\n${finalContent.substring(0, this.MAX_CONTENT_LENGTH)}`,
+      url: urlContent.url,
+      company: company.toUpperCase(),
+      verdict: resolveVerdict(sentiment),
+      score: sentiment.score,
+      confidence: sentiment.confidence,
+      reasoning: sentiment.reasoning,
+      keyPoints: sentiment.keyFactors,
+      warnings: warnings.length > 0 ? warnings : undefined,
+      disclaimer: NEWS_DISCLAIMER,
+      timestamp: new Date().toISOString()
     };
   }
-
-  private getTickerPatterns(company: string): string {
-    const ticker = this.getTickerForCompany(company);
-    return ticker
-      ? `(${this.escapeRegExp(company)}|${ticker})`
-      : this.escapeRegExp(company);
-  }
-
-  private getTickerForCompany(company: string): string | null {
-    const tickerMap: { [key: string]: string } = {
-      apple: 'AAPL',
-      microsoft: 'MSFT',
-      google: 'GOOGL',
-      alphabet: 'GOOGL',
-      amazon: 'AMZN',
-      tesla: 'TSLA',
-      meta: 'META',
-      facebook: 'META',
-      nvidia: 'NVDA',
-      intel: 'INTC',
-      amd: 'AMD',
-      netflix: 'NFLX',
-    };
-
-    return tickerMap[company.trim().toLowerCase()] || null;
-  }
-
-  private escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  private decodeHtml(value: string): string {
-    return value
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
-  }
-
-  async analyzeSourcesForCompany(
-    company: string,
-    urls: string[]
-  ): Promise<SourceAnalysisResult> {
-    if (!urls || urls.length === 0) {
-      throw new Error('Se deben proporcionar al menos una URL');
-    }
-
-    if (!company || company.trim().length === 0) {
-      throw new Error('Se debe especificar la compania a analizar');
-    }
-
-    const results = await Promise.allSettled(
-      urls.map((url) => this.fetchURLContent(url, company.trim()))
-    );
-    const urlContents = results
-      .filter((r) => r.status === 'fulfilled')
-      .map((r) => (r as PromiseFulfilledResult<URLContent>).value);
-    const warnings = results
-      .filter((r) => r.status === 'rejected')
-      .map((r) => (r as PromiseRejectedResult).reason?.message || String((r as PromiseRejectedResult).reason));
-
-    if (urlContents.length === 0) {
-      return this.buildNoContentFallback(company.trim(), urls, warnings);
-    }
-
-    if (!this.hasAnthropicApiKey()) {
-      return this.buildLocalContentAnalysis(company.trim(), urlContents, warnings);
-    }
-
-    const contentSummary = urlContents
-      .map(
-        (uc, i) =>
-          `[Fuente ${i + 1}: ${uc.source}]\nTitulo: ${uc.title}\nContenido: ${uc.content}`
-      )
-      .join('\n\n---\n\n');
-
-    const prompt = `Eres un analista de inversiones experto. He recopilado informacion sobre "${company}" de ${urlContents.length} fuente(s) financiera(s).
-
-NOTICIAS Y ANALISIS SOBRE ${company.toUpperCase()}:
-${contentSummary}
-
-Basandote solo en el contenido de estas fuentes sobre ${company}, proporciona un veredicto de inversion consolidado.
-
-Analiza:
-- Noticias positivas o negativas sobre ${company}
-- Oportunidades de crecimiento o riesgos
-- Perspectivas de precio y rentabilidad
-- Tendencias macroeconomicas que afecten a ${company}
-
-Responde unicamente con JSON valido con esta estructura exacta:
-{
-  "verdict": <"BUY" | "SELL" | "HOLD">,
-  "score": <numero entre -1.0 y 1.0>,
-  "confidence": <numero entre 0.0 y 1.0>,
-  "reasoning": "<explicacion concisa en 2-3 oraciones especificas sobre ${company}>",
-  "keyPoints": ["<punto sobre ${company}>", "<punto sobre ${company}>", "<punto sobre ${company}>"]
 }
 
-CRITERIOS ESTRICTOS:
-- score > 0.3 -> BUY
-- score < -0.3 -> SELL
-- -0.3 a 0.3 -> HOLD
-- confidence: 0 = fuentes contradictorias, 1 = todas coinciden`;
+// FIC: Extract <title> text from raw HTML.
+// FIC: Extrae el texto de <title> del HTML crudo.
+export function extractTitle(html: string): string {
+  const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+  return m ? decodeEntities(m[1].trim()) : "";
+}
 
-    try {
-      const message = await this.getClient().messages.create({
-        model: 'claude-opus-4-5',
-        max_tokens: 512,
-        messages: [{ role: 'user', content: prompt }],
-      });
+// FIC: Strip scripts/styles/tags and collapse whitespace, capped at maxChars.
+// FIC: Elimina scripts/styles/etiquetas y colapsa espacios, acotado a maxChars.
+export function extractRelevantContent(html: string, maxChars = 5000): string {
+  const withoutScripts = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ");
+  const text = decodeEntities(withoutScripts.replace(/<[^>]+>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.slice(0, maxChars);
+}
 
-      const rawText = (message.content[0] as { type: 'text'; text: string }).text;
-      const cleaned = rawText.replace(/```json|```/g, '').trim();
-      const analysisData = JSON.parse(cleaned);
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
 
-      return {
-        url: urlContents.map((content) => content.url).join(', '),
-        company,
-        verdict: analysisData.verdict,
-        score: analysisData.score,
-        confidence: analysisData.confidence,
-        reasoning: analysisData.reasoning,
-        keyPoints: analysisData.keyPoints,
-        warnings: warnings.length > 0 ? warnings : undefined,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      throw new Error(`Error analyzing sources: ${(error as Error).message}`);
-    }
-  }
-
-  private buildNoContentFallback(
-    company: string,
-    urls: string[],
-    warnings: string[]
-  ): SourceAnalysisResult {
-    const blockedSources = urls.join(', ');
-
-    return {
-      url: blockedSources,
-      company,
-      verdict: 'HOLD',
-      score: 0,
-      confidence: 0.1,
-      reasoning:
-        `No se pudo leer contenido verificable de las fuentes configuradas para ${company}. ` +
-        'La recomendacion se mantiene en MANTENER con confianza baja para evitar una senal de compra o venta sin evidencia suficiente.',
-      keyPoints: [
-        'Las fuentes configuradas no entregaron contenido accesible para analizar.',
-        'Algunas fuentes financieras bloquean scraping automatizado con respuestas HTTP 403.',
-        'Agrega otra fuente accesible como Reuters, CNBC, Yahoo Finance o un enlace directo a una noticia para obtener una senal con mayor confianza.',
-      ],
-      warnings,
-      timestamp: new Date().toISOString(),
-    };
-  }
-
-  private buildLocalContentAnalysis(
-    company: string,
-    urlContents: URLContent[],
-    warnings: string[]
-  ): SourceAnalysisResult {
-    const positiveTerms = [
-      'beat',
-      'beats',
-      'growth',
-      'gain',
-      'gains',
-      'profit',
-      'profits',
-      'revenue rose',
-      'upgrade',
-      'outperform',
-      'bullish',
-      'strong demand',
-      'record',
-      'positive',
-      'crecimiento',
-      'ganancia',
-      'ganancias',
-      'sube',
-      'supera',
-      'positivo',
-    ];
-    const negativeTerms = [
-      'miss',
-      'misses',
-      'loss',
-      'losses',
-      'decline',
-      'drops',
-      'fell',
-      'cut',
-      'downgrade',
-      'underperform',
-      'bearish',
-      'weak demand',
-      'lawsuit',
-      'risk',
-      'negative',
-      'perdida',
-      'perdidas',
-      'cae',
-      'baja',
-      'riesgo',
-      'negativo',
-    ];
-
-    const combinedContent = urlContents
-      .map((content) => `${content.title} ${content.content}`)
-      .join(' ')
-      .toLowerCase();
-    const positiveCount = this.countTermMatches(combinedContent, positiveTerms);
-    const negativeCount = this.countTermMatches(combinedContent, negativeTerms);
-    const netScore = positiveCount - negativeCount;
-    const score = Math.max(-0.6, Math.min(0.6, netScore / 10));
-    const verdict: SourceAnalysisResult['verdict'] =
-      score > 0.3 ? 'BUY' : score < -0.3 ? 'SELL' : 'HOLD';
-    const confidence = Math.min(
-      0.55,
-      0.25 + Math.abs(netScore) * 0.05 + urlContents.length * 0.05
-    );
-
-    return {
-      url: urlContents.map((content) => content.url).join(', '),
-      company,
-      verdict,
-      score,
-      confidence,
-      reasoning:
-        `Analisis local para ${company}: se detectaron ${positiveCount} senales positivas y ${negativeCount} senales negativas en las fuentes accesibles. ` +
-        'La confianza es limitada porque no hay ANTHROPIC_API_KEY configurada para el analisis IA completo.',
-      keyPoints: [
-        `${urlContents.length} fuente(s) accesible(s) fueron leidas correctamente.`,
-        `Balance textual detectado: ${positiveCount} positivo(s) contra ${negativeCount} negativo(s).`,
-        'Configura ANTHROPIC_API_KEY para obtener razonamiento financiero mas profundo y especifico.',
-      ],
-      warnings: [
-        'ANTHROPIC_API_KEY no esta configurada; se uso analisis local de respaldo.',
-        ...warnings,
-      ],
-      timestamp: new Date().toISOString(),
-    };
-  }
-
-  private countTermMatches(content: string, terms: string[]): number {
-    return terms.reduce((count, term) => {
-      const escapedTerm = this.escapeRegExp(term.toLowerCase());
-      const matches = content.match(new RegExp(`\\b${escapedTerm}\\b`, 'g'));
-      return count + (matches?.length || 0);
-    }, 0);
-  }
-
-  async validateURL(url: string): Promise<boolean> {
-    try {
-      const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
-      new URL(normalizedUrl);
-      console.log(`[ValidateURL] URL valida: ${normalizedUrl}`);
-      return true;
-    } catch (error) {
-      console.error('[ValidateURL] Error:', error);
-      return false;
-    }
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
   }
 }

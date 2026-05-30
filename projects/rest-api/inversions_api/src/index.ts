@@ -30,6 +30,7 @@ import { bollingerRouter } from "./routes/indicators/bollinger";
 import { indicatorsConfluenceRouter } from "./routes/indicators/confluence";
 import { indicatorsHealthRouter } from "./routes/indicators/health";
 import { chatExplainRouter } from "./routes/indicators/chatExplain";
+import { newsSentimentRouter } from "./routes/news/sentiment";
 import { confluenceTableRouter } from "./routes/signals/confluenceTable";
 import { simulationRunRouter } from "./routes/simulation/run";
 import { indicatorsRateLimit, chatRateLimit } from "./middleware/indicatorsRateLimit";
@@ -63,7 +64,7 @@ const auditHistoryService = new AuditHistoryService();
 const approvalService = new ApprovalService();
 const executionService = new ExecutionService();
 
-app.use('/news/sentiment', newsSentimentRouter);
+app.use("/api/news", indicatorsRateLimit, newsSentimentRouter);
 app.use("/api/signals", signalDetailsRouter);
 app.use("/api/signals", signalConfluenceRouter);
 app.use("/api/signals", indicatorsRateLimit, confluenceTableRouter);
