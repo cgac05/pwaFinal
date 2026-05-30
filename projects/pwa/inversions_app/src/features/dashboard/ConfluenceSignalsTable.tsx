@@ -86,6 +86,9 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
   const [modalResumen, setModalResumen] = useState<string>("");
   const [stubCore, setStubCore] = useState<string | null>(null);
   const [stubResumen, setStubResumen] = useState<string>("");
+  // FIC: Full row stored for A_TECNICO structured detail panel. (EN)
+  // FIC: Fila completa almacenada para el panel de detalle estructurado de A_TECNICO. (ES)
+  const [stubRow, setStubRow] = useState<ConfluenceSignalRow | null>(null);
 
   const { setSelectedSignal } = useSignalStore();
   const { results: institutionalResults } = useInstitutionalStore();
@@ -194,6 +197,8 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                   } else {
                     setStubCore(row.core);
                     setStubResumen(row.resumen_analisis ?? "");
+                    // FIC: Store full row for A_TECNICO structured panel; null for others. (EN)
+                    setStubRow(row.core === "A_TECNICO" ? row : null);
                   }
                 };
 
@@ -256,7 +261,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
             justifyContent: "center",
             padding: "1.25rem"
           }}
-          onClick={() => setStubCore(null)}
+          onClick={() => { setStubCore(null); setStubRow(null); }}
         >
           <div
             className="card"
@@ -271,12 +276,90 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 id="stub-dialog-title" style={{ marginBottom: "0.25rem", flexShrink: 0 }}>{stubCore.replace("A_", "")}</h2>
-            <p style={{ color: "var(--color-text-muted)", fontSize: "0.8rem", marginBottom: "1.25rem", flexShrink: 0 }}>
-              Análisis gráfico en construcción — próximamente disponible.
-            </p>
+            <h2 id="stub-dialog-title" style={{ marginBottom: "0.25rem", flexShrink: 0 }}>
+              {stubCore === "A_TECNICO" ? "Análisis Técnico" : stubCore.replace("A_", "")}
+            </h2>
+            {stubCore !== "A_TECNICO" && (
+              <p style={{ color: "var(--color-text-muted)", fontSize: "0.8rem", marginBottom: "1.25rem", flexShrink: 0 }}>
+                Análisis gráfico en construcción — próximamente disponible.
+              </p>
+            )}
 
-            {stubResumen && (
+            {/* FIC: A_TECNICO structured panel — replaces plain text for this core. (EN) */}
+            {stubCore === "A_TECNICO" && stubRow ? (() => {
+              // Parse evidencia_refs: ["trend:ALCISTA", "adx:28.7", ...]
+              const ev: Record<string, string> = {};
+              for (const ref of (stubRow.evidencia_refs ?? [])) {
+                const i = ref.indexOf(":");
+                if (i > 0) ev[ref.slice(0, i)] = ref.slice(i + 1);
+              }
+              const met = stubRow.observacion?.metricas ?? {};
+              const trendColor = stubRow.tendencia === "ALCISTA" ? "var(--color-buy)"
+                : stubRow.tendencia === "BAJISTA" ? "var(--color-sell)"
+                : "var(--color-text-muted)";
+              const subCard = { background: "var(--color-surface-raised)", borderRadius: "var(--radius-sm)",
+                padding: "0.75rem 1rem", border: "1px solid var(--color-border-subtle)" };
+              const subTitle = { fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase" as const,
+                letterSpacing: "0.07em", color: "var(--color-accent)", marginBottom: "0.5rem" };
+              const dataRow = (label: string, value: React.ReactNode, color?: string) => (
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0",
+                  borderBottom: "1px solid var(--color-border-subtle)", fontSize: "0.75rem" }}>
+                  <span style={{ color: "var(--color-text-muted)" }}>{label}</span>
+                  <span style={{ fontWeight: 600, color: color ?? "var(--color-text)" }}>{value}</span>
+                </div>
+              );
+              return (
+                <div style={{ flex: 1, overflowY: "auto", display: "grid",
+                  gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.25rem" }}>
+                  {/* Tendencia */}
+                  <div style={subCard}>
+                    <div style={subTitle}>Tendencia</div>
+                    {dataRow("Detectada", ev.trend ?? stubRow.tendencia, trendColor)}
+                    {dataRow("Fuerza", ev.trendStrength ?? (met.TREND_STRENGTH as string) ?? "—")}
+                  </div>
+                  {/* Momentum */}
+                  <div style={subCard}>
+                    <div style={subTitle}>Momentum</div>
+                    {dataRow("ADX", ev.adx ? `${ev.adx}` : "—")}
+                    {dataRow("Interpretación",
+                      Number(ev.adx ?? 0) >= 40 ? "Muy fuerte" :
+                      Number(ev.adx ?? 0) >= 25 ? "Fuerte" :
+                      Number(ev.adx ?? 0) >= 15 ? "Débil" : "Sin tendencia")}
+                    {dataRow("Líneas", `${ev.trendLines ?? "0"} totales`)}
+                  </div>
+                  {/* Medias */}
+                  <div style={subCard}>
+                    <div style={subTitle}>Medias Móviles</div>
+                    {dataRow("EMA50", met.SMA_50 ? `$${Number(met.SMA_50).toFixed(2)}` : "—")}
+                    {dataRow("Último cierre", stubRow.precio > 0 ? `$${stubRow.precio.toFixed(2)}` : "—")}
+                    {dataRow("Candles analizadas", met.CANDLES_ANALYZED ?? "—")}
+                  </div>
+                  {/* Soportes */}
+                  <div style={subCard}>
+                    <div style={subTitle}>Soportes</div>
+                    {dataRow("Cantidad", ev.supports ?? (met.SOPORTES as string) ?? "0",
+                      Number(ev.supports ?? 0) > 0 ? "var(--color-buy)" : undefined)}
+                  </div>
+                  {/* Resistencias */}
+                  <div style={subCard}>
+                    <div style={subTitle}>Resistencias</div>
+                    {dataRow("Cantidad", ev.resistances ?? (met.RESISTENCIAS as string) ?? "0",
+                      Number(ev.resistances ?? 0) > 0 ? "var(--color-sell)" : undefined)}
+                  </div>
+                  {/* Métricas */}
+                  <div style={subCard}>
+                    <div style={subTitle}>Métricas</div>
+                    {Object.entries(met).map(([k, v]) => dataRow(k, String(v)))}
+                    {Object.keys(met).length === 0 && (
+                      <span style={{ fontSize: "0.72rem", color: "var(--color-text-muted)" }}>Sin métricas</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })() : null}
+
+            {/* Other stub cores — plain text as before */}
+            {stubCore !== "A_TECNICO" && stubResumen && (
               <>
                 <div style={{
                   borderTop: "1px solid var(--color-border-subtle)",

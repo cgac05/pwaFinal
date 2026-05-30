@@ -16,6 +16,7 @@ import {
 } from "../../../services/signals/confluenceTableApi";
 import { TermStrategyModal, type TermStrategyParams } from "./TermStrategyModal";
 import { CoverageParamsModal, type CoverageModalParams } from "./CoverageParamsModal";
+import { WheelParamsModal, type WheelModalParams } from "./WheelParamsModal";
 
 // ─── Panel CSS ─────────────────────────────────────────────────────────────────
 // Uses only real Revolut design-system tokens from tokens.css.
@@ -444,6 +445,7 @@ function ChipButton({
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
 function isTermStrategy(e: string)     { return TERM_STRATEGIES.has(e); }
 function isCoverageStrategy(e: string) { return e === "COVERED_CALL"; }
+function isWheelStrategy(e: string)    { return e === "WHEEL"; }
 
 const DEFAULT_TERM_PARAMS: TermStrategyParams = {
   optionStyle: "CALL",
@@ -461,6 +463,26 @@ const DEFAULT_COVERAGE_PARAMS: CoverageModalParams = {
   currentPrice: 0,
   shares: 100,
   riskTolerancePct: 0.05,
+};
+
+// FIC: Default params for Wheel modal — isolated from CoverageModalParams. (EN)
+// FIC: Parámetros por defecto para el modal Wheel — aislados de CoverageModalParams. (ES)
+const DEFAULT_WHEEL_PARAMS: WheelModalParams = {
+  csp: {
+    ticker: "",
+    currentPrice: 0,
+    capitalDisponible: 0,
+    strikePut: 0,
+    primaPut: 0,
+    contratos: 1,
+  },
+  cc: {
+    acciones: 100,
+    costoPromedio: 0,
+    strikeCall: 0,
+    primaCall: 0,
+    contratos: 1,
+  },
 };
 
 type Preset = "2A" | "1A" | "6M" | "3M" | "1M";
@@ -496,6 +518,9 @@ interface Props {
   onExecute?: (activeCoreIds: CoreId[]) => void;
   onStrategyChange?: (estrategia: string) => void;
   onCoverageParamsConfirmed?: (params: CoverageModalParams, kind: string) => void;
+  // FIC: Callback fired when user clicks "Analizar Wheel" — lifts params to MainDashboard. (EN)
+  // FIC: Callback al hacer click en "Analizar Wheel" — sube params a MainDashboard. (ES)
+  onWheelParamsConfirmed?: (params: WheelModalParams) => void;
 }
 
 // ─── Main component ────────────────────────────────────────────────────────────
@@ -505,6 +530,7 @@ export function SimulationControlPanel({
   onExecute,
   onStrategyChange,
   onCoverageParamsConfirmed,
+  onWheelParamsConfirmed,
 }: Props) {
   const [preset, setPreset]               = useState<Preset>("3M");
   const [estrategiaFrom, setEstrategiaFrom] = useState(isoToday());
@@ -524,6 +550,10 @@ export function SimulationControlPanel({
   const [termParams, setTermParams]       = useState<TermStrategyParams>(DEFAULT_TERM_PARAMS);
   const [coverageModalOpen, setCoverageModalOpen] = useState(false);
   const [coverageParams, setCoverageParams]       = useState<CoverageModalParams>(DEFAULT_COVERAGE_PARAMS);
+  // FIC: Wheel modal state — independent from Coverage modal state. (EN)
+  // FIC: Estado del modal Wheel — independiente del estado del modal Coverage. (ES)
+  const [wheelModalOpen, setWheelModalOpen]       = useState(false);
+  const [wheelParams, setWheelParams]             = useState<WheelModalParams>({ ...DEFAULT_WHEEL_PARAMS, csp: { ...DEFAULT_WHEEL_PARAMS.csp, ticker: ticket } });
 
   useEffect(() => {
     if (!coverageModalOpen || coverageParams.currentPrice > 0) return;
@@ -535,11 +565,26 @@ export function SimulationControlPanel({
       .catch(() => { /* user can enter manually */ });
   }, [coverageModalOpen, ticket, coverageParams.currentPrice]);
 
+  // FIC: Fetch current price when Wheel modal opens, same pattern as Coverage modal. (EN)
+  // FIC: Obtiene el precio actual al abrir el modal Wheel, mismo patrón que Coverage. (ES)
+  useEffect(() => {
+    if (!wheelModalOpen || wheelParams.csp.currentPrice > 0) return;
+    getMarketQuotes([ticket])
+      .then((data) => {
+        const q = data.quotes.find((qt) => qt.symbol === ticket.toUpperCase());
+        if (q && q.price > 0) setWheelParams((prev) => ({ ...prev, csp: { ...prev.csp, currentPrice: q.price } }));
+      })
+      .catch(() => { /* user can enter manually */ });
+  }, [wheelModalOpen, ticket, wheelParams.csp.currentPrice]);
+
   const handleEstrategiaChange = (e: string) => {
     setEstrategia(e);
     onStrategyChange?.(e);
-    if (isTermStrategy(e))     setTermModalOpen(true);
+    if (isTermStrategy(e))          setTermModalOpen(true);
     else if (isCoverageStrategy(e)) setCoverageModalOpen(true);
+    // FIC: Wheel opens its own independent modal — does not touch Coverage flow. (EN)
+    // FIC: Wheel abre su propio modal independiente — no toca el flujo de Coverage. (ES)
+    else if (isWheelStrategy(e))    setWheelModalOpen(true);
   };
 
   const toggleCore = (c: CoreId)          => setCoresOn((p) => ({ ...p, [c]: !p[c] }));
@@ -782,6 +827,16 @@ export function SimulationControlPanel({
         onChange={setCoverageParams}
         onClose={() => setCoverageModalOpen(false)}
         onConfirm={(params) => onCoverageParamsConfirmed?.(params, estrategia)}
+      />
+      {/* FIC: WheelParamsModal — coexists with CoverageParamsModal, fully independent. (EN) */}
+      {/* FIC: WheelParamsModal — coexiste con CoverageParamsModal, completamente independiente. (ES) */}
+      <WheelParamsModal
+        open={wheelModalOpen}
+        ticker={ticket}
+        params={wheelParams}
+        onChange={setWheelParams}
+        onClose={() => setWheelModalOpen(false)}
+        onConfirm={(params) => onWheelParamsConfirmed?.(params)}
       />
     </>
   );

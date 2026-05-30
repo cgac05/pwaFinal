@@ -12,6 +12,11 @@ import { ConfluenceSignalsTable } from "./ConfluenceSignalsTable";
 import { SimulationControlPanel } from "./simulation/SimulationControlPanel";
 import { SimulatorStrategySection } from "./simulation/SimulatorStrategySection";
 import type { CoverageModalParams } from "./simulation/CoverageParamsModal";
+// FIC: WheelModalParams for lifting confirmed Wheel state up to dashboard. (EN)
+// FIC: WheelModalParams para elevar el estado Wheel confirmado al dashboard. (ES)
+import type { WheelModalParams } from "./simulation/WheelParamsModal";
+// FIC: Real Technical Analysis Extended panel — replaces placeholder. (EN)
+import { TechnicalAnalysisExtendedSection } from "./TechnicalAnalysisExtendedSection";
 import { AppShell } from "../../layouts/AppShell";
 import { ActivityBar } from "../../components/ui/ActivityBar";
 import { LeftPanel } from "../sidebar/LeftPanel";
@@ -32,6 +37,9 @@ export function MainDashboard() {
   const [simulationVerdict, setSimulationVerdict] = useState<{ verdict?: unknown; score?: number; degraded?: boolean } | null>(null);
   const [activeSimulationStrategy, setActiveSimulationStrategy] = useState("IRON_CONDOR");
   const [coverageRequest, setCoverageRequest] = useState<{ params: CoverageModalParams; kind: string } | null>(null);
+  // FIC: Last confirmed Wheel params — shown as read-only summary in SimulatorStrategySection. (EN)
+  // FIC: Últimos params Wheel confirmados — mostrados como resumen de solo lectura en SimulatorStrategySection. (ES)
+  const [wheelSummary, setWheelSummary] = useState<WheelModalParams | null>(null);
   const [institutionalCoreWasActive, setInstitutionalCoreWasActive] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [selectedStrikeData, setSelectedStrikeData] = useState<{
@@ -67,10 +75,19 @@ export function MainDashboard() {
     []
   );
 
+  // FIC: Lift confirmed Wheel params to dashboard state for summary panel. (EN)
+  // FIC: Eleva los params Wheel confirmados al estado del dashboard para el panel de resumen. (ES)
+  const handleWheelConfirmed = useCallback(
+    (params: WheelModalParams) => setWheelSummary(params),
+    []
+  );
+
   // FIC: Writes selected strike to global store so CoverageStrategyModal can read it from anywhere. (EN)
   // FIC: Escribe el strike seleccionado en el store global para que CoverageStrategyModal lo lea desde cualquier lugar. (ES)
   const handleStrikeSelect = useCallback(
     (strike: number, type: "call" | "put", premium: number, iv: number) => {
+      // TEMP-LOG [Punto 2 — MainDashboard] valor recibido del callback
+      console.log("[WHEEL-AUDIT][2-MainDashboard] handleStrikeSelect →", { strike, type, premium, iv });
       setSelectedStrikeData({ strike, type, premium, iv });
       setSelectedStrike({ strike, type, premium, iv });
     },
@@ -240,6 +257,7 @@ export function MainDashboard() {
         onExecute={handleSimulationExecute}
         onStrategyChange={setActiveSimulationStrategy}
         onCoverageParamsConfirmed={handleCoverageConfirmed}
+        onWheelParamsConfirmed={handleWheelConfirmed}
       />
 
       {/* ── Simulation verdict */}
@@ -418,14 +436,13 @@ export function MainDashboard() {
           ticker={selectedSymbol}
           activeStrategy={activeSimulationStrategy}
           coverageRequest={coverageRequest}
+          wheelSummary={wheelSummary}
         />
       )}
 
       {/* ── Placeholder sections — reserved for other teams */}
-      <PlaceholderSection
-        title="Análisis Técnico Extendido"
-        description="Señales de indicadores técnicos avanzados, patrones de velas y análisis de estructura de mercado."
-      />
+      {/* FIC: Replaced placeholder with real TechnicalAnalysisExtendedSection. (EN) */}
+      <TechnicalAnalysisExtendedSection symbol={selectedSymbol} timeframe={timeframe} />
       <PlaceholderSection
         title="Análisis Fundamental"
         description="Métricas financieras, earnings, valuación y comparativa sectorial."
@@ -468,11 +485,16 @@ export function MainDashboard() {
           zIndex: 900,
           transition: "transform var(--duration-normal) var(--easing-standard), box-shadow var(--duration-normal) var(--easing-standard)"
         }}
-      >
-        <MessageSquare size={24} color="#ffffff" />
-      </button>
+      />
 
-      <GlobalChatDrawer isOpen={copilotOpen} onClose={() => setCopilotOpen(false)} />
+      {/* FIC: GlobalChatDrawer restored — was missing from JSX after file repair. (EN) */}
+      {/* FIC: GlobalChatDrawer restaurado — faltaba en el JSX tras la reparación del archivo. (ES) */}
+      <GlobalChatDrawer
+        isOpen={copilotOpen}
+        onClose={() => setCopilotOpen(false)}
+      />
     </>
   );
 }
+
+export default MainDashboard;
