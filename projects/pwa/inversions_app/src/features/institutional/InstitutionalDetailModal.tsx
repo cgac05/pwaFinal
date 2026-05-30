@@ -346,16 +346,16 @@ export function InstitutionalDetailModal({ isOpen, onClose, ticker, data, resume
               <div style={{ display: "flex", gap: "var(--space-xl)" }}>
                 <div>
                   <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Inflows</p>
-                  <p style={{ fontWeight: 600, color: "var(--color-buy)" }}>${data.metrics?.inflows.toLocaleString()}</p>
+                  <p style={{ fontWeight: 600, color: "var(--color-buy)" }}>${data.metrics?.inflows.toLocaleString()}M</p>
                 </div>
                 <div>
                   <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Outflows</p>
-                  <p style={{ fontWeight: 600, color: "var(--color-sell)" }}>${data.metrics?.outflows.toLocaleString()}</p>
+                  <p style={{ fontWeight: 600, color: "var(--color-sell)" }}>${data.metrics?.outflows.toLocaleString()}M</p>
                 </div>
                 <div>
                   <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Net Flow</p>
                   <p style={{ fontWeight: 600, color: (data.metrics?.netFlow ?? 0) >= 0 ? "var(--color-buy)" : "var(--color-sell)" }}>
-                    ${data.metrics?.netFlow.toLocaleString()}
+                    ${data.metrics?.netFlow.toLocaleString()}M
                   </p>
                 </div>
               </div>

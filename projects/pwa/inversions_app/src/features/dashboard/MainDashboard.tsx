@@ -21,6 +21,8 @@ import { useSignalStore } from "../../store/signals";
 import { useAppShellStore } from "../../store/appShell";
 import { useInstitutionalStore, setInstitutionalLoading, setInstitutionalResult, setInstitutionalError } from "../../store/institutional";
 import { getInstitutionalAnalysis } from "../../services/institutional/institutionalApi";
+import { formatCurrency } from "../../utils/format";
+import { Tooltip } from "../../components/ui/Tooltip";
 
 export function MainDashboard() {
   const isTestEnv = import.meta.env.MODE === "test";
@@ -279,59 +281,134 @@ export function MainDashboard() {
               Error: {instError}
             </p>
           )}
-          {instData && !instIsLoading && (
-            <>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "var(--space-md)" }}>
-                {instData.trends && (
-                  <div>
-                    <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "0 0 4px" }}>Tendencia</p>
-                    <p style={{ fontWeight: 600, margin: 0, color: instData.trends.direction === "bullish" ? "var(--color-buy)" : instData.trends.direction === "bearish" ? "var(--color-sell)" : "var(--color-text-muted)" }}>
-                      {instData.trends.direction === "bullish" ? <><span style={{ color: "var(--color-buy)" }}>●</span> Bullish</> : instData.trends.direction === "bearish" ? <><span style={{ color: "var(--color-sell)" }}>●</span> Bearish</> : <><span style={{ color: "var(--color-text-muted)" }}>●</span> Neutral</>}
+          {instData && !instIsLoading && (() => {
+            const uniqueSources = [
+              ...new Map(instData.sourceReports.map((s) => [s.sourceId, s])).values(),
+            ];
+            const ownershipPct = instData.metrics?.fundsOwnershipPct ?? 0;
+            const ownershipColor =
+              ownershipPct >= 70 ? "var(--color-buy)" : ownershipPct >= 40 ? "var(--color-hold)" : "var(--color-sell)";
+            const ownershipLabel = ownershipPct >= 70 ? "Alto" : ownershipPct >= 40 ? "Medio" : "Bajo";
+            const netFlow = instData.metrics?.netFlow ?? 0;
+            const days = instData.expiration?.daysToNextOpex ?? 0;
+            const opexDate = new Date(Date.now() + days * 86_400_000);
+            const opexStr = opexDate.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+            const visibleSources = uniqueSources.slice(0, 3);
+            const hiddenSources = uniqueSources.slice(3);
+            const trendDir = instData.trends?.direction;
+            const trendColor =
+              trendDir === "bullish" ? "var(--color-buy)" :
+              trendDir === "bearish" ? "var(--color-sell)" :
+              "var(--color-text-muted)";
+
+            return (
+              <>
+                {/* Row 1 — key metrics */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0, marginBottom: "var(--space-md)" }}>
+                  {/* Tendencia */}
+                  <div style={{ paddingRight: "var(--space-md)", borderRight: "1px solid var(--color-border-subtle)" }}>
+                    <p style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", margin: "0 0 4px", fontWeight: 600 }}>Tendencia</p>
+                    <p style={{ fontSize: 14, fontWeight: 600, margin: 0, color: trendColor }}>
+                      {trendDir === "bullish" ? "▲ Bullish" : trendDir === "bearish" ? "▼ Bearish" : instData.trends ? "— Neutral" : "—"}
                     </p>
                   </div>
-                )}
-                {instData.zones && (
-                  <div>
-                    <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "0 0 4px" }}>Zonas detectadas</p>
-                    <p style={{ fontWeight: 600, margin: 0 }}>{instData.zones.support.length} soporte · {instData.zones.resistance.length} resistencia</p>
-                  </div>
-                )}
-                {instData.expiration && (
-                  <div>
-                    <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "0 0 4px" }}>Próximo OpEx</p>
-                    <p style={{ fontWeight: 600, margin: 0 }}>{instData.expiration.daysToNextOpex} días</p>
-                  </div>
-                )}
-                {instData.metrics && (
-                  <div>
-                    <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "0 0 4px" }}>Ownership inst.</p>
-                    <p style={{ fontWeight: 600, margin: 0 }}>{instData.metrics.fundsOwnershipPct.toFixed(1)}%</p>
-                  </div>
-                )}
-                {instData.metrics && (
-                  <div>
-                    <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "0 0 4px" }}>Net Flow</p>
-                    <p style={{ fontWeight: 600, margin: 0, color: instData.metrics.netFlow >= 0 ? "var(--color-buy)" : "var(--color-sell)" }}>
-                      ${instData.metrics.netFlow.toLocaleString()}
+
+                  {/* Zonas detectadas */}
+                  <div style={{ paddingLeft: "var(--space-md)", paddingRight: "var(--space-md)", borderRight: "1px solid var(--color-border-subtle)" }}>
+                    <p style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", margin: "0 0 4px", fontWeight: 600 }}>Zonas detectadas</p>
+                    <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>
+                      {instData.zones ? `${instData.zones.support.length}S · ${instData.zones.resistance.length}R` : "—"}
                     </p>
                   </div>
-                )}
-                <div>
-                  <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "0 0 4px" }}>Fuentes</p>
-                  <p style={{ fontSize: "var(--font-size-xs)", margin: 0 }}>
-                    {instData.sourceReports.map((s) => (
-                      <span key={s.sourceId} style={{ marginRight: "var(--space-xs)" }}>
-                        {s.status === "ok" ? <span style={{ color: "var(--color-buy)", fontWeight: 700 }}>●</span> : s.status === "partial" ? <span style={{ color: "var(--color-warning)", fontWeight: 700 }}>●</span> : <span style={{ color: "var(--color-sell)", fontWeight: 700 }}>●</span>} {s.sourceId.split("_")[0]}
-                      </span>
-                    ))}
-                  </p>
+
+                  {/* Ownership institucional */}
+                  <div style={{ paddingLeft: "var(--space-md)", paddingRight: "var(--space-md)", borderRight: "1px solid var(--color-border-subtle)" }}>
+                    <p style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", margin: "0 0 4px", fontWeight: 600 }}>Ownership inst.</p>
+                    <p style={{ fontSize: 14, fontWeight: 600, margin: "0 0 4px" }}>
+                      {ownershipPct.toFixed(1)}%{" "}
+                      <span style={{ fontSize: 10, fontWeight: 600, color: ownershipColor }}>{ownershipLabel}</span>
+                    </p>
+                    <div style={{ width: "100%", height: 4, backgroundColor: "var(--color-surface-raised)", borderRadius: "var(--radius-pill)", overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(ownershipPct, 100)}%`, height: "100%", backgroundColor: ownershipColor, borderRadius: "var(--radius-pill)" }} />
+                    </div>
+                  </div>
+
+                  {/* Net Flow */}
+                  <div style={{ paddingLeft: "var(--space-md)" }}>
+                    <p style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", margin: "0 0 4px", fontWeight: 600 }}>Net Flow</p>
+                    <p style={{ fontSize: 14, fontWeight: 600, margin: 0, color: netFlow >= 0 ? "var(--color-buy)" : "var(--color-sell)" }}>
+                      {netFlow >= 0 ? "▲ " : "▼ "}{formatCurrency(netFlow)}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <p style={{ marginTop: "var(--space-sm)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
-                Haz clic en una fila de la tabla de confluencia para ver el detalle completo.
-              </p>
-            </>
-          )}
+
+                {/* Row 2 — metadata */}
+                <div style={{ display: "flex", gap: "var(--space-xl)", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "var(--space-sm)", alignItems: "center", flexWrap: "wrap" }}>
+                  {instData.expiration && (
+                    <div>
+                      <p style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", margin: "0 0 2px", fontWeight: 600 }}>Próximo OpEx</p>
+                      <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>{opexStr} · {days}d</p>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", fontWeight: 600, marginRight: "var(--space-xs)" }}>
+                      Fuentes
+                    </span>
+                    {visibleSources.map((s) => {
+                      const label =
+                        s.sourceId === "yahoo_chart" ? "Chart" :
+                        s.sourceId === "sec_edgar_13f" ? "SEC 13F" :
+                        s.sourceId === "finra_short_interest" ? "FINRA" :
+                        s.sourceId === "yahoo_options_flow" ? "Options" :
+                        s.sourceId === "yahoo_institutional" ? "Inst." :
+                        s.sourceId.split("_")[0];
+                      const borderColor =
+                        s.status === "ok" ? "var(--color-buy)" :
+                        s.status === "partial" ? "var(--color-warning)" :
+                        "var(--color-border)";
+                      const bg =
+                        s.status === "ok" ? "rgba(0,168,126,0.10)" :
+                        s.status === "partial" ? "rgba(236,126,0,0.10)" :
+                        "rgba(255,255,255,0.04)";
+                      const color =
+                        s.status === "ok" ? "var(--color-buy)" :
+                        s.status === "partial" ? "var(--color-warning)" :
+                        "var(--color-text-muted)";
+                      return (
+                        <span
+                          key={s.sourceId}
+                          style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", padding: "2px 6px", borderRadius: "var(--radius-xs)", border: `1px solid ${borderColor}`, backgroundColor: bg, color, fontWeight: 600, lineHeight: "1.5" }}
+                        >
+                          {label}
+                        </span>
+                      );
+                    })}
+                    {hiddenSources.length > 0 && (
+                      <Tooltip
+                        content={hiddenSources.map((s) =>
+                          s.sourceId === "yahoo_chart" ? "Chart" :
+                          s.sourceId === "sec_edgar_13f" ? "SEC 13F" :
+                          s.sourceId === "finra_short_interest" ? "FINRA" :
+                          s.sourceId === "yahoo_options_flow" ? "Options" :
+                          s.sourceId === "yahoo_institutional" ? "Inst." :
+                          s.sourceId.split("_")[0]
+                        ).join("\n")}
+                      >
+                        <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", padding: "2px 6px", borderRadius: "var(--radius-xs)", border: "1px solid var(--color-border)", backgroundColor: "rgba(255,255,255,0.04)", color: "var(--color-text-muted)", fontWeight: 600, cursor: "default", lineHeight: "1.5" }}>
+                          +{hiddenSources.length}
+                        </span>
+                      </Tooltip>
+                    )}
+                    <Tooltip content="Haz clic en una fila de la tabla de confluencia para ver el detalle completo.">
+                      <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)", marginLeft: "var(--space-xs)", cursor: "default" }}>
+                        ⓘ
+                      </span>
+                    </Tooltip>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </section>
       )}
 

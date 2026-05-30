@@ -133,8 +133,10 @@ export const parseYahooChart: ParseFn = async (ticker, period, fetchImpl) => {
 
     // FIC: Estimate flows from average volume — 60% long bias as baseline. (EN)
     // FIC: Estima flujos desde volumen promedio — sesgo largo 60% como base. (ES)
-    const inflows = avgVolume * currentPrice * 0.60;
-    const outflows = avgVolume * currentPrice * 0.40;
+    // FIC: Express flows in millions of dollars for consistent scale across sources. (EN)
+    // FIC: Expresa los flujos en millones de dólares para escala consistente entre fuentes. (ES)
+    const inflows  = Math.round((avgVolume * currentPrice * 0.60) / 1_000_000);
+    const outflows = Math.round((avgVolume * currentPrice * 0.40) / 1_000_000);
 
     return {
       sourceId: "yahoo_chart",
