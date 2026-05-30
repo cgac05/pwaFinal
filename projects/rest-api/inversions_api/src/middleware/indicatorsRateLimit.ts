@@ -45,7 +45,7 @@ export function getRateLimitStorage(): RateLimitStorage {
 
 export const INDICATORS_BUCKET: RateLimitConfig = {
   windowSeconds: 60,
-  maxRequests: 60,
+  maxRequests: 300,
   bucket: "indicators"
 };
 
