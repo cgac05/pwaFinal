@@ -88,6 +88,8 @@ export function useSignalStore() {
       emit();
     },
     setSelectedStrike: (strike: SelectedStrike | undefined) => {
+      // TEMP-LOG [Punto 3 — signals store] valor que se persiste
+      console.log("[WHEEL-AUDIT][3-signals store] setSelectedStrike →", strike);
       state = { ...state, selectedStrike: strike };
       emit();
     },
@@ -104,6 +106,6 @@ export function useSignalStore() {
         window.localStorage.setItem("inversions.runtime.operational", mode);
       }
       emit();
-    }
+    },
   };
 }

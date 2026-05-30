@@ -5,6 +5,8 @@ import type { CoverageStrategyContract, CoverageStrategyResult } from "./coverag
 import { analyzeProtectivePut } from "./protectivePutEngine";
 import { analyzeCollar } from "./collarEngine";
 import { analyzeCoveredStraddle } from "./coveredStraddleEngine";
+import { analyzeCashSecuredPut } from "./cashSecuredPutEngine";
+import { analyzeCoveredCall } from "./coveredCallEngine";
 
 export interface CoverageSimulationResult {
   strategyResult: CoverageStrategyResult;
@@ -66,6 +68,16 @@ export class CoverageSimulationEngine {
         break;
       case "covered_straddle":
         strategyResult = analyzeCoveredStraddle(contract);
+        break;
+      case "secured_put":
+        // FIC: Cash Secured Put — premium income, obligated to buy shares if assigned. (EN)
+        // FIC: Cash Secured Put — ingreso por prima, obligado a comprar acciones si se asigna. (ES)
+        strategyResult = analyzeCashSecuredPut(contract);
+        break;
+      case "covered_call":
+        // FIC: Covered Call — premium income, upside capped at strike. (EN)
+        // FIC: Covered Call — ingreso por prima, alza limitada al strike. (ES)
+        strategyResult = analyzeCoveredCall(contract);
         break;
       case "protective_put":
       case "married_put":
@@ -136,8 +148,11 @@ export class CoverageSimulationEngine {
     };
   }
 
-  // FIC: Deterministic scenarios at ±5%, ±10%, ±20% from current price. (EN)
-  // FIC: Escenarios deterministas a ±5%, ±10%, ±20% del precio actual. (ES)
+  // FIC: Deterministic scenarios at +/-5%, +/-10%, +/-20% from current price. (EN)
+  // FIC: Escenarios deterministas a +/-5%, +/-10%, +/-20% del precio actual. (ES)
+
+  // FIC: Deterministic scenarios at +/-5%, +/-10%, +/-20% from current price. (EN)
+  // FIC: Escenarios deterministas a +/-5%, +/-10%, +/-20% del precio actual. (ES)
   private buildDeterministicScenarios(
     contract: CoverageStrategyContract,
     result: CoverageStrategyResult

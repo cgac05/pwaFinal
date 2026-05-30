@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { createSeriesMarkers } from "lightweight-charts";
+import { createSeriesMarkers, LineSeries, LineStyle } from "lightweight-charts";
 import { useSignalStore } from "../../store/signals";
 import { getAuthHeaders } from "../../services/signals/signalApi";
 import { Badge } from "../../components/ui/Badge";
@@ -62,12 +62,22 @@ export const SuperChart: React.FC<SuperChartProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const signalMarkersRef = useRef<Map<string, SignalMark>>(new Map());
+  const bullishSeriesRef = useRef<any>(null);
+  const bearishSeriesRef = useRef<any>(null);
+  const supportResistanceLinesRef = useRef<any[]>([]);
+  const trendSeriesRef = useRef<Array<{ series: any; direction: "ALCISTA" | "BAJISTA" }>>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [candles, setCandles] = useState<OHLC[]>([]);
   const [signals, setSignals] = useState<SignalMark[]>([]);
   const [dataSource, setDataSource] = useState<"tradier" | "yahoo" | "mock" | null>(null);
+
+  const [srWindow, setSrWindow] = useState<number>(20);
+  const [trendWindow, setTrendWindow] = useState<number>(5);
+  const [mostrarAlcistas, setMostrarAlcistas] = useState<boolean>(true);
+  const [mostrarBajistas, setMostrarBajistas] = useState<boolean>(false);
+  const [techData, setTechData] = useState<any>(null);
 
   const [activeIndicators, setActiveIndicators] = useState<ActiveIndicators>(() => {
     try {
@@ -211,6 +221,158 @@ export const SuperChart: React.FC<SuperChartProps> = ({
     loadOHLC();
   }, [symbol, timeframe, startDate, endDate]);
 
+  // ── Load Technical Analysis (supports, resistances, trendlines) ────────────
+  useEffect(() => {
+    if (!symbol || !chartRef.current || !candleSeriesRef.current) return;
+
+    const loadTechnicalAnalysis = async () => {
+      try {
+        const response = await fetch("/api/indicators/technical-analysis", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            symbol,
+            timeframe,
+            count: 300,
+            supportResistanceWindow: srWindow,
+            trendWindow: trendWindow,
+            clusterTolerance: 0.005,
+          }),
+        });
+
+        if (!response.ok) throw new Error("Failed to load technical analysis");
+
+        const data = await response.json();
+        setTechData(data);
+
+        // 1. Draw horizontal Support / Resistance lines
+        if (candleSeriesRef.current) {
+          supportResistanceLinesRef.current.forEach((line) => {
+            candleSeriesRef.current.removePriceLine(line);
+          });
+          supportResistanceLinesRef.current = [];
+
+          if (data.supports) {
+            data.supports.forEach((level: any) => {
+              const priceLine = candleSeriesRef.current.createPriceLine({
+                price: level.price,
+                color: "rgba(0,168,126,0.6)",
+                lineStyle: LineStyle.Dashed,
+                lineWidth: 1.5,
+                axisLabelVisible: true,
+                title: `S(${level.touches})`,
+              });
+              supportResistanceLinesRef.current.push(priceLine);
+            });
+          }
+
+          if (data.resistances) {
+            data.resistances.forEach((level: any) => {
+              const priceLine = candleSeriesRef.current.createPriceLine({
+                price: level.price,
+                color: "rgba(226,59,74,0.6)",
+                lineStyle: LineStyle.Dashed,
+                lineWidth: 1.5,
+                axisLabelVisible: true,
+                title: `R(${level.touches})`,
+              });
+              supportResistanceLinesRef.current.push(priceLine);
+            });
+          }
+        }
+
+        // 2. Draw diagonal Trendlines
+        if (chartRef.current) {
+          // Initialize series if not present
+          if (!bullishSeriesRef.current) {
+            bullishSeriesRef.current = chartRef.current.addSeries(LineSeries, {
+              color: "#2196f3",
+              lineWidth: 2.5,
+              priceLineVisible: false,
+              lastValueVisible: false,
+              crosshairMarkerVisible: false,
+            }, 0);
+          }
+          if (!bearishSeriesRef.current) {
+            bearishSeriesRef.current = chartRef.current.addSeries(LineSeries, {
+              color: "#ef5350",
+              lineWidth: 2.5,
+              priceLineVisible: false,
+              lastValueVisible: false,
+              crosshairMarkerVisible: false,
+            }, 0);
+          }
+
+          // Apply visibility
+          bullishSeriesRef.current.applyOptions({ visible: mostrarAlcistas });
+          bearishSeriesRef.current.applyOptions({ visible: mostrarBajistas });
+
+          // Populate data: use filter() to draw ALL lines per direction
+          trendSeriesRef.current.forEach(({ series }) => {
+            try { chartRef.current!.removeSeries(series); } catch { /* already removed */ }
+          });
+          trendSeriesRef.current = [];
+
+          const allLines: any[] = data.trendLines ?? [];
+          allLines.forEach((tl: any) => {
+            const isBullish = tl.direction === "ALCISTA";
+            const s = chartRef.current!.addSeries(LineSeries, {
+              color: isBullish ? "rgba(0,168,126,0.7)" : "rgba(226,59,74,0.7)",
+              lineWidth: 1,
+              lineStyle: LineStyle.Dashed,
+              priceLineVisible: false,
+              lastValueVisible: false,
+              crosshairMarkerVisible: false,
+              visible: isBullish ? mostrarAlcistas : mostrarBajistas,
+            }, 0);
+            s.setData([
+              { time: tl.p1.time as any, value: tl.p1.price },
+              { time: tl.pEnd.time as any, value: tl.pEnd.price },
+            ]);
+            trendSeriesRef.current.push({ series: s, direction: tl.direction });
+          });
+
+          // Sync legacy single refs (kept for compat)
+          bullishSeriesRef.current = trendSeriesRef.current.find(x => x.direction === "ALCISTA")?.series ?? null;
+          bearishSeriesRef.current = trendSeriesRef.current.find(x => x.direction === "BAJISTA")?.series ?? null;
+        }
+      } catch (err) {
+        console.error("Technical analysis load error:", err);
+      }
+    };
+
+    loadTechnicalAnalysis();
+  }, [symbol, timeframe, srWindow, trendWindow]);
+
+  // Handle client-side visibility updates for ALL trendline series
+  useEffect(() => {
+    trendSeriesRef.current.forEach(({ series, direction }) => {
+      const visible = direction === "ALCISTA" ? mostrarAlcistas : mostrarBajistas;
+      series.applyOptions({ visible });
+    });
+  }, [mostrarAlcistas, mostrarBajistas]);
+
+  // Clean up all drawings on unmount or symbol change
+  useEffect(() => {
+    return () => {
+      if (candleSeriesRef.current) {
+        supportResistanceLinesRef.current.forEach((line) => {
+          candleSeriesRef.current.removePriceLine(line);
+        });
+        supportResistanceLinesRef.current = [];
+      }
+      trendSeriesRef.current.forEach(({ series }) => {
+        try { chartRef.current?.removeSeries(series); } catch { /* already removed */ }
+      });
+      trendSeriesRef.current = [];
+      bullishSeriesRef.current = null;
+      bearishSeriesRef.current = null;
+    };
+  }, [symbol]);
+
   // ── Load signal markers ───────────────────────────────────────────────────
   useEffect(() => {
     if (!symbol || !candleSeriesRef.current) return;
@@ -327,6 +489,165 @@ export const SuperChart: React.FC<SuperChartProps> = ({
             </button>
           );
         })}
+      </div>
+ 
+      {/* ── Technical Analysis Panel ───────────────────────────────────────── */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          padding: "10px 16px",
+          borderBottom: "1px solid var(--color-border-subtle)",
+          background: "var(--color-surface)",
+          fontSize: "var(--font-size-xs)",
+          color: "var(--color-text)",
+          flexShrink: 0,
+          gap: "24px",
+        }}
+      >
+        <div style={{ display: "flex", gap: "32px", flexWrap: "wrap" }}>
+          {/* Soportes / Resistencias Column */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontWeight: 600, color: "var(--color-text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                Soportes / Resistencias
+              </span>
+              <span style={{ fontSize: "10px", color: "var(--color-text-muted)", background: "rgba(255,255,255,0.08)", padding: "1px 6px", borderRadius: "3px" }}>
+                {techData ? `${techData.resistances?.length ?? 0}R / ${techData.supports?.length ?? 0}S` : "0R / 0S"}
+              </span>
+            </div>
+            
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ color: "var(--color-text-muted)" }}>Ventana</span>
+              <div style={{ display: "flex", gap: "4px" }}>
+                {[5, 10, 15, 20, 50].map((w) => (
+                  <button
+                    key={w}
+                    onClick={() => setSrWindow(w)}
+                    style={{
+                      padding: "2px 8px",
+                      fontSize: "10px",
+                      borderRadius: "3px",
+                      border: "1px solid var(--color-border)",
+                      background: srWindow === w ? "var(--color-accent)" : "transparent",
+                      color: srWindow === w ? "#fff" : "var(--color-text-muted)",
+                      cursor: "pointer",
+                      fontWeight: srWindow === w ? 600 : "normal",
+                    }}
+                  >
+                    {w}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "12px", fontSize: "10px", marginTop: "2px", color: "var(--color-text-muted)" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ display: "inline-block", width: "12px", height: "0px", borderBottom: "1.5px dashed rgba(226,59,74,0.8)" }}></span>
+                Resistencia
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ display: "inline-block", width: "12px", height: "0px", borderBottom: "1.5px dashed rgba(0,168,126,0.8)" }}></span>
+                Soporte
+              </span>
+            </div>
+          </div>
+
+          {/* Tendencias Column */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontWeight: 600, color: "var(--color-text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                Tendencias
+              </span>
+              <span style={{ fontSize: "10px", color: "var(--color-text-muted)", background: "rgba(255,255,255,0.08)", padding: "1px 6px", borderRadius: "3px" }}>
+                {techData ? `${techData.trendLines?.filter((l: any) => l.direction === "ALCISTA").length ?? 0}A / ${techData.trendLines?.filter((l: any) => l.direction === "BAJISTA").length ?? 0}V` : "0A / 0V"}
+              </span>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ color: "var(--color-text-muted)" }}>Ventana</span>
+              <div style={{ display: "flex", gap: "4px" }}>
+                {[5, 10, 15, 20, 50].map((w) => (
+                  <button
+                    key={w}
+                    onClick={() => setTrendWindow(w)}
+                    style={{
+                      padding: "2px 8px",
+                      fontSize: "10px",
+                      borderRadius: "3px",
+                      border: "1px solid var(--color-border)",
+                      background: trendWindow === w ? "var(--color-accent)" : "transparent",
+                      color: trendWindow === w ? "#fff" : "var(--color-text-muted)",
+                      cursor: "pointer",
+                      fontWeight: trendWindow === w ? 600 : "normal",
+                    }}
+                  >
+                    {w}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "6px", marginTop: "2px" }}>
+              <button
+                onClick={() => setMostrarAlcistas(!mostrarAlcistas)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  padding: "1px 8px",
+                  fontSize: "10px",
+                  borderRadius: "3px",
+                  border: `1px solid ${mostrarAlcistas ? "rgba(0,168,126,0.6)" : "var(--color-border)"}`,
+                  background: mostrarAlcistas ? "rgba(0,168,126,0.15)" : "transparent",
+                  color: mostrarAlcistas ? "var(--color-buy)" : "var(--color-text-muted)",
+                  cursor: "pointer",
+                }}
+              >
+                ▲ Alcistas
+              </button>
+              <button
+                onClick={() => setMostrarBajistas(!mostrarBajistas)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  padding: "1px 8px",
+                  fontSize: "10px",
+                  borderRadius: "3px",
+                  border: `1px solid ${mostrarBajistas ? "rgba(226,59,74,0.6)" : "var(--color-border)"}`,
+                  background: mostrarBajistas ? "rgba(226,59,74,0.15)" : "transparent",
+                  color: mostrarBajistas ? "var(--color-sell)" : "var(--color-text-muted)",
+                  cursor: "pointer",
+                }}
+              >
+                ▼ Bajistas
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Trend Verdict Badge */}
+        {techData && techData.trend && (
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center" }}>
+            <span
+              style={{
+                fontSize: "10px",
+                fontWeight: 600,
+                color: techData.trend === "ALCISTA" ? "var(--color-buy)" : techData.trend === "BAJISTA" ? "var(--color-sell)" : "var(--color-text-muted)",
+                background: techData.trend === "ALCISTA" ? "rgba(0,168,126,0.12)" : techData.trend === "BAJISTA" ? "rgba(226,59,74,0.12)" : "rgba(255,255,255,0.06)",
+                padding: "3px 10px",
+                borderRadius: "var(--radius-pill)",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+            >
+              {techData.trend === "ALCISTA" ? "▲ " : techData.trend === "BAJISTA" ? "▼ " : "— "}
+              {techData.trend} - {techData.trendStrength || "NEUTRAL"}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── Chart area ────────────────────────────────────────────────────── */}

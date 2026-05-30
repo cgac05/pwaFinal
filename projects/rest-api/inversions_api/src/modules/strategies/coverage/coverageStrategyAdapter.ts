@@ -153,6 +153,14 @@ export function adaptContractToEngine(params: {
   } else if (kind === "covered_straddle") {
     legs.push({ type: "put", position: "short", strike: putStrikePrice, premium: putPremium, expiry });
     legs.push({ type: "call", position: "short", strike: callStrikePrice, premium: callPremium, expiry });
+  } else if (kind === "secured_put") {
+    // FIC: Cash Secured Put -- short put backed by full cash collateral. (EN)
+    // FIC: Cash Secured Put -- put corta respaldada por colateral en efectivo. (ES)
+    legs.push({ type: "put", position: "short", strike: putStrikePrice, premium: putPremium, expiry });
+  } else if (kind === "covered_call") {
+    // FIC: Covered Call -- short call against owned shares. (EN)
+    // FIC: Covered Call -- call corta contra acciones propias. (ES)
+    legs.push({ type: "call", position: "short", strike: callStrikePrice, premium: callPremium, expiry });
   }
 
   return {

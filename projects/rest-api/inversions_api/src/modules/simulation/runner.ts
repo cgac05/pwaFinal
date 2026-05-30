@@ -18,8 +18,10 @@ import {
   type Timeframe
 } from "../indicators/types";
 import { buildInstitutionalRows } from "../institutional/institutionalRowBuilder";
+import { buildTechnicalTable } from "../indicators/technicalTable";
 import type { InstitutionalRouteContext } from "../../routes/institutional/bootstrap";
 import type { InstitutionalAnalysisContract } from "../institutional/institutionalContract";
+import { runAiCore } from "./aiCoreRunner";
 
 export interface SimulationRunResult {
   verdict: ConfluenceVerdict;
@@ -49,7 +51,8 @@ export const KNOWN_ESTRATEGIAS = new Set<string>([
   "BUTTERFLY",
   "COVERED_CALL",
   "CALENDAR_SPREAD",
-  "DIAGONAL_SPREAD"
+  "DIAGONAL_SPREAD",
+  "WHEEL",
 ]);
 
 const RANGO_HISTORICO_DAYS: Record<string, number> = {
@@ -224,12 +227,40 @@ export async function runSimulation(
     }
   }
 
-  // FIC: Stub remaining cores — skip A_INSTITUCIONAL if real rows were built. (EN)
-  // FIC: Stub de cores restantes — omite A_INSTITUCIONAL si se generaron filas reales. (ES)
+  // FIC: A_TECNICO real rows — uses candles already in scope, no extra fetch. (EN)
+  // FIC: Filas reales A_TECNICO — usa candles ya en scope, sin fetch extra. (ES)
+  const tecnicoRows = enabledCores.has("A_TECNICO")
+    ? buildTechnicalTable({
+        ticket:          request.ticket,
+        timeframe:       request.temporalidad,
+        candles,
+        sourceInputHash: verdict.source_input_hash,
+        previousRows:    deps.previousRows,
+        now:             computedAt,
+      })
+    : [];
+
+  // FIC: Execute AI Core if enabled
+  let aiRow: ConfluenceSignalRow | null = null;
+  if (enabledCores.has("A_IA")) {
+    aiRow = await runAiCore({
+      ticket: request.ticket,
+      timeframe: request.temporalidad,
+      sourceInputHash: verdict.source_input_hash,
+      computedAt: computedAt,
+      previousRows: deps.previousRows,
+      precalculatedRows: [...table, ...institutionalRows, ...tecnicoRows],
+    });
+  }
+
+  // FIC: Stub remaining cores — skip A_INSTITUCIONAL/A_TECNICO/A_IA if real rows were built. (EN)
+  // FIC: Stub de cores restantes — omite A_INSTITUCIONAL/A_TECNICO/A_IA si hay filas reales. (ES)
   const stubCores = (ALL_CORE_IDS as readonly CoreId[])
     .filter((c) => {
       if (c === "A_INDICADORES") return false;
       if (c === "A_INSTITUCIONAL" && institutionalRows.length > 0) return false;
+      if (c === "A_TECNICO" && tecnicoRows.length > 0) return false;
+      if (c === "A_IA" && aiRow !== null) return false;
       return enabledCores.has(c);
     });
 
@@ -242,9 +273,13 @@ export async function runSimulation(
       previousRows: deps.previousRows,
       now: computedAt
     });
-    table = [...table, ...institutionalRows, ...stubs];
+    table = [...table, ...institutionalRows, ...tecnicoRows, ...stubs];
   } else {
-    table = [...table, ...institutionalRows];
+    table = [...table, ...institutionalRows, ...tecnicoRows];
+  }
+
+  if (aiRow) {
+    table.push(aiRow);
   }
 
   const disabled = (ALL_CORE_IDS as readonly CoreId[]).filter((c) => !enabledCores.has(c));
@@ -259,6 +294,6 @@ export async function runSimulation(
     table,
     inputs_echo: request,
     computed_at: computedAt.toISOString(),
-    algorithm_version: ALGORITHM_VERSION
+    algorithm_version: ALGORITHM_VERSION,
   };
 }

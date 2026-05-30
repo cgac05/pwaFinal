@@ -9,6 +9,9 @@ import {
   type CoverageStrategyResult,
 } from "../../../services/coverage/coverageApi";
 import type { CoverageModalParams } from "./CoverageParamsModal";
+// FIC: Import WheelModalParams for read-only summary card. (EN)
+// FIC: Importa WheelModalParams para la tarjeta de resumen de solo lectura. (ES)
+import type { WheelModalParams } from "./WheelParamsModal";
 
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
 
@@ -29,9 +32,12 @@ interface Props {
   ticker: string;
   activeStrategy: string;
   coverageRequest?: { params: CoverageModalParams; kind: string } | null;
+  // FIC: Last confirmed Wheel params from WheelParamsModal — used for read-only summary. (EN)
+  // FIC: Últimos params Wheel confirmados en WheelParamsModal — usados para resumen de solo lectura. (ES)
+  wheelSummary?: WheelModalParams | null;
 }
 
-export function SimulatorStrategySection({ ticker, activeStrategy, coverageRequest }: Props) {
+export function SimulatorStrategySection({ ticker, activeStrategy, coverageRequest, wheelSummary }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<CoverageAnalyzeResponse | null>(null);
@@ -80,10 +86,13 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
 
   const isTermStrategy = TERM_STRATEGIES.has(activeStrategy);
   const isCoverageStrategy = activeStrategy === "COVERED_CALL";
+  // FIC: Wheel is a first-class strategy with its own summary panel. (EN)
+  // FIC: Wheel es una estrategia de primer nivel con su propio panel de resumen. (ES)
+  const isWheelStrategy = activeStrategy === "WHEEL";
 
   const cardStyle: React.CSSProperties = {
     padding: "var(--space-lg)",
-    opacity: (!isCoverageStrategy && !isTermStrategy) ? 0.5 : 1,
+    opacity: (!isCoverageStrategy && !isTermStrategy && !isWheelStrategy) ? 0.5 : 1,
   };
 
   const mutedText: React.CSSProperties = {
@@ -98,7 +107,7 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
         <h2 style={{ margin: 0, fontSize: "var(--font-size-base)" }}>
           Estrategia · {sectionTitle}
         </h2>
-        {(isTermStrategy || !isCoverageStrategy) && (
+        {(isTermStrategy || (!isCoverageStrategy && !isWheelStrategy)) && (
           <span style={{
             fontSize: "var(--font-size-xs)",
             color: "var(--color-text-muted)",
@@ -119,7 +128,7 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
       )}
 
       {/* Unknown strategies */}
-      {!isCoverageStrategy && !isTermStrategy && (
+      {!isCoverageStrategy && !isTermStrategy && !isWheelStrategy && (
         <p style={mutedText}>
           El análisis de {sectionTitle} está en construcción y estará disponible próximamente.
         </p>
@@ -257,6 +266,61 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
           )}
         </>
       )}
+
+      {/* FIC: Wheel summary — read-only panel shown when activeStrategy === "WHEEL". (EN) */}
+      {/* FIC: Resumen Wheel — panel de solo lectura cuando activeStrategy === "WHEEL". (ES) */}
+      {isWheelStrategy && (
+        <>
+          {!wheelSummary && (
+            <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
+              Selecciona un PUT desde la Cadena de Opciones y configura los parámetros Wheel en el panel de control.
+            </p>
+          )}
+          {wheelSummary && (() => {
+            // FIC: Simple inline math — avoids importing calcCsp/calcCc from WheelParamsModal. (EN)
+            // FIC: Matemática inline simple — evita importar calcCsp/calcCc de WheelParamsModal. (ES)
+            const { csp, cc } = wheelSummary;
+            const capitalComprometido = csp.strikePut * csp.contratos * 100;
+            const primaCsp  = csp.primaPut  * csp.contratos * 100;
+            const primaCc   = cc.primaCall  * cc.contratos  * 100;
+            const breakeven = csp.strikePut - csp.primaPut - cc.primaCall;
+            const roi       = capitalComprometido > 0 ? (primaCsp + primaCc) / capitalComprometido : 0;
+            const hasCc     = cc.strikeCall > 0 && cc.primaCall > 0;
+            const status    = hasCc ? "CC_CONFIGURADO" : "CSP_CONFIGURADO";
+            const statusColor = hasCc ? "var(--color-buy)" : "var(--color-accent)";
+
+            const rows: Array<{ label: string; value: string; color?: string }> = [
+              { label: "Estado",              value: status, color: statusColor },
+              { label: "Capital comprometido",value: capitalComprometido > 0 ? `$${capitalComprometido.toFixed(2)}` : "—" },
+              { label: "Prima CSP recibida",  value: primaCsp > 0 ? `$${primaCsp.toFixed(2)}` : "—", color: "var(--color-buy)" },
+              { label: "Prima CC recibida",   value: primaCc  > 0 ? `$${primaCc.toFixed(2)}`  : "—", color: "var(--color-buy)" },
+              { label: "Breakeven Wheel",     value: breakeven > 0 ? `$${breakeven.toFixed(2)}` : "—" },
+              { label: "ROI estimado",        value: roi > 0 ? `${(roi * 100).toFixed(2)}%` : "—", color: "var(--color-buy)" },
+            ];
+
+            return (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "var(--space-md)" }}>
+                {rows.map((r) => (
+                  <div key={r.label} style={{
+                    background: "var(--color-surface)",
+                    borderRadius: "var(--radius-sm)",
+                    padding: "var(--space-sm) var(--space-md)",
+                    border: "1px solid var(--color-border-subtle)",
+                  }}>
+                    <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "2px" }}>
+                      {r.label}
+                    </div>
+                    <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 700, color: r.color ?? "var(--color-text)" }}>
+                      {r.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </>
+      )}
+
     </section>
   );
 }

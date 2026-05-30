@@ -139,6 +139,7 @@ export const CANONICAL_ESTRATEGIAS = [
   "COVERED_CALL",
   "CALENDAR_SPREAD",
   "DIAGONAL_SPREAD",
+  "WHEEL",
 ] as const;
 
 export const ALL_CORES: CoreId[] = [

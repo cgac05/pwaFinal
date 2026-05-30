@@ -47,9 +47,10 @@ const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
 
 // FIC: Cores que ESTE feature stubea — A_INDICADORES queda fuera (lo cubre confluenceTable.ts).
 // FIC: A_IA aparece aqui solo cuando el LLM no respondio; el caller decide cuando llamarlo.
+// FIC: A_TECNICO removed — now served by buildTechnicalTable() in technicalTable.ts. (EN)
+// FIC: A_TECNICO removido — ahora servido por buildTechnicalTable() en technicalTable.ts. (ES)
 const DEFAULT_STUB_CORES: CoreId[] = [
   "A_FUNDAMENTAL",
-  "A_TECNICO",
   "A_INSTITUCIONAL",
   "A_NOTICIAS"
 ];

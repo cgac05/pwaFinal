@@ -202,6 +202,11 @@ export function OptionChainTable({ symbol, onSelectStrike }: OptionChainTablePro
   const handleCallClick = useCallback(
     (row: OptionChainRow) => {
       const premium = midpoint(row.callBid, row.callAsk) || row.callLastPrice;
+      // TEMP-LOG [Punto 1 — OptionChainTable] antes de emitir callback
+      console.log("[WHEEL-AUDIT][1-OptionChainTable] call click →", {
+        strike: row.strike, type: "call", premium,
+        callBid: row.callBid, callAsk: row.callAsk, callLastPrice: row.callLastPrice,
+      });
       onSelectStrike?.(row.strike, "call", premium, row.callIV);
     },
     [onSelectStrike]
@@ -210,6 +215,11 @@ export function OptionChainTable({ symbol, onSelectStrike }: OptionChainTablePro
   const handlePutClick = useCallback(
     (row: OptionChainRow) => {
       const premium = midpoint(row.putBid, row.putAsk) || row.putLastPrice;
+      // TEMP-LOG [Punto 1 — OptionChainTable] antes de emitir callback
+      console.log("[WHEEL-AUDIT][1-OptionChainTable] put click →", {
+        strike: row.strike, type: "put", premium,
+        putBid: row.putBid, putAsk: row.putAsk, putLastPrice: row.putLastPrice,
+      });
       onSelectStrike?.(row.strike, "put", premium, row.putIV);
     },
     [onSelectStrike]
@@ -448,14 +458,14 @@ export function OptionChainTable({ symbol, onSelectStrike }: OptionChainTablePro
   );
 }
 
-// FIC: Wrapper that reads symbol from Signal Store — use this in MainDashboard. (EN)
-// FIC: Wrapper que lee el symbol del Signal Store — usar este en MainDashboard. (ES)
+// FIC: Connected wrapper — reads ticker from useSignalStore. (EN)
+// FIC: Wrapper conectado — lee el ticker de useSignalStore. (ES)
 export function OptionChainTableConnected({
   onSelectStrike,
 }: {
   onSelectStrike?: OptionChainTableProps["onSelectStrike"];
 }) {
   const { selectedInstrument } = useSignalStore();
-  const symbol = selectedInstrument?.symbol ?? "SPY";
+  const symbol = selectedInstrument?.symbol ?? "";
   return <OptionChainTable symbol={symbol} onSelectStrike={onSelectStrike} />;
 }

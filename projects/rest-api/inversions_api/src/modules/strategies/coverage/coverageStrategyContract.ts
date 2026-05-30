@@ -2,7 +2,15 @@
 // FIC: Contrato de estrategias de cobertura — tipos para todas las operaciones de cobertura. (ES)
 
 /** Strategy kinds supported / Tipos de estrategia soportados */
-export type CoverageStrategyKind = "protective_put" | "married_put" | "collar_put" | "covered_straddle";
+// FIC: "secured_put" and "covered_call" added for Wheel strategy phase 1. (EN)
+// FIC: "secured_put" y "covered_call" añadidos para la fase 1 de la estrategia Wheel. (ES)
+export type CoverageStrategyKind =
+  | "protective_put"
+  | "married_put"
+  | "collar_put"
+  | "covered_straddle"
+  | "secured_put"
+  | "covered_call";
 
 /** Alert severity levels / Niveles de severidad de alertas */
 export type CoverageStrategyAlertSeverity = "info" | "warning" | "critical";
