@@ -174,21 +174,34 @@ export function buildInstitutionalMetricsSummary(contract: InstitutionalAnalysis
 
 // FIC: Build an institutional positions summary for API responses (regulatory/13F view). (EN)
 // FIC: Construye un resumen de posiciones institucionales para respuestas API (vista regulatoria/13F). (ES)
-export function buildInstitutionalPositionsSummary(contract: InstitutionalAnalysisContract) {
+export function buildInstitutionalPositionsSummary(
+  contract: InstitutionalAnalysisContract,
+  merged?: {
+    fundsOwnershipPct?: number;
+    flows?: { inflows: number; outflows: number; asOf?: string };
+    openPositions?: { count: number; notional?: number };
+  }
+) {
+  const ownership = merged?.fundsOwnershipPct ?? contract.fundsOwnershipPct;
+  const inflows   = merged?.flows?.inflows    ?? contract.flows.inflows;
+  const outflows  = merged?.flows?.outflows   ?? contract.flows.outflows;
+  const count     = merged?.openPositions?.count    ?? contract.openPositions.count;
+  const notional  = merged?.openPositions?.notional ?? contract.openPositions.notional;
+
   return {
     ticker: contract.ticker,
     positions13F: contract.sourceIds?.map((sourceId) => ({
       sourceId,
       asOf: contract.flows.asOf,
-      count: contract.openPositions.count,
-      notional: contract.openPositions.notional ?? 0,
-      ownership: contract.fundsOwnershipPct,
+      count,
+      notional: notional ?? 0,
+      ownership,
       confidence: 0.80,
     })) ?? [],
     flows: {
-      inflows: contract.flows.inflows,
-      outflows: contract.flows.outflows,
-      netFlow: contract.flows.inflows - contract.flows.outflows,
+      inflows,
+      outflows,
+      netFlow: inflows - outflows,
     },
   };
 }

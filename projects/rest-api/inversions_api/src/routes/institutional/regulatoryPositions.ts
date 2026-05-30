@@ -27,7 +27,7 @@ regulatoryPositionsRouter.get(
       return res.status(503).json({ code: "ALL_SOURCES_UNAVAILABLE" });
     }
 
-    const positionsSummary = buildInstitutionalPositionsSummary(contract);
+    const positionsSummary = buildInstitutionalPositionsSummary(contract, resolved.merged);
 
     const sourceReports = resolved.observations.map((obs) => ({
       sourceId: obs.sourceId,

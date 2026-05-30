@@ -24,10 +24,10 @@ const TAB_LABELS: Record<Tab, string> = {
   observaciones: "Observaciones",
 };
 
-const statusIcon = (status: string) => {
-  if (status === "ok") return "✅";
-  if (status === "partial") return "⚠️";
-  return "❌";
+const statusIcon = (status: string): React.ReactNode => {
+  if (status === "ok") return <span style={{ color: "var(--color-buy)", fontWeight: 700 }}>●</span>;
+  if (status === "partial") return <span style={{ color: "var(--color-warning)", fontWeight: 700 }}>●</span>;
+  return <span style={{ color: "var(--color-sell)", fontWeight: 700 }}>●</span>;
 };
 
 const strengthBar = (value: number) => {
@@ -62,9 +62,9 @@ const strengthBar = (value: number) => {
 
 const trendBadge = (direction: "bullish" | "bearish" | "neutral") => {
   const config = {
-    bullish: { color: "var(--color-buy)", label: "🟢 Bullish" },
-    bearish: { color: "var(--color-sell)", label: "🔴 Bearish" },
-    neutral: { color: "var(--color-text-muted)", label: "⚫ Neutral" },
+    bullish: { color: "var(--color-buy)", label: "Bullish" },
+    bearish: { color: "var(--color-sell)", label: "Bearish" },
+    neutral: { color: "var(--color-text-muted)", label: "Neutral" },
   };
   return (
     <span
@@ -72,8 +72,12 @@ const trendBadge = (direction: "bullish" | "bearish" | "neutral") => {
         fontSize: "var(--font-size-sm)",
         fontWeight: 600,
         color: config[direction].color,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.35em",
       }}
     >
+      <span style={{ fontWeight: 700 }}>●</span>
       {config[direction].label}
     </span>
   );
@@ -208,11 +212,11 @@ export function InstitutionalDetailModal({ isOpen, onClose, ticker, data, resume
                   </div>
                   <div>
                     <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-xs)" }}>SMA-50</p>
-                    <p style={{ fontSize: "var(--font-size-md)", fontWeight: 600 }}>${data.trends.sma50.toFixed(2)}</p>
+                    <p style={{ fontSize: "var(--font-size-base)", fontWeight: 600 }}>${data.trends.sma50.toFixed(2)}</p>
                   </div>
                   <div>
                     <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-xs)" }}>SMA-200</p>
-                    <p style={{ fontSize: "var(--font-size-md)", fontWeight: 600 }}>${data.trends.sma200.toFixed(2)}</p>
+                    <p style={{ fontSize: "var(--font-size-base)", fontWeight: 600 }}>${data.trends.sma200.toFixed(2)}</p>
                   </div>
                   <div>
                     <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-xs)" }}>Crossover</p>

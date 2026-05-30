@@ -1,7 +1,8 @@
 // FIC: AppShell layout — VS Code-style 3-zone grid: activity bar, left panel, main content.
 // FIC: Layout AppShell — cuadrícula de 3 zonas estilo VS Code: barra de actividad, panel izquierdo, contenido principal.
 
-import React from "react";
+import React, { useState } from "react";
+import { Menu } from "lucide-react";
 import { Drawer } from "../components/ui/Drawer";
 import { useAppShellStore } from "../store/appShell";
 
@@ -15,6 +16,7 @@ const TABLET_BREAKPOINT = 1023;
 
 export function AppShell({ activityBar, leftPanel, main }: AppShellProps) {
   const { leftPanelCollapsed } = useAppShellStore();
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const leftWidth = leftPanelCollapsed ? "0px" : "var(--left-panel-width)";
 
@@ -77,8 +79,8 @@ export function AppShell({ activityBar, leftPanel, main }: AppShellProps) {
 
       {/* ── Tablet: left panel as Drawer (overlay, no grid reduction) ── */}
       <Drawer
-        isOpen={false}
-        onClose={() => {}}
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
         position="left"
         width="var(--left-panel-width)"
         title="Panel"
@@ -92,8 +94,32 @@ export function AppShell({ activityBar, leftPanel, main }: AppShellProps) {
           .app-shell-left-panel {
             display: none !important;
           }
+          .app-shell-menu-btn {
+            display: flex !important;
+          }
         }
       `}</style>
+
+      {/* ── Tablet menu button — opens Drawer, hidden on desktop ── */}
+      <button
+        className="app-shell-menu-btn btn-ghost"
+        onClick={() => setDrawerOpen(true)}
+        aria-label="Abrir panel"
+        style={{
+          position: "fixed",
+          top: "var(--space-sm, 0.5rem)",
+          left: "calc(var(--activity-bar-width) + var(--space-sm, 0.5rem))",
+          zIndex: 800,
+          display: "none",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "2rem",
+          height: "2rem",
+          padding: 0,
+        }}
+      >
+        <Menu size={18} />
+      </button>
     </div>
   );
 }

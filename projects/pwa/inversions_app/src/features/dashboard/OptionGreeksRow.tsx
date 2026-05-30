@@ -12,15 +12,15 @@ export function OptionGreeksRow({ greeks, colSpan }: Props) {
   const [open, setOpen] = useState(false);
   return (
     <tr>
-      <td colSpan={colSpan} style={{ background: "var(--color-surface-raised, #1c1f26)" }}>
+      <td colSpan={colSpan} style={{ background: "var(--color-surface-raised)" }}>
         <button
           onClick={() => setOpen((o) => !o)}
-          style={{ background: "none", border: 0, color: "var(--color-accent, #ffd43b)", cursor: "pointer", fontSize: "0.75rem" }}
+          style={{ background: "none", border: 0, color: "var(--color-accent)", cursor: "pointer", fontSize: "var(--font-size-xs)" }}
         >
           {open ? "▼" : "▶"} Greeks {greeks.ala} · {greeks.posicion}
         </button>
         {open && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "0.4rem", marginTop: "0.4rem", fontSize: "0.75rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "0.4rem", marginTop: "0.4rem", fontSize: "var(--font-size-xs)" }}>
             <div>Vencimiento: {greeks.vencimiento}</div>
             <div>Strike: {greeks.strike.toFixed(2)}</div>
             <div>Delta: {greeks.delta.toFixed(3)}</div>

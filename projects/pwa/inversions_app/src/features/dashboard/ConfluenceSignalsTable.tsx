@@ -3,8 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useSignalStore, type SelectedSignal } from "../../store/signals";
-import { useAppShellStore } from "../../store/appShell";
-import { useInstitutionalStore, getNearestZone } from "../../store/institutional";
+import { useInstitutionalStore } from "../../store/institutional";
 import {
   getConfluenceTable,
   type ConfluenceSignalRow,
@@ -89,9 +88,14 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
   const [stubResumen, setStubResumen] = useState<string>("");
 
   const { setSelectedSignal } = useSignalStore();
-  const { analysisCategory } = useAppShellStore();
   const { results: institutionalResults } = useInstitutionalStore();
-  const showInstitutionalColumns = analysisCategory === "institutional";
+
+  useEffect(() => {
+    if (!stubCore) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setStubCore(null); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [stubCore]);
 
   useEffect(() => {
     if (rowsProp) {
@@ -122,7 +126,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
       .map((row) => ({ ...row, resumen_analisis: buildResumen(row, institutionalResults) }));
   }, [rows, institutionalResults]);
 
-  const totalCols = TABLE_COLUMNS.length + (showInstitutionalColumns ? 4 : 0);
+  const totalCols = TABLE_COLUMNS.length;
   const sorted = enrichedSorted;
 
   return (
@@ -154,18 +158,10 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
           <thead>
             <tr>
               {TABLE_COLUMNS.map((col) => (
-                <th key={col.key} style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", width: col.width }}>
+                <th key={col.key} style={{ position: "sticky", top: 0, background: "var(--color-surface)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", width: col.width }}>
                   {col.label}
                 </th>
               ))}
-              {showInstitutionalColumns && (
-                <>
-                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)", width: 96 }}>INST. SCORE</th>
-                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)", width: 110 }}>TREND</th>
-                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)", width: 140 }}>ZONA CERCANA</th>
-                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)", width: 86 }}>DÍAS OPEX</th>
-                </>
-              )}
             </tr>
           </thead>
           <tbody>
@@ -179,7 +175,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                 const instData = institutionalResults[row.ticket?.toUpperCase() ?? ""];
                 const onClick = () => {
                   if (row.core === "A_INSTITUCIONAL") {
-                    if (showInstitutionalColumns && instData) {
+                    if (instData) {
                       setModalTicker(row.ticket ?? null);
                       setModalResumen(row.resumen_analisis ?? "");
                     } else {
@@ -201,12 +197,6 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                   }
                 };
 
-                const instScore = instData?.zones?.institutionalScore;
-                const trendDir = instData?.trends?.direction;
-                const allZones = instData?.zones?.all ?? [];
-                const nearestZone = getNearestZone(allZones, row.precio ?? 0);
-                const daysToOpex = instData?.expiration?.daysToNextOpex;
-
                 const cells = (
                   <tr key={rowKey} onClick={onClick} data-resumen={row.resumen_analisis ?? ""} style={{ cursor: "pointer", opacity: row.estado === "DEGRADADA" ? 0.62 : 1 }}>
                     {TABLE_COLUMNS.map((col) => {
@@ -226,7 +216,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                         content = (
                           <span>
                             {row.core}{" "}
-                            <span title={row.disclaimer_id} style={{ background: "var(--color-accent, #ffd43b)", color: "#000", borderRadius: 3, padding: "0 4px", fontSize: "0.6rem", fontWeight: 700 }}>IA</span>
+                            <span title={row.disclaimer_id} style={{ background: "var(--color-accent-subtle)", color: "var(--color-accent)", borderRadius: 3, padding: "0 4px", fontSize: "0.6rem", fontWeight: 700 }}>IA</span>
                           </span>
                         );
                       } else {
@@ -239,30 +229,6 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                         </td>
                       );
                     })}
-                    {showInstitutionalColumns && (
-                      <>
-                        <td style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle" }}>
-                          {instScore != null ? (
-                            <span style={{ color: instScore >= 0.7 ? "var(--color-buy)" : instScore >= 0.4 ? "var(--color-hold)" : "var(--color-sell)", fontWeight: 600 }}>
-                              {instScore.toFixed(2)}
-                            </span>
-                          ) : "—"}
-                        </td>
-                        <td style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle" }}>
-                          {trendDir === "bullish" ? "🟢 Bullish" : trendDir === "bearish" ? "🔴 Bearish" : trendDir === "neutral" ? "⚫ Neutral" : "—"}
-                        </td>
-                        <td style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle" }}>
-                          {nearestZone
-                            ? <span style={{ color: nearestZone.type === "support" ? "var(--color-buy)" : "var(--color-sell)" }}>
-                                ${nearestZone.price.toFixed(2)} ({nearestZone.type === "support" ? "S" : "R"})
-                              </span>
-                            : "—"}
-                        </td>
-                        <td style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle" }}>
-                          {daysToOpex != null ? `${daysToOpex}d` : "—"}
-                        </td>
-                      </>
-                    )}
                   </tr>
                 );
                 if (row.optionLeg) {
@@ -279,11 +245,12 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
         <div
           role="dialog"
           aria-modal="true"
+          aria-labelledby="stub-dialog-title"
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.62)",
-            zIndex: 45,
+            background: "rgba(0,0,0,0.72)",
+            zIndex: 1100,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -304,7 +271,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ marginBottom: "0.25rem", flexShrink: 0 }}>{stubCore.replace("A_", "")}</h2>
+            <h2 id="stub-dialog-title" style={{ marginBottom: "0.25rem", flexShrink: 0 }}>{stubCore.replace("A_", "")}</h2>
             <p style={{ color: "var(--color-text-muted)", fontSize: "0.8rem", marginBottom: "1.25rem", flexShrink: 0 }}>
               Análisis gráfico en construcción — próximamente disponible.
             </p>
@@ -312,7 +279,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
             {stubResumen && (
               <>
                 <div style={{
-                  borderTop: "1px solid rgba(255,255,255,0.08)",
+                  borderTop: "1px solid var(--color-border-subtle)",
                   paddingTop: "1rem",
                   marginBottom: "0.5rem",
                   flexShrink: 0

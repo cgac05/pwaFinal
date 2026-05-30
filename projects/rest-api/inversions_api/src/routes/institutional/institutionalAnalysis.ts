@@ -97,7 +97,22 @@ institutionalAnalysisRouter.get(
             quarterlyReportImpact: expiration.quarterlyReportImpact,
           }
         : null,
-      metrics: buildInstitutionalMetricsSummary(contract),
+      metrics: (() => {
+        const m = preResolvedResult.merged;
+        return {
+          ticker:                contract.ticker,
+          volume:                m.volume                  ?? contract.volume,
+          openPositionsCount:    m.openPositions?.count    ?? contract.openPositions.count,
+          openPositionsNotional: m.openPositions?.notional ?? contract.openPositions.notional,
+          inflows:               m.flows?.inflows          ?? contract.flows.inflows,
+          outflows:              m.flows?.outflows         ?? contract.flows.outflows,
+          netFlow:               m.flows
+            ? m.flows.inflows - m.flows.outflows
+            : contract.flows.inflows - contract.flows.outflows,
+          fundsOwnershipPct:     m.fundsOwnershipPct       ?? contract.fundsOwnershipPct,
+          liquidity:             m.liquidity               ?? contract.liquidity,
+        };
+      })(),
       sourceReports,
     });
   }

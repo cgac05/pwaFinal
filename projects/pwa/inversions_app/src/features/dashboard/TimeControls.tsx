@@ -98,7 +98,7 @@ export function TimeControls({ symbol, onTimeframeChange, onPeriodChange }: Time
             <button
               key={opt.value}
               className={`btn-ghost ${period === opt.value ? "active" : ""}`}
-              style={{ padding: "0.2rem 0.55rem", fontSize: "var(--font-size-xs)" }}
+              style={{ padding: "0.25rem 0.6rem", fontSize: "var(--font-size-xs)" }}
               onClick={() => handlePeriodChange(opt.value)}
             >
               {opt.label}
@@ -116,7 +116,7 @@ export function TimeControls({ symbol, onTimeframeChange, onPeriodChange }: Time
             if (customStartDate && customEndDate) {
               onPeriodChange?.("custom", new Date(customStartDate), new Date(customEndDate));
             }
-          }} style={{ padding: "0.3rem 0.75rem", fontSize: "var(--font-size-xs)" }}>
+          }} style={{ padding: "0.25rem 0.6rem", fontSize: "var(--font-size-xs)" }}>
             Aplicar
           </button>
         </div>

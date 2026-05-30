@@ -291,7 +291,7 @@ export function CoverageStrategyModal({ isOpen, onClose, initialTicker, initialK
           backgroundColor: loading ? "rgba(73,79,223,0.5)" : "var(--color-accent)",
           color: "white",
           border: "none",
-          borderRadius: "var(--radius-xs)",
+          borderRadius: "var(--radius-pill)",
           padding: "var(--space-xs) var(--space-lg)",
           fontSize: "var(--font-size-sm)",
           fontWeight: 600,
@@ -326,7 +326,7 @@ export function CoverageStrategyModal({ isOpen, onClose, initialTicker, initialK
                       fontWeight: 600,
                       textTransform: "uppercase",
                       letterSpacing: "0.05em",
-                      borderBottom: "1px solid rgba(255,255,255,0.06)",
+                      borderBottom: "1px solid var(--color-border-subtle)",
                     }}
                   >
                     {h}
@@ -346,25 +346,25 @@ export function CoverageStrategyModal({ isOpen, onClose, initialTicker, initialK
                     transition: "background-color var(--duration-fast) var(--easing-standard)",
                   }}
                 >
-                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)", fontWeight: selectedKind === r.kind ? 600 : 400 }}>
+                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", fontWeight: selectedKind === r.kind ? 600 : 400 }}>
                     {KIND_LABELS[r.kind] ?? r.kind}
                   </td>
-                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
                     {r.confidenceScore.toFixed(2)}
                   </td>
-                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)", color: "var(--color-buy)" }}>
+                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", color: "var(--color-buy)" }}>
                     {r.summary.maxProfit === "∞" ? "∞" : `$${Number(r.summary.maxProfit).toLocaleString()}`}
                   </td>
-                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)", color: "var(--color-sell)" }}>
+                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", color: "var(--color-sell)" }}>
                     ${r.summary.maxLoss.toLocaleString()}
                   </td>
-                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
                     ${r.summary.breakEvenPrice.toFixed(2)}
                   </td>
-                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
                     ${r.summary.stopLossPrice.toFixed(2)}
                   </td>
-                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
                     <span
                       style={{
                         color: BADGE_COLORS[r.confidenceLevel],

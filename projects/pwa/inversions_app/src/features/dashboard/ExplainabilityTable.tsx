@@ -51,7 +51,7 @@ export function ExplainabilityTable({ cards }: ExplainabilityTableProps) {
               return (
                 <tr
                   key={card.signalId}
-                  style={{ background: idx % 2 === 1 ? "var(--color-surface-raised)" : "var(--color-surface)" }}
+                  style={{ background: idx % 2 === 1 ? "rgba(255,255,255,0.04)" : "transparent" }}
                 >
                   <td style={{ padding: "0.6rem 0.75rem", borderBottom: "1px solid var(--color-border-subtle)" }}>
                     <strong style={{ fontWeight: "var(--font-weight-emphasis)" }}>{card.instrument}</strong>

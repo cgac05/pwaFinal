@@ -160,7 +160,7 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
                           fontWeight: 600,
                           textTransform: "uppercase",
                           letterSpacing: "0.05em",
-                          borderBottom: "1px solid rgba(255,255,255,0.06)",
+                          borderBottom: "1px solid var(--color-border-subtle)",
                         }}
                       >
                         {h}
@@ -180,25 +180,25 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
                         transition: "background-color var(--duration-fast) var(--easing-standard)",
                       }}
                     >
-                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)", fontWeight: selectedKind === r.kind ? 600 : 400 }}>
+                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", fontWeight: selectedKind === r.kind ? 600 : 400 }}>
                         {KIND_LABELS[r.kind] ?? r.kind}
                       </td>
-                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
                         {r.confidenceScore.toFixed(2)}
                       </td>
-                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)", color: "var(--color-buy)" }}>
+                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", color: "var(--color-buy)" }}>
                         {r.summary.maxProfit === "∞" ? "∞" : `$${Number(r.summary.maxProfit).toLocaleString()}`}
                       </td>
-                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)", color: "var(--color-sell)" }}>
+                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", color: "var(--color-sell)" }}>
                         ${r.summary.maxLoss.toLocaleString()}
                       </td>
-                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
                         ${r.summary.breakEvenPrice.toFixed(2)}
                       </td>
-                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
                         ${r.summary.stopLossPrice.toFixed(2)}
                       </td>
-                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                      <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
                         <span style={{ color: BADGE_COLORS[r.confidenceLevel], fontWeight: 700, fontSize: "var(--font-size-xs)" }}>
                           {r.confidenceLevel}
                         </span>

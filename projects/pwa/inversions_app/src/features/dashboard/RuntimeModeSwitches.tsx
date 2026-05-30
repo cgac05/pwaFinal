@@ -16,6 +16,7 @@ export const RuntimeModeSwitches: React.FC<RuntimeModeProps> = ({ onModeChange }
   const [connStatus, setConnStatus] = useState<"connected" | "disconnected" | "checking">("checking");
   const [showWarning, setShowWarning] = useState(false);
   const [realModeModalOpen, setRealModeModalOpen] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const checkConnection = async () => {
@@ -37,6 +38,7 @@ export const RuntimeModeSwitches: React.FC<RuntimeModeProps> = ({ onModeChange }
   }, []);
 
   const handleToggleOnline = async () => {
+    setErrorMsg(null);
     const newMode = runtimeMode === "online" ? "offline" : "online";
     try {
       const response = await fetch("/api/runtime/mode", {
@@ -44,13 +46,13 @@ export const RuntimeModeSwitches: React.FC<RuntimeModeProps> = ({ onModeChange }
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ mode: newMode, operationalMode })
       });
-      if (!response.ok) { alert(`Failed to change mode: ${response.statusText}`); return; }
+      if (!response.ok) { setErrorMsg(`Error: ${response.statusText}`); return; }
       setRuntimeMode(newMode as "online" | "offline");
       onModeChange?.(newMode === "online", operationalMode);
       setShowWarning(true);
       setTimeout(() => setShowWarning(false), 3000);
     } catch (err) {
-      alert(`Error: ${(err as Error).message}`);
+      setErrorMsg((err as Error).message);
     }
   };
 
@@ -65,19 +67,20 @@ export const RuntimeModeSwitches: React.FC<RuntimeModeProps> = ({ onModeChange }
   };
 
   const applyOperationalMode = async (newOpMode: "demo" | "real") => {
+    setErrorMsg(null);
     try {
       const response = await fetch("/api/runtime/mode", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ mode: runtimeMode, operationalMode: newOpMode })
       });
-      if (!response.ok) { alert(`Failed to change operational mode: ${response.statusText}`); return; }
+      if (!response.ok) { setErrorMsg(`Error: ${response.statusText}`); return; }
       setOperationalMode(newOpMode);
       onModeChange?.(runtimeMode === "online", newOpMode);
       setShowWarning(true);
       setTimeout(() => setShowWarning(false), 3000);
     } catch (err) {
-      alert(`Error: ${(err as Error).message}`);
+      setErrorMsg((err as Error).message);
     }
   };
 
@@ -186,6 +189,12 @@ export const RuntimeModeSwitches: React.FC<RuntimeModeProps> = ({ onModeChange }
           }}>
             ⚠️ TRADING REAL activo — revisa órdenes antes de aprobar
           </div>
+        )}
+
+        {errorMsg && (
+          <p style={{ color: "var(--color-sell)", fontSize: "var(--font-size-sm)", marginTop: "var(--space-xs)", margin: 0 }}>
+            {errorMsg}
+          </p>
         )}
       </div>
 

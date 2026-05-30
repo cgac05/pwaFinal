@@ -26,9 +26,9 @@ interface Props {
 }
 
 const inputStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.12)",
-  borderRadius: "var(--radius-xs)",
+  background: "var(--color-surface-raised)",
+  border: "1px solid var(--color-border)",
+  borderRadius: "var(--radius-sm)",
   color: "var(--color-text)",
   fontSize: "var(--font-size-sm)",
   padding: "var(--space-xs) var(--space-sm)",
@@ -62,7 +62,7 @@ export function CoverageParamsModal({ open, estrategia, ticker, params, onChange
       style={{
         position: "fixed", inset: 0,
         background: "rgba(0,0,0,0.72)",
-        zIndex: 45,
+        zIndex: 1100,
         display: "flex", alignItems: "center", justifyContent: "center",
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}

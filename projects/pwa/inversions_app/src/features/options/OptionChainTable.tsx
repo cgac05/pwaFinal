@@ -295,7 +295,7 @@ export function OptionChainTable({ symbol, onSelectStrike }: OptionChainTablePro
   const scrollBody: React.CSSProperties = {
     flex: 1,
     overflow: "auto",
-    borderRadius: "var(--radius-lg)",
+    borderRadius: "var(--radius-sm)",
     border: "1px solid var(--color-border)",
   };
 

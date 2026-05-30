@@ -286,7 +286,7 @@ export function MainDashboard() {
                   <div>
                     <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "0 0 4px" }}>Tendencia</p>
                     <p style={{ fontWeight: 600, margin: 0, color: instData.trends.direction === "bullish" ? "var(--color-buy)" : instData.trends.direction === "bearish" ? "var(--color-sell)" : "var(--color-text-muted)" }}>
-                      {instData.trends.direction === "bullish" ? "🟢 Bullish" : instData.trends.direction === "bearish" ? "🔴 Bearish" : "⚫ Neutral"}
+                      {instData.trends.direction === "bullish" ? <><span style={{ color: "var(--color-buy)" }}>●</span> Bullish</> : instData.trends.direction === "bearish" ? <><span style={{ color: "var(--color-sell)" }}>●</span> Bearish</> : <><span style={{ color: "var(--color-text-muted)" }}>●</span> Neutral</>}
                     </p>
                   </div>
                 )}
@@ -321,7 +321,7 @@ export function MainDashboard() {
                   <p style={{ fontSize: "var(--font-size-xs)", margin: 0 }}>
                     {instData.sourceReports.map((s) => (
                       <span key={s.sourceId} style={{ marginRight: "var(--space-xs)" }}>
-                        {s.status === "ok" ? "✅" : s.status === "partial" ? "⚠️" : "❌"} {s.sourceId.split("_")[0]}
+                        {s.status === "ok" ? <span style={{ color: "var(--color-buy)", fontWeight: 700 }}>●</span> : s.status === "partial" ? <span style={{ color: "var(--color-warning)", fontWeight: 700 }}>●</span> : <span style={{ color: "var(--color-sell)", fontWeight: 700 }}>●</span>} {s.sourceId.split("_")[0]}
                       </span>
                     ))}
                   </p>
@@ -369,7 +369,9 @@ export function MainDashboard() {
       />
 
       {/* FAB — Copilot IA */}
+      <style>{`.fab-btn:hover{transform:scale(1.08);box-shadow:0 6px 20px rgba(73,79,223,0.55)}@media(prefers-reduced-motion:reduce){.fab-btn{transition:none!important}}`}</style>
       <button
+        className="fab-btn"
         onClick={() => setCopilotOpen(true)}
         title="Abrir Copilot IA"
         style={{
@@ -387,15 +389,7 @@ export function MainDashboard() {
           justifyContent: "center",
           boxShadow: "0 4px 16px rgba(73, 79, 223, 0.5)",
           zIndex: 900,
-          transition: "transform 0.2s ease, box-shadow 0.2s ease"
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)";
-          (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 6px 20px rgba(73, 79, 223, 0.7)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
-          (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 16px rgba(73, 79, 223, 0.5)";
+          transition: "transform var(--duration-normal) var(--easing-standard), box-shadow var(--duration-normal) var(--easing-standard)"
         }}
       >
         <MessageSquare size={24} color="#ffffff" />
