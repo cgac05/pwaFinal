@@ -1,58 +1,37 @@
-// FIC: ActivityBar unit tests — keyboard navigation, aria-labels, section toggle behavior.
-// FIC: Tests unitarios de ActivityBar — navegación por teclado, aria-labels, comportamiento de toggle de sección.
+// FIC: ActivityBar unit tests — navigation button and toggle behavior.
 
+import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ActivityBar } from "./ActivityBar";
 
-const mockSetActiveSection = vi.fn();
+const mockToggleLeftPanel = vi.fn();
 
 vi.mock("../../store/appShell", () => ({
   useAppShellStore: () => ({
-    activeSection: "watchlist",
     leftPanelCollapsed: false,
-    setActiveSection: mockSetActiveSection,
+    toggleLeftPanel: mockToggleLeftPanel,
   }),
 }));
 
 describe("ActivityBar", () => {
-  beforeEach(() => { mockSetActiveSection.mockClear(); });
+  beforeEach(() => {
+    mockToggleLeftPanel.mockClear();
+  });
 
-  it("renderiza los 3 botones de navegación", () => {
+  it("renderiza el botón de navegación Watchlist", () => {
     render(<ActivityBar />);
     expect(screen.getByRole("button", { name: "Watchlist" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Análisis" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Estrategias" })).toBeDefined();
   });
 
-  it("cada botón tiene aria-label correcto", () => {
+  it("el botón tiene aria-label correcto", () => {
     render(<ActivityBar />);
     expect(screen.getByLabelText("Watchlist")).toBeDefined();
-    expect(screen.getByLabelText("Análisis")).toBeDefined();
-    expect(screen.getByLabelText("Estrategias")).toBeDefined();
   });
 
-  it("clic en ícono inactivo llama setActiveSection con la sección correcta", () => {
+  it("clic en el botón llama a toggleLeftPanel", () => {
     render(<ActivityBar />);
-    fireEvent.click(screen.getByLabelText("Análisis"));
-    expect(mockSetActiveSection).toHaveBeenCalledWith("analysis");
-  });
-
-  it("clic en ícono activo llama setActiveSection (toggle de colapso lo maneja el store)", () => {
-    render(<ActivityBar />);
-    fireEvent.click(screen.getByLabelText("Watchlist")); // already active
-    expect(mockSetActiveSection).toHaveBeenCalledWith("watchlist");
-  });
-
-  it("Enter activa el botón de sección", () => {
-    render(<ActivityBar />);
-    fireEvent.keyDown(screen.getByLabelText("Estrategias"), { key: "Enter" });
-    expect(mockSetActiveSection).toHaveBeenCalledWith("strategies");
-  });
-
-  it("Space activa el botón de sección", () => {
-    render(<ActivityBar />);
-    fireEvent.keyDown(screen.getByLabelText("Análisis"), { key: " " });
-    expect(mockSetActiveSection).toHaveBeenCalledWith("analysis");
+    fireEvent.click(screen.getByLabelText("Watchlist"));
+    expect(mockToggleLeftPanel).toHaveBeenCalled();
   });
 });

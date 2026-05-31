@@ -11,7 +11,7 @@ vi.mock("../signals/signalApi", () => ({
 const baseReq = { symbol: "AAPL", timeframe: "1d", question: "¿Tendencia?" };
 
 function mockFetch(status: number, body: unknown) {
-  global.fetch = vi.fn().mockResolvedValue({
+  globalThis.fetch = vi.fn().mockResolvedValue({
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
@@ -33,7 +33,7 @@ describe("sendChatMessage", () => {
   });
 
   it("error 400 sin body usa mensaje genérico", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 400,
       json: async () => { throw new Error("no json"); },
@@ -52,7 +52,7 @@ describe("sendChatMessage", () => {
   });
 
   it("error de red lanza error descriptivo", async () => {
-    global.fetch = vi.fn().mockRejectedValue(new Error("fetch failed"));
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error("fetch failed"));
     await expect(sendChatMessage(baseReq)).rejects.toThrow("Error de red");
   });
 });

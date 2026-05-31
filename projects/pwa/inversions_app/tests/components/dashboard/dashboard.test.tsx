@@ -7,6 +7,7 @@ import { ExplainabilityTable } from "../../../src/features/dashboard/Explainabil
 import { MainDashboard } from "../../../src/features/dashboard/MainDashboard";
 
 vi.mock("../../../src/services/signals/signalApi", () => ({
+  getAuthHeaders: vi.fn(() => ({})),
   getDashboardOrchestrator: vi.fn(async () => ({
     timeframe: "1d",
     generatedAt: new Date().toISOString(),
@@ -100,7 +101,7 @@ describe("dashboard components", () => {
       render(<MainDashboard />);
     });
 
-    expect(screen.getByText(/Dashboard de Confluencia/i)).toBeTruthy();
-    expect(screen.getByText(/Cores analíticos/i)).toBeTruthy();
+    expect(screen.getByText(/Inversions/i)).toBeTruthy();
+    expect(screen.getByText(/Cores de Análisis/i)).toBeTruthy();
   });
 });

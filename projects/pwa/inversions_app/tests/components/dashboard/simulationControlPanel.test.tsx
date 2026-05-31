@@ -22,16 +22,16 @@ vi.mock("../../../src/services/signals/confluenceTableApi", async () => {
 describe("SimulationControlPanel", () => {
   it("renders the canonical inputs from PDF v1", () => {
     render(<SimulationControlPanel ticket="AAPL" onResult={() => {}} />);
-    expect(screen.getByText(/Rango Historico/i)).toBeTruthy();
+    expect(screen.getByText(/Rango Histórico/i)).toBeTruthy();
     expect(screen.getByText(/Temporalidad/i)).toBeTruthy();
-    expect(screen.getByText(/Estrategia$/i)).toBeTruthy();
-    expect(screen.getByText(/Tolerancia Riesgo/i)).toBeTruthy();
+    expect(screen.getByText(/^Estrategia$/i)).toBeTruthy();
+    expect(screen.getByText(/Tolerancia al Riesgo/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /Ejecutar/i })).toBeTruthy();
   });
 
   it("toggles cores SI/NO buttons", () => {
     render(<SimulationControlPanel ticket="AAPL" onResult={() => {}} />);
-    const noLabels = screen.getAllByText(/A_INDICADORES/i);
+    const noLabels = screen.getAllByText(/Indicadores/i);
     expect(noLabels.length).toBeGreaterThan(0);
   });
 

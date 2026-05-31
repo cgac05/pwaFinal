@@ -20,7 +20,7 @@ export function getRuntimeMode(userId: string): RuntimeModeState {
 
   const initial: RuntimeModeState = {
     mode: "online",
-    operationalMode: "real",
+    operationalMode: "demo",
     updatedAt: new Date().toISOString()
   };
   userRuntimeMode.set(userId, initial);

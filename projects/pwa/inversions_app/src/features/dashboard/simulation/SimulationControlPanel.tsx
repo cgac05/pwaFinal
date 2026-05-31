@@ -17,6 +17,7 @@ import {
 import { TermStrategyModal, type TermStrategyParams } from "./TermStrategyModal";
 import { CoverageParamsModal, type CoverageModalParams } from "./CoverageParamsModal";
 import { WheelParamsModal, type WheelModalParams } from "./WheelParamsModal";
+import { useSignalStore } from "../../../store/signals";
 
 // ─── Panel CSS ─────────────────────────────────────────────────────────────────
 // Uses only real Revolut design-system tokens from tokens.css.
@@ -532,6 +533,7 @@ export function SimulationControlPanel({
   onCoverageParamsConfirmed,
   onWheelParamsConfirmed,
 }: Props) {
+  const { incrementSimulationRunCount } = useSignalStore();
   const [preset, setPreset]               = useState<Preset>("3M");
   const [estrategiaFrom, setEstrategiaFrom] = useState(isoToday());
   const [estrategiaTo, setEstrategiaTo]   = useState(isoPlusDays(30));
@@ -607,7 +609,9 @@ export function SimulationControlPanel({
         estrategia,
         toleranciaRiesgo: tolerancia,
       };
-      onResult(await runSimulation(payload));
+      const result = await runSimulation(payload);
+      onResult(result);
+      incrementSimulationRunCount();
     } catch (err) {
       setError(err instanceof Error ? err.message : "simulation_failed");
     } finally {

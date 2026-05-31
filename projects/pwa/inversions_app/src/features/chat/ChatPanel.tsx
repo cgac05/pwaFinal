@@ -130,8 +130,7 @@ export function ChatPanel() {
 
   const handleRetry = useCallback((messageId: string) => {
     const errorMsg = messages.find((m) => m.id === messageId);
-    const preceding = messages.findLast?.((m) => m.role === "user") ??
-      messages.slice().reverse().find((m) => m.role === "user");
+    const preceding = messages.slice().reverse().find((m) => m.role === "user");
     if (preceding) {
       void handleSend(preceding.content);
     } else if (errorMsg) {

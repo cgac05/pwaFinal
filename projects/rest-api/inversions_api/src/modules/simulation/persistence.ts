@@ -2,6 +2,7 @@
 // FIC: Best-effort persistence of simulation_runs (FR-008) — auditing without blocking the response.
 
 import type { SimulationRunResult } from "./runner";
+import { mockDb } from "../volatility/mockDb";
 
 let cachedClient: any = null;
 let lookupTried = false;
@@ -28,6 +29,31 @@ export async function persistSimulationRun(
   result: SimulationRunResult,
   userId?: string
 ): Promise<void> {
+  try {
+    const aiRow = result.table.find((row) => row.core === "A_IA");
+    if (aiRow) {
+      const decisionText = aiRow.tipoSenal === "CALL" ? "SÍ" : "NO";
+      const justification = aiRow.observacion?.explicacion || "Sin justificación.";
+      const analysisSummary = aiRow.observacion?.explicacion || "Sin análisis.";
+
+      const newResult: any = {
+        id: `res_sim_${Date.now()}`,
+        ticker: (result.inputs_echo.ticket || "UNKNOWN").toUpperCase(),
+        decision: decisionText,
+        justification,
+        date: new Date().toISOString(),
+        scores: `Score Financiero: N/A\nScore Técnico: N/A\nScore Noticias: N/A\nScore Opciones: N/A (Origen: Simulación Core IA - ${aiRow.tipoSenal})`,
+        chatHistory: [],
+        analysisSummary,
+        analysisSource: "gemini",
+      };
+
+      mockDb.results.unshift(newResult);
+    }
+  } catch (err) {
+    console.error("Error intercepting A_IA persistence in mockDb:", err);
+  }
+
   const client = tryGetClient();
   if (!client) return;
   try {

@@ -36,10 +36,11 @@ interface GlobalChatDrawerProps {
 }
 
 export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalChatDrawerProps) {
-  const { selectedInstrument } = useSignalStore();
+  const { selectedInstrument, simulationRunCount } = useSignalStore();
   const activeTicker = selectedInstrument?.symbol ?? "SPY";
 
-  const [messages, setMessages] = useState<ExtendedChatMessage[]>([]);
+  const [chatHistories, setChatHistories] = useState<Record<string, ExtendedChatMessage[]>>({});
+  const currentMessages = chatHistories[activeTicker] ?? [];
   const [results, setResults] = useState<MockResult[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
   const [selectedModel, setSelectedModel] = useState<'primary' | 'fallback'>('primary');
@@ -49,6 +50,10 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
   const [showReports, setShowReports] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const filteredResults = results.filter(
+    (item) => item.ticker.toUpperCase() === activeTicker.toUpperCase()
+  );
 
   const loadEvaluationResults = useCallback(async () => {
     setLoadingResults(true);
@@ -64,11 +69,11 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
 
   useEffect(() => {
     void loadEvaluationResults();
-  }, [loadEvaluationResults]);
+  }, [loadEvaluationResults, simulationRunCount]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [currentMessages, loading]);
 
   const handleSend = useCallback(async (customQuestion?: string) => {
     const question = (customQuestion ?? input).trim();
@@ -88,7 +93,10 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
       timestamp: new Date().toISOString()
     };
 
-    setMessages(prev => [...prev, newUserMessage]);
+    setChatHistories(prev => ({
+      ...prev,
+      [activeTicker]: [...(prev[activeTicker] ?? []), newUserMessage]
+    }));
 
     const assistantMessageId = `ai-${Date.now()}`;
     const newAssistantMessage: ExtendedChatMessage = {
@@ -99,7 +107,10 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
       status: "pending"
     };
 
-    setMessages(prev => [...prev, newAssistantMessage]);
+    setChatHistories(prev => ({
+      ...prev,
+      [activeTicker]: [...(prev[activeTicker] ?? []), newAssistantMessage]
+    }));
 
     try {
       const apiMessage = isInline ? question : `[Activo: ${activeTicker}] ${question}`;
@@ -113,31 +124,40 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
       const intervalId = setInterval(() => {
         if (currentIndex >= replyText.length) {
           clearInterval(intervalId);
-          setMessages(prev => prev.map(msg =>
-            msg.id === assistantMessageId
-              ? { ...msg, content: replyText, modelUsed: reply.model, status: "completed" }
-              : msg
-          ));
+          setChatHistories(prev => ({
+            ...prev,
+            [activeTicker]: (prev[activeTicker] ?? []).map(msg =>
+              msg.id === assistantMessageId
+                ? { ...msg, content: replyText, modelUsed: reply.model, status: "completed" }
+                : msg
+            )
+          }));
           setLoading(false);
         } else {
           currentIndex += chunkSize;
           const nextText = replyText.slice(0, currentIndex);
-          setMessages(prev => prev.map(msg =>
-            msg.id === assistantMessageId
-              ? { ...msg, content: nextText + "▌", status: "completed" }
-              : msg
-          ));
+          setChatHistories(prev => ({
+            ...prev,
+            [activeTicker]: (prev[activeTicker] ?? []).map(msg =>
+              msg.id === assistantMessageId
+                ? { ...msg, content: nextText + "▌", status: "completed" }
+                : msg
+            )
+          }));
         }
       }, typingSpeed);
 
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo conectar con el modelo Gemini.";
       setErrorMsg(message);
-      setMessages(prev => prev.map(msg =>
-        msg.id === assistantMessageId
-          ? { ...msg, content: `Error de Auditoría: No se pudo obtener respuesta del modelo. Detalle: ${message}`, status: "error" }
-          : msg
-      ));
+      setChatHistories(prev => ({
+        ...prev,
+        [activeTicker]: (prev[activeTicker] ?? []).map(msg =>
+          msg.id === assistantMessageId
+            ? { ...msg, content: `Error de Auditoría: No se pudo obtener respuesta del modelo. Detalle: ${message}`, status: "error" }
+            : msg
+        )
+      }));
       setLoading(false);
     }
   }, [input, loading, selectedModel, activeTicker, isInline]);
@@ -150,7 +170,10 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
   };
 
   const clearChat = () => {
-    setMessages([]);
+    setChatHistories(prev => ({
+      ...prev,
+      [activeTicker]: []
+    }));
     setErrorMsg(null);
   };
 
@@ -226,7 +249,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 <div className="skeleton" style={{ width: "24px", height: "24px", borderRadius: "50%" }} />
                 <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>Cargando catálogo...</span>
               </div>
-            ) : results.length === 0 ? (
+            ) : filteredResults.length === 0 ? (
               <div style={{
                 display: "flex",
                 flexDirection: "column",
@@ -240,28 +263,15 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 <AlertCircle size={32} color="var(--color-hold)" />
                 <div>
                   <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--color-text-muted)", lineHeight: 1.4 }}>
-                    No se han encontrado reportes de evaluación analizados.
+                    No se han encontrado reportes de evaluación para {activeTicker}.
                   </p>
                   <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.75rem", color: "var(--color-text-muted)", opacity: 0.7 }}>
-                    Debes correr el simulador primero.
+                    Debes correr el simulador con {activeTicker} primero.
                   </p>
                 </div>
-                <span
-                  className="btn-primary"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    fontSize: "0.75rem",
-                    padding: "0.4rem 0.8rem"
-                  }}
-                >
-                  Ir a Evaluar
-                  <ArrowRight size={12} />
-                </span>
               </div>
             ) : (
-              results.map((item) => (
+              filteredResults.map((item) => (
                 <div
                   key={item.id}
                   style={{
@@ -415,7 +425,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
             flexDirection: "column",
             gap: "1.25rem"
           }}>
-            {messages.length === 0 ? (
+            {currentMessages.length === 0 ? (
               <div style={{
                 display: "flex",
                 flexDirection: "column",
@@ -501,7 +511,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 </div>
               </div>
             ) : (
-              messages.map((msg) => (
+              currentMessages.map((msg) => (
                 <div
                   key={msg.id}
                   style={{
@@ -563,7 +573,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
               ))
             )}
 
-            {loading && messages.length > 0 && messages[messages.length - 1].status === "pending" && (
+            {loading && currentMessages.length > 0 && currentMessages[currentMessages.length - 1].status === "pending" && (
               <div style={{
                 alignSelf: "flex-start",
                 display: "flex",
@@ -614,7 +624,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
             <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end" }}>
               <button
                 onClick={clearChat}
-                disabled={messages.length === 0 || loading}
+                disabled={currentMessages.length === 0 || loading}
                 className="btn-ghost"
                 style={{
                   padding: "0.65rem",
@@ -628,7 +638,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 }}
                 title="Limpiar chat"
               >
-                <Trash2 size={16} style={{ color: messages.length === 0 ? "var(--color-text-muted)" : "var(--color-sell)" }} />
+                <Trash2 size={16} style={{ color: currentMessages.length === 0 ? "var(--color-text-muted)" : "var(--color-sell)" }} />
               </button>
 
               <div style={{ flex: 1, position: "relative" }}>
@@ -845,7 +855,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           >
             <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
               <Layers size={13} color="var(--color-accent)" />
-              Reportes de Volatilidad ({results.length})
+              Reportes de Volatilidad ({filteredResults.length})
             </span>
             <span style={{ fontSize: "0.7rem", color: "var(--color-text-muted)" }}>
               {showReports ? "▲ Ocultar" : "▼ Desplegar"}
@@ -867,12 +877,12 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 <div style={{ padding: "1rem", textAlign: "center", fontSize: "0.7rem", color: "var(--color-text-muted)" }}>
                   Cargando...
                 </div>
-              ) : results.length === 0 ? (
+              ) : filteredResults.length === 0 ? (
                 <div style={{ padding: "1rem", textAlign: "center", fontSize: "0.7rem", color: "var(--color-text-muted)" }}>
-                  Sin reportes. Corre la simulación primero.
+                  Sin reportes para {activeTicker}. Corre la simulación primero.
                 </div>
               ) : (
-                results.map((item) => (
+                filteredResults.map((item) => (
                   <div
                     key={item.id}
                     onClick={() => {
@@ -923,7 +933,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           flexDirection: "column",
           gap: "1rem"
         }}>
-          {messages.length === 0 ? (
+          {currentMessages.length === 0 ? (
             <div style={{
               display: "flex",
               flexDirection: "column",
@@ -990,7 +1000,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
               </div>
             </div>
           ) : (
-            messages.map((msg) => (
+            currentMessages.map((msg) => (
               <div
                 key={msg.id}
                 style={{
@@ -1051,7 +1061,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
             ))
           )}
 
-          {loading && messages.length > 0 && messages[messages.length - 1].status === "pending" && (
+          {loading && currentMessages.length > 0 && currentMessages[currentMessages.length - 1].status === "pending" && (
             <div style={{
               alignSelf: "flex-start",
               display: "flex",
@@ -1103,7 +1113,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
             <button
               onClick={clearChat}
-              disabled={messages.length === 0 || loading}
+              disabled={currentMessages.length === 0 || loading}
               className="btn-ghost"
               style={{
                 padding: "0.5rem",
@@ -1117,7 +1127,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
               }}
               title="Limpiar chat"
             >
-              <Trash2 size={14} style={{ color: messages.length === 0 ? "var(--color-text-muted)" : "var(--color-sell)" }} />
+              <Trash2 size={14} style={{ color: currentMessages.length === 0 ? "var(--color-text-muted)" : "var(--color-sell)" }} />
             </button>
 
             <div style={{ flex: 1, position: "relative" }}>

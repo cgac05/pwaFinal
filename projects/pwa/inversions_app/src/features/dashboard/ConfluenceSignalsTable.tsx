@@ -13,7 +13,7 @@ import type { InstitutionalAnalysisResponse } from "../../services/institutional
 import { OptionGreeksRow } from "./OptionGreeksRow";
 import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailModal";
 import { AiDetailModal } from "../ai/AiDetailModal";
-import type { ModalRowData } from "../institutional/types";
+import { ObservationsTab } from "./ObservationsTab";
 import { MarkdownContent } from "../../components/ui/MarkdownContent";
 
 // FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
@@ -425,7 +425,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
       <AiDetailModal
         isOpen={aiModalOpen}
         onClose={() => { setAiModalOpen(false); setStubRow(null); }}
-        ticker={symbol}
+        ticker={symbol ?? ""}
         signalRow={stubRow ?? undefined}
         activeStrategy={activeStrategy}
       />

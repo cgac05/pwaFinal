@@ -34,7 +34,7 @@ const sampleRow = (overrides: Partial<ConfluenceSignalRow> = {}): ConfluenceSign
 describe("ConfluenceSignalsTable (PDF v1)", () => {
   it("renders 13 canonical column headers", () => {
     render(<ConfluenceSignalsTable rows={[sampleRow()]} />);
-    for (const label of ["TICKET", "CORE", "SUBCORE", "PRECIO", "TIPO SEÑAL", "FECHA", "TIMEFRAME", "TENDENCIA", "SCORE", "PESO", "INVERTIR", "ESTADO", "OBSERVACION"]) {
+    for (const label of ["TICKET", "CORE", "SUBCORE", "PRECIO", "TIPO SEÑAL", "FECHA", "TIMEFRAME", "TENDENCIA", "SCORE", "PESO", "INVERTIR", "ESTADO", "ESTRATEGIA"]) {
       expect(screen.getByText(label)).toBeTruthy();
     }
   });

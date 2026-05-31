@@ -249,19 +249,20 @@ export const SuperChart: React.FC<SuperChartProps> = ({
         setTechData(data);
 
         // 1. Draw horizontal Support / Resistance lines
-        if (candleSeriesRef.current) {
+        const candleSeries = candleSeriesRef.current;
+        if (candleSeries) {
           supportResistanceLinesRef.current.forEach((line) => {
-            candleSeriesRef.current.removePriceLine(line);
+            candleSeries.removePriceLine(line);
           });
           supportResistanceLinesRef.current = [];
 
           if (data.supports) {
             data.supports.forEach((level: any) => {
-              const priceLine = candleSeriesRef.current.createPriceLine({
+              const priceLine = candleSeries.createPriceLine({
                 price: level.price,
                 color: "rgba(0,168,126,0.6)",
                 lineStyle: LineStyle.Dashed,
-                lineWidth: 1.5,
+                lineWidth: 1,
                 axisLabelVisible: true,
                 title: `S(${level.touches})`,
               });
@@ -271,11 +272,11 @@ export const SuperChart: React.FC<SuperChartProps> = ({
 
           if (data.resistances) {
             data.resistances.forEach((level: any) => {
-              const priceLine = candleSeriesRef.current.createPriceLine({
+              const priceLine = candleSeries.createPriceLine({
                 price: level.price,
                 color: "rgba(226,59,74,0.6)",
                 lineStyle: LineStyle.Dashed,
-                lineWidth: 1.5,
+                lineWidth: 1,
                 axisLabelVisible: true,
                 title: `R(${level.touches})`,
               });
@@ -290,7 +291,7 @@ export const SuperChart: React.FC<SuperChartProps> = ({
           if (!bullishSeriesRef.current) {
             bullishSeriesRef.current = chartRef.current.addSeries(LineSeries, {
               color: "#2196f3",
-              lineWidth: 2.5,
+              lineWidth: 2,
               priceLineVisible: false,
               lastValueVisible: false,
               crosshairMarkerVisible: false,
@@ -299,7 +300,7 @@ export const SuperChart: React.FC<SuperChartProps> = ({
           if (!bearishSeriesRef.current) {
             bearishSeriesRef.current = chartRef.current.addSeries(LineSeries, {
               color: "#ef5350",
-              lineWidth: 2.5,
+              lineWidth: 2,
               priceLineVisible: false,
               lastValueVisible: false,
               crosshairMarkerVisible: false,
@@ -358,9 +359,10 @@ export const SuperChart: React.FC<SuperChartProps> = ({
   // Clean up all drawings on unmount or symbol change
   useEffect(() => {
     return () => {
-      if (candleSeriesRef.current) {
+      const candleSeries = candleSeriesRef.current;
+      if (candleSeries) {
         supportResistanceLinesRef.current.forEach((line) => {
-          candleSeriesRef.current.removePriceLine(line);
+          candleSeries.removePriceLine(line);
         });
         supportResistanceLinesRef.current = [];
       }
