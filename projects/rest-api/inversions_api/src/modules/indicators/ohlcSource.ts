@@ -5,6 +5,10 @@ import type { OhlcBar, Timeframe } from "./types";
 import { fetchYahooOhlc } from "../institutional/yahooChartParser";
 import { createHash } from "node:crypto";
 
+// FIC: 5-minute cache prevents Yahoo Finance rate-limiting when multiple strategies run concurrently. (EN)
+// FIC: Caché de 5 minutos previene rate-limiting de Yahoo cuando varias estrategias corren en paralelo. (ES)
+const candleCache = new Map<string, { data: OhlcBar[]; expiresAt: number }>();
+
 const TIMEFRAME_MS: Record<Timeframe, number> = {
   "1m": 60_000,
   "5m": 300_000,
@@ -57,11 +61,17 @@ function getMockCandles({ symbol, timeframe, count = 300, endTimeMs }: GetCandle
 export async function getCandles(opts: GetCandlesOptions): Promise<OhlcBar[]> {
   const { symbol, timeframe, count = 300 } = opts;
 
+  const cacheKey = `${symbol}:${timeframe}:${count}`;
+  const cached = candleCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data;
+  }
+
   try {
     const yahooCandles = await fetchYahooOhlc(symbol, timeframe);
     if (yahooCandles && yahooCandles.length >= Math.min(count, 20)) {
       const sliced = yahooCandles.slice(-count);
-      return sliced.map((c) => ({
+      const result = sliced.map((c) => ({
         time: c.time,
         open: c.open,
         high: c.high,
@@ -69,6 +79,8 @@ export async function getCandles(opts: GetCandlesOptions): Promise<OhlcBar[]> {
         close: c.close,
         volume: c.volume,
       }));
+      candleCache.set(cacheKey, { data: result, expiresAt: Date.now() + 300_000 });
+      return result;
     }
   } catch {
     // fall through to mock
