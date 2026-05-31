@@ -1,15 +1,17 @@
 // FIC: News Section — integración de análisis de noticias reales en el dashboard principal.
 // FIC: Muestra noticias clickeables que abren modal con detalles completos.
 
-import React, { useState } from "react";
+import React from "react";
 import { Newspaper } from "lucide-react";
+import type { NewsDateRange } from "../../services/news/newsApi";
 import { NewsSourcesAnalyzer } from "../news/NewsSourcesAnalyzer";
 
 interface NewsSectionProps {
   symbol?: string;
+  dateRange?: NewsDateRange;
 }
 
-export function NewsSection({ symbol = "SPY" }: NewsSectionProps) {
+export function NewsSection({ symbol = "SPY", dateRange }: NewsSectionProps) {
   return (
     <section className="card" style={{ padding: 0, overflow: "hidden" }}>
       <div style={{
@@ -27,7 +29,7 @@ export function NewsSection({ symbol = "SPY" }: NewsSectionProps) {
       </div>
 
       <div style={{ padding: "var(--space-lg)" }}>
-        <NewsSourcesAnalyzer symbol={symbol} />
+        <NewsSourcesAnalyzer symbol={symbol} dateRange={dateRange} />
       </div>
     </section>
   );

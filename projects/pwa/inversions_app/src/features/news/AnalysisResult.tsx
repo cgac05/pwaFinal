@@ -1,5 +1,5 @@
 import { ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AnalyzedNewsSource, NewsAnalysisAggregate, NewsConfluenceResponse, NewsVerdict } from "../../services/news/newsApi";
 
 interface AnalysisResultProps {
@@ -175,6 +175,14 @@ export function AnalysisResult({ confluence, manualAnalysis }: AnalysisResultPro
   const [currentPageManual, setCurrentPageManual] = useState(0);
   
   const ITEMS_PER_PAGE = 12;
+
+  useEffect(() => {
+    setCurrentPageConfluence(0);
+  }, [confluence?.generatedAt, confluence?.symbol, confluence?.articles.length]);
+
+  useEffect(() => {
+    setCurrentPageManual(0);
+  }, [manualAnalysis?.generatedAt, manualAnalysis?.symbol, manualAnalysis?.sources.length]);
 
   if (!confluence && !manualAnalysis) {
     return <p className="tnmt-empty">Carga noticias reales del ticker o pega fuentes propias para ver resultados.</p>;

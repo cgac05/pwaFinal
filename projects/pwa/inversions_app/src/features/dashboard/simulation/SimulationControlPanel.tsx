@@ -536,6 +536,7 @@ interface Props {
   onResult: (result: SimulationResponse) => void;
   onExecute?: (activeCoreIds: CoreId[]) => void;
   onStrategyChange?: (estrategia: string) => void;
+  onSimulationRangeChange?: (range: { from: string; to: string }) => void;
   onCoverageParamsConfirmed?: (params: CoverageModalParams, kind: string) => void;
   // FIC: Callback fired when user clicks "Analizar Wheel" — lifts params to MainDashboard. (EN)
   // FIC: Callback al hacer click en "Analizar Wheel" — sube params a MainDashboard. (ES)
@@ -549,6 +550,7 @@ export function SimulationControlPanel({
   onResult,
   onExecute,
   onStrategyChange,
+  onSimulationRangeChange,
   onCoverageParamsConfirmed,
   onWheelParamsConfirmed,
   onSpreadParamsConfirmed,
@@ -609,6 +611,10 @@ export function SimulationControlPanel({
       })
       .catch(() => { /* user can enter manually */ });
   }, [wheelModalOpen, ticket, wheelParams.csp.currentPrice]);
+
+  useEffect(() => {
+    onSimulationRangeChange?.({ from: estrategiaFrom, to: estrategiaTo });
+  }, [estrategiaFrom, estrategiaTo, onSimulationRangeChange]);
 
   const handleEstrategiaChange = (e: string) => {
     setEstrategia(e);

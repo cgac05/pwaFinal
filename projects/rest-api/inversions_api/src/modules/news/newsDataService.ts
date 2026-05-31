@@ -57,12 +57,14 @@ interface ProviderResult {
 
 function normalizeInput(input: string | NewsQueryParams, limit = 8): Required<NewsQueryParams> {
   if (typeof input === "string") {
-    return { symbol: input.trim().toUpperCase() || "SPY", limit, includeFallback: false };
+    return { symbol: input.trim().toUpperCase() || "SPY", limit, from: "", to: "", includeFallback: false };
   }
 
   return {
     symbol: input.symbol.trim().toUpperCase() || "SPY",
     limit: input.limit ?? limit,
+    from: input.from ?? "",
+    to: input.to ?? "",
     includeFallback: false
   };
 }
@@ -91,6 +93,27 @@ function toIsoDate(daysAgo = 0): string {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() - daysAgo);
   return date.toISOString().slice(0, 10);
+}
+
+function normalizeDate(value?: string): string | undefined {
+  const text = value?.trim();
+  return text ? text.slice(0, 10) : undefined;
+}
+
+function isWithinDateRange(publishedAt: string | undefined, from?: string, to?: string): boolean {
+  if (!from && !to) return true;
+  const date = publishedAt ? new Date(publishedAt) : null;
+  if (!date || Number.isNaN(date.getTime())) return false;
+  const timestamp = date.getTime();
+  if (from) {
+    const fromDate = new Date(`${from}T00:00:00.000Z`);
+    if (timestamp < fromDate.getTime()) return false;
+  }
+  if (to) {
+    const toDate = new Date(`${to}T23:59:59.999Z`);
+    if (timestamp > toDate.getTime()) return false;
+  }
+  return true;
 }
 
 function getEnv(name: string): string | undefined {
@@ -226,7 +249,7 @@ async function fetchNewsApi(symbol: string, limit: number, timeoutMs: number): P
     q: `(${symbol} OR "${company}") AND (stock OR shares OR earnings OR market)`,
     language: "en",
     sortBy: "publishedAt",
-    pageSize: String(Math.min(20, limit)),
+    pageSize: String(Math.min(100, limit)),
     apiKey
   });
   const payload = await fetchJson<{ articles?: Array<{ title?: string; description?: string; content?: string; url?: string; publishedAt?: string; source?: { name?: string } }> }>(
@@ -279,7 +302,7 @@ async function fetchPolygon(symbol: string, limit: number, timeoutMs: number): P
 
   const params = new URLSearchParams({
     ticker: symbol,
-    limit: String(Math.min(20, limit)),
+    limit: String(Math.min(100, limit)),
     order: "desc",
     sort: "published_utc",
     apiKey
@@ -318,6 +341,8 @@ function sortByDate(items: NewsSourceInput[]): NewsSourceInput[] {
 
 export async function fetchNewsData(input: string | NewsQueryParams, defaultLimit = 8): Promise<NewsDataResponse> {
   const params = normalizeInput(input, defaultLimit);
+  const from = normalizeDate(params.from);
+  const to = normalizeDate(params.to);
   const timeoutMs = Number(process.env.NEWS_FETCH_TIMEOUT_MS ?? 5500);
   const configuredProviders = [
     getEnv("FINNHUB_API_KEY") ? "finnhub" : "no-finnhub",
@@ -325,7 +350,7 @@ export async function fetchNewsData(input: string | NewsQueryParams, defaultLimi
     getEnv("POLYGON_API_KEY") ? "polygon" : "no-polygon",
     getEnv("ALPHA_VANTAGE_API_KEY") ? "alpha" : "no-alpha"
   ].join(":");
-  const cacheKey = `${params.symbol}:${params.limit}:real-only:${configuredProviders}`;
+  const cacheKey = `${params.symbol}:${params.limit}:${from ?? "all"}:${to ?? "all"}:real-only:${configuredProviders}`;
   const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return { ...cached.data, fromCache: true };
@@ -343,14 +368,14 @@ export async function fetchNewsData(input: string | NewsQueryParams, defaultLimi
   // Calcular noticias crudas vs relevantes por proveedor
   const resultsWithFiltering = results.map((result) => {
     const rawCount = result.sources.length;
-    const relevantCount = result.sources.filter((source) => isRelevantToSymbol(source, params.symbol)).length;
+    const relevantCount = result.sources.filter((source) => isWithinDateRange(source.publishedAt, from, to) && isRelevantToSymbol(source, params.symbol)).length;
     return { ...result, rawCount, relevantCount };
   });
 
   const status = resultsWithFiltering.map(providerStatus);
   const remote = sortByDate(
     dedupe(resultsWithFiltering.flatMap((result) => result.sources))
-      .filter((source) => isRelevantToSymbol(source, params.symbol))
+      .filter((source) => isWithinDateRange(source.publishedAt, from, to) && isRelevantToSymbol(source, params.symbol))
   ).slice(0, params.limit);
 
   const articles: AnalyzedNewsSource[] = await Promise.all(

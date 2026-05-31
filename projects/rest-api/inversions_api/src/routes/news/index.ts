@@ -11,7 +11,12 @@ export const newsRouter = Router();
 function toLimit(value: unknown, fallback = 8): number {
   const parsed = Number(value ?? fallback);
   if (!Number.isFinite(parsed)) return fallback;
-  return Math.max(1, Math.min(20, Math.floor(parsed)));
+  return Math.max(1, Math.min(100, Math.floor(parsed)));
+}
+
+function toDate(value: unknown): string | undefined {
+  const text = String(value ?? "").trim();
+  return text ? text.slice(0, 10) : undefined;
 }
 
 function toSymbol(value: unknown): string {
@@ -76,7 +81,13 @@ newsRouter.get("/data", async (req, res) => {
   try {
     const symbol = toSymbol(req.query.symbol);
     const limit = toLimit(req.query.limit);
-    const result = await fetchNewsData({ symbol, limit, includeFallback: false });
+    const result = await fetchNewsData({
+      symbol,
+      limit,
+      from: toDate(req.query.from),
+      to: toDate(req.query.to),
+      includeFallback: false
+    });
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ code: "NEWS_DATA_FAILED", message: getErrorMessage(error) });
@@ -87,7 +98,13 @@ newsRouter.get("/confluence", async (req, res) => {
   try {
     const symbol = toSymbol(req.query.symbol);
     const limit = toLimit(req.query.limit, 8);
-    const result = await evaluateNewsImpact({ symbol, limit, includeFallback: false });
+    const result = await evaluateNewsImpact({
+      symbol,
+      limit,
+      from: toDate(req.query.from),
+      to: toDate(req.query.to),
+      includeFallback: false
+    });
     res.status(200).json({
       ...result,
       from: "TNMT_NEWS_CONFLUENCE",

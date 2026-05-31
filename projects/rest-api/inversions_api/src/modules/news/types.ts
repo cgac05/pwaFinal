@@ -68,6 +68,8 @@ export interface NewsAnalysisAggregate {
 export interface NewsQueryParams {
   symbol: string;
   limit?: number;
+  from?: string;
+  to?: string;
   /** Deprecated: kept only for compatibility. The real-news mode never creates demo data. */
   includeFallback?: boolean;
 }

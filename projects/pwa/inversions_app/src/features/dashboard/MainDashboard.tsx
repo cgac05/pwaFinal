@@ -24,6 +24,7 @@ import { ActivityBar } from "../../components/ui/ActivityBar";
 import { LeftPanel } from "../sidebar/LeftPanel";
 import { Badge } from "../../components/ui/Badge";
 import type { ConfluenceSignalRow, SimulationResponse, CoreId } from "../../services/signals/confluenceTableApi";
+import type { NewsDateRange } from "../../services/news/newsApi";
 import { useSignalStore } from "../../store/signals";
 import { useAppShellStore } from "../../store/appShell";
 import { useInstitutionalStore, setInstitutionalLoading, setInstitutionalResult, setInstitutionalError } from "../../store/institutional";
@@ -38,6 +39,7 @@ export function MainDashboard() {
   const [simulationRows, setSimulationRows] = useState<ConfluenceSignalRow[] | undefined>(undefined);
   const [simulationVerdict, setSimulationVerdict] = useState<{ verdict?: unknown; score?: number; degraded?: boolean } | null>(null);
   const [activeSimulationStrategy, setActiveSimulationStrategy] = useState("IRON_CONDOR");
+  const [newsDateRange, setNewsDateRange] = useState<NewsDateRange | undefined>(undefined);
   const [coverageRequest, setCoverageRequest] = useState<{ params: CoverageModalParams; kind: string } | null>(null);
   // FIC: Last confirmed Wheel params — shown as read-only summary in SimulatorStrategySection. (EN)
   // FIC: Últimos params Wheel confirmados — mostrados como resumen de solo lectura en SimulatorStrategySection. (ES)
@@ -264,6 +266,7 @@ export function MainDashboard() {
         onResult={handleSimulationResult}
         onExecute={handleSimulationExecute}
         onStrategyChange={setActiveSimulationStrategy}
+        onSimulationRangeChange={setNewsDateRange}
         onCoverageParamsConfirmed={handleCoverageConfirmed}
         onWheelParamsConfirmed={handleWheelConfirmed}
         onSpreadParamsConfirmed={handleSpreadConfirmed}
@@ -460,7 +463,7 @@ export function MainDashboard() {
         description="Métricas financieras, earnings, valuación y comparativa sectorial."
       />
       {/* ── News Section — muestra análisis de noticias reales */}
-      <NewsSection symbol={selectedSymbol} />
+      <NewsSection symbol={selectedSymbol} dateRange={newsDateRange} />
     </div>
   );
 

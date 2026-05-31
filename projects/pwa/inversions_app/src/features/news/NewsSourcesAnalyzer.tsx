@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, BarChart3, CheckCircle2, KeyRound, Newspaper, Radio, RefreshCw, ShieldCheck } from "lucide-react";
-import { analyzeNewsSources, getNewsConfluence, type NewsAnalysisAggregate, type NewsConfluenceResponse, type NewsProviderStatus, type NewsSourceInput, type AnalyzedNewsSource } from "../../services/news/newsApi";
+import { analyzeNewsSources, getNewsConfluence, type NewsAnalysisAggregate, type NewsConfluenceResponse, type NewsDateRange, type NewsProviderStatus, type NewsSourceInput, type AnalyzedNewsSource } from "../../services/news/newsApi";
 import { SourceInput } from "./SourceInput";
 import { SourceList } from "./SourceList";
 import { AnalysisResult } from "./AnalysisResult";
@@ -9,6 +9,7 @@ import "../styles/NewsSourcesAnalyzer.css";
 
 interface NewsSourcesAnalyzerProps {
   symbol?: string;
+  dateRange?: NewsDateRange;
   onArticleSelect?: (article: AnalyzedNewsSource) => void;
 }
 
@@ -47,7 +48,7 @@ function ProviderStatusSummary({ providers }: { providers: NewsProviderStatus[] 
   );
 }
 
-export function NewsSourcesAnalyzer({ symbol = "SPY", onArticleSelect }: NewsSourcesAnalyzerProps) {
+export function NewsSourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect }: NewsSourcesAnalyzerProps) {
   const normalizedSymbol = symbol.trim().toUpperCase() || "SPY";
   const [activeSymbol, setActiveSymbol] = useState(normalizedSymbol);
   const [sources, setSources] = useState<NewsSourceInput[]>([]);
@@ -69,7 +70,7 @@ export function NewsSourcesAnalyzer({ symbol = "SPY", onArticleSelect }: NewsSou
     setLoading(true);
     setError(null);
     try {
-      const result = await getNewsConfluence(activeSymbol, 100, controller.signal);
+      const result = await getNewsConfluence(activeSymbol, 100, controller.signal, dateRange);
       setConfluence(result);
     } catch (err) {
       setError((err as Error).message);
@@ -104,7 +105,7 @@ export function NewsSourcesAnalyzer({ symbol = "SPY", onArticleSelect }: NewsSou
   useEffect(() => {
     void loadTickerNews();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSymbol]);
+  }, [activeSymbol, dateRange?.from, dateRange?.to]);
 
   return (
     <section className="tnmt-news-panel" id="noticias-sentimiento">

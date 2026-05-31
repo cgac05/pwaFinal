@@ -75,6 +75,11 @@ export interface NewsConfluenceResponse {
   };
 }
 
+export interface NewsDateRange {
+  from?: string;
+  to?: string;
+}
+
 async function readJson<T>(response: Response): Promise<T> {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -84,8 +89,10 @@ async function readJson<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export async function getNewsConfluence(symbol: string, limit = 8, signal?: AbortSignal): Promise<NewsConfluenceResponse> {
+export async function getNewsConfluence(symbol: string, limit = 8, signal?: AbortSignal, dateRange?: NewsDateRange): Promise<NewsConfluenceResponse> {
   const params = new URLSearchParams({ symbol: symbol.trim().toUpperCase(), limit: String(limit) });
+  if (dateRange?.from) params.set("from", dateRange.from);
+  if (dateRange?.to) params.set("to", dateRange.to);
   const response = await fetch(`/api/news/confluence?${params.toString()}`, { signal });
   return readJson<NewsConfluenceResponse>(response);
 }
