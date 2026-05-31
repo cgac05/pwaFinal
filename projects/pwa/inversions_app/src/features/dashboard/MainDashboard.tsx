@@ -41,6 +41,7 @@ export function MainDashboard() {
   const [fundamentalAnalysis, setFundamentalAnalysis] = useState<FundamentalAnalysisResponse | null>(null);
   const [fundamentalAutoRunKey, setFundamentalAutoRunKey] = useState(0);
   const [wheelSummary, setWheelSummary] = useState<WheelModalParams | null>(null);
+  const [termResult, setTermResult] = useState<any | null>(null);
   const [institutionalCoreWasActive, setInstitutionalCoreWasActive] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [selectedStrikeData, setSelectedStrikeData] = useState<{
@@ -67,6 +68,7 @@ export function MainDashboard() {
       setOptionStrategyAnalysis(null);
       setFundamentalAnalysis(null);
       setWheelSummary(null);
+      setTermResult(null);
       setSelectedStrikeData(null);
       setSelectedStrike(undefined);
     }
@@ -89,6 +91,10 @@ export function MainDashboard() {
 
   const handleWheelConfirmed = useCallback((params: WheelModalParams) => {
     setWheelSummary(params);
+  }, []);
+
+  const handleTermResult = useCallback((data: any) => {
+    setTermResult(data);
   }, []);
 
   // FIC: Writes selected strike to global store so CoverageStrategyModal can read it from anywhere. (EN)
@@ -283,6 +289,7 @@ export function MainDashboard() {
         onCoverageParamsConfirmed={handleCoverageConfirmed}
         onOptionStrategyCalculated={handleOptionStrategyCalculated}
         onWheelParamsConfirmed={handleWheelConfirmed}
+        onTermResult={handleTermResult}
       />
 
       {/* ── Simulation verdict */}
@@ -468,6 +475,7 @@ export function MainDashboard() {
           coverageRequest={coverageRequest}
           optionStrategyAnalysis={optionStrategyAnalysis}
           wheelSummary={wheelSummary}
+          termResult={termResult}
         />
       )}
 

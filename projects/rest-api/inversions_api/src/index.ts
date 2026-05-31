@@ -43,6 +43,8 @@ import { coverageSimulateRouter } from "./routes/coverage/simulate";
 import { optionChainRouter } from "./routes/options/chain";
 import { optionExpirationsRouter } from "./routes/options/expirations";
 import { supabaseClient } from "./database/supabase/client";
+import { calendarSpreadRouter } from "./routes/strategies/term/calendarSpread";
+import { diagonalSpreadRouter } from "./routes/strategies/term/diagonalSpread";
 import { createFundamentalAnalyzeRouter } from "./routes/fundamental/analyze";
 import { createCompanyProfileRouter } from "./routes/fundamental/companyProfile";
 import { createOptionsRouter } from "./routes/strategies/optionsRouter";
@@ -110,6 +112,10 @@ app.use("/api/team-03/fundamental", createCompanyProfileRouter(supabaseClient));
 app.use("/api/team-03/options", createOptionsRouter(supabaseClient));
 app.use("/api/team-03/options", createOptionsAnalysisQARouter(supabaseClient));
 
+// ── Team-09 routes: Calendar & Diagonal Spreads ──────────────────────
+app.use("/api/v1/strategies/term", calendarSpreadRouter);
+app.use("/api/v1/strategies/term", diagonalSpreadRouter);
+
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
@@ -118,6 +124,25 @@ app.get("/api/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
+// Debug: list all registered routes (temporary helper)
+app.get("/_debug/routes", (_req, res) => {
+  const routes: Array<{ path: string; methods: string[] }> = [];
+  const stack = (app as any)._router?.stack ?? [];
+  for (const layer of stack) {
+    if (layer.route && layer.route.path) {
+      routes.push({ path: layer.route.path, methods: Object.keys(layer.route.methods) });
+    } else if (layer.name === 'router' && layer.handle && layer.handle.stack) {
+      for (const l of layer.handle.stack) {
+        if (l.route && l.route.path) {
+          // attempt to reconstruct mount path
+          const prefix = layer.regexp && layer.regexp.source ? layer.regexp.source : '';
+          routes.push({ path: `${prefix}${l.route.path}`, methods: Object.keys(l.route.methods) });
+        }
+      }
+    }
+  }
+  res.json({ routes });
+});
 const port = Number(process.env.PORT ?? 3000);
 
 app.listen(port, () => {

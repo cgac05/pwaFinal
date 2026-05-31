@@ -31,6 +31,26 @@ export interface SelectedStrike {
   estimatedRiskFreeRate?: number;
 }
 
+export interface SelectedOptionsStrategy {
+  id: "short-put" | "long-put" | "short-call" | "long-call" | "calendar-spread" | "diagonal-spread";
+  name: "Short Put" | "Long Put" | "Short Call" | "Long Call" | "Calendar Spread" | "Diagonal Spread";
+}
+
+export interface OptionsStrategyParams {
+  ticker: string;
+  strikePrice: number;
+  currentPrice: number;
+  premiumPerContract: number;
+  numberOfContracts: number;
+  expirationDate: string;
+  availableCapital: number;
+  assumptions?: {
+    impliedVolatility?: number;
+    timeDecayModel?: "LINEAR" | "EXPONENTIAL";
+    interestRate?: number;
+  };
+}
+
 type RuntimeMode = "online" | "offline";
 type OperationalMode = "demo" | "real";
 
@@ -38,6 +58,8 @@ interface SignalStoreState {
   selectedInstrument?: SelectedInstrument;
   selectedSignal?: SelectedSignal;
   selectedStrike?: SelectedStrike;
+  selectedOptionsStrategy?: SelectedOptionsStrategy;
+  optionsStrategyParams?: OptionsStrategyParams;
   runtimeMode: RuntimeMode;
   operationalMode: OperationalMode;
 }
@@ -96,6 +118,14 @@ export function useSignalStore() {
       // TEMP-LOG [Punto 3 — signals store] valor que se persiste
       console.log("[WHEEL-AUDIT][3-signals store] setSelectedStrike →", strike);
       state = { ...state, selectedStrike: strike };
+      emit();
+    },
+    setSelectedOptionsStrategy: (strategy: SelectedOptionsStrategy) => {
+      state = { ...state, selectedOptionsStrategy: strategy };
+      emit();
+    },
+    setOptionsStrategyParams: (params: OptionsStrategyParams) => {
+      state = { ...state, optionsStrategyParams: params };
       emit();
     },
     setRuntimeMode: (mode: RuntimeMode) => {

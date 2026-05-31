@@ -1,4 +1,12 @@
 /**
+ * @deprecated This interface-based standard has been superseded by the canonical string format
+ * in @inversions/utils. All signal generators MUST use `buildCanonicalOutputString()` from
+ * `@inversions/utils` instead of implementing this interface. This file will be removed once
+ * all consumers have migrated to the canonical format.
+ * 
+ * Migración: Usar `buildCanonicalOutputString()` del paquete `@inversions/utils` con
+ * `CanonicalOutputRow` en lugar de implementar `StrategyOutput`.
+ * 
  * FIC: Strategy Output Standard - Transversal contract for all strategy outputs.
  * Ensures consistent structure and metadata across all signal generation modules.
  * 
@@ -315,6 +323,31 @@ export function createStrategyOutput(
   }
 
   return output;
+}
+
+/**
+ * @deprecated Bridge function to convert a legacy StrategyOutput to the canonical string format.
+ * Use `buildCanonicalOutputString` from `@inversions/utils` directly instead.
+ */
+export function strategyOutputToCanonical(output: StrategyOutput): string {
+  const { buildCanonicalOutputString } = require("@inversions/utils");
+  const tipoSenal = output.tipo_recomendacion === RecommendationType.COMPRA ? "CALL"
+    : output.tipo_recomendacion === RecommendationType.VENTA ? "PUT"
+    : "HOLD";
+
+  return buildCanonicalOutputString({
+    core: "E_ESTRATEGIA",
+    subCore: output.source,
+    tipoSenal,
+    score: output.confluencia_score,
+    peso: 1,
+    observacion: {
+      objetivo: output.instrumento,
+      senal: output.tipo_recomendacion,
+      explicacion: output.resumen ?? output.score_breakdown.razon,
+      metricas: {},
+    },
+  });
 }
 
 export default StrategyOutput;

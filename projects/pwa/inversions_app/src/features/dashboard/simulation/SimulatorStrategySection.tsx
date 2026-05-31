@@ -34,13 +34,14 @@ interface Props {
   coverageRequest?: { params: CoverageModalParams; kind: string } | null;
   optionStrategyAnalysis?: OptionStrategyAnalysis | null;
   wheelSummary?: WheelModalParams | null;
+  termResult?: any | null;
 }
 
 function money(value: number | "Ilimitado"): string {
   return value === "Ilimitado" ? "Ilimitado" : `$${value.toFixed(2)}`;
 }
 
-export function SimulatorStrategySection({ ticker, activeStrategy, coverageRequest, optionStrategyAnalysis, wheelSummary }: Props) {
+export function SimulatorStrategySection({ ticker, activeStrategy, coverageRequest, optionStrategyAnalysis, wheelSummary, termResult }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<CoverageAnalyzeResponse | null>(null);
@@ -104,13 +105,27 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
     color: "var(--color-text-muted)",
   };
 
+  const fmt = (v: any, d = 2) =>
+    v != null && Number.isFinite(Number(v)) ? Number(v).toFixed(d) : "—";
+
   return (
     <section className="card" style={cardStyle}>
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
         <h2 style={{ margin: 0, fontSize: "var(--font-size-base)" }}>
           Estrategia · {sectionTitle}
         </h2>
-        {(isTermStrategy || (!isCoverageStrategy && !isCoreOptionStrategy && !isWheelStrategy)) && (
+        {isTermStrategy && !termResult && (
+          <span style={{
+            fontSize: "var(--font-size-xs)",
+            color: "var(--color-text-muted)",
+            background: "var(--color-surface-raised)",
+            padding: "2px 8px",
+            borderRadius: "var(--radius-xs)",
+          }}>
+            Ejecuta la simulación para ver el análisis
+          </span>
+        )}
+        {(!isCoverageStrategy && !isCoreOptionStrategy && !isWheelStrategy && !isTermStrategy) && (
           <span style={{
             fontSize: "var(--font-size-xs)",
             color: "var(--color-text-muted)",
@@ -123,12 +138,166 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
         )}
       </div>
 
-      {/* TERM strategies — placeholder */}
-      {isTermStrategy && (
+      {/* TERM strategies — Calendar / Diagonal */}
+      {isTermStrategy && !termResult && (
         <p style={mutedText}>
-          El análisis de estrategias temporales (Calendar / Diagonal Spread) estará disponible en un sprint posterior.
+          Selecciona los parámetros y ejecuta la simulación para ver el análisis de {sectionTitle}.
         </p>
       )}
+
+      {isTermStrategy && termResult && (() => {
+        const analysis  = termResult.analysis  ?? {};
+        const report    = termResult.report    ?? {};
+        const risk      = report.riskMetrics   ?? {};
+        const mc        = termResult.simulation?.monteCarlo ?? null;
+        const stressTests: any[] = report.stressTests ?? [];
+        const payoff: any[] = report.payoffCurve ?? [];
+        const netTheta = analysis.netTheta ?? analysis.greeks?.theta ?? 0;
+        const delta    = analysis.greeks?.delta ?? risk.netDelta ?? 0;
+        const gamma    = analysis.greeks?.gamma ?? risk.netGamma ?? 0;
+        const vega     = analysis.greeks?.vega  ?? risk.netVega  ?? 0;
+        const pop      = risk.probabilityOfProfit ?? 0;
+        const breakEvenPrice: number = (() => {
+          if (!payoff.length) return 0;
+          for (let i = 1; i < payoff.length; i++) {
+            const prev = payoff[i - 1];
+            const curr = payoff[i];
+            if ((prev.pnl < 0 && curr.pnl >= 0) || (prev.pnl >= 0 && curr.pnl < 0)) {
+              return Number(curr.price ?? curr.underlyingPrice ?? 0);
+            }
+          }
+          return 0;
+        })();
+
+        return (
+          <div style={{ display: "grid", gap: "var(--space-md)" }}>
+
+            {/* Métricas principales */}
+            <div>
+              <p style={{ ...mutedText, marginBottom: "var(--space-sm)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: "var(--font-size-xs)" }}>
+                Métricas principales
+              </p>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["Estructura", "DTE Corto", "DTE Largo", "Theta ($/día)", "Delta", "Gamma", "Vega ($/1%)", "PoP"].map(h => (
+                      <th key={h} style={{ textAlign: "left", padding: "var(--space-xs) var(--space-sm)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", fontWeight: 600 }}>
+                      {termResult.structureName ?? sectionTitle}
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                      {analysis.shortDte ?? "—"} días
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                      {analysis.longDte ?? "—"} días
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", color: netTheta > 0 ? "var(--color-buy)" : "var(--color-sell)" }}>
+                      ${fmt(netTheta)}
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                      {fmt(delta, 4)}
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                      {fmt(gamma, 4)}
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                      ${fmt(vega)}
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", color: pop >= 0.5 ? "var(--color-buy)" : "var(--color-sell)" }}>
+                      {fmt(pop * 100, 1)}%
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              {breakEvenPrice > 0 && (
+                <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginTop: "var(--space-xs)" }}>
+                  Break-even aproximado: ${fmt(breakEvenPrice)}
+                </p>
+              )}
+            </div>
+
+            {/* Stress Tests */}
+            {stressTests.length > 0 && (
+              <div>
+                <p style={{ ...mutedText, marginBottom: "var(--space-sm)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: "var(--font-size-xs)" }}>
+                  Stress Tests
+                </p>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      {["Escenario", "Precio Suby.", "P&L ($)", "Valor Estrategia ($)"].map(h => (
+                        <th key={h} style={{ textAlign: "left", padding: "var(--space-xs) var(--space-sm)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stressTests.map((s: any) => (
+                      <tr key={s.label}>
+                        <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", fontWeight: 500 }}>{s.label}</td>
+                        <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>${fmt(s.underlyingPrice)}</td>
+                        <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", color: Number(s.pnl) >= 0 ? "var(--color-buy)" : "var(--color-sell)", fontWeight: 600 }}>
+                          {Number(s.pnl) >= 0 ? "+" : ""}${fmt(s.pnl)}
+                        </td>
+                        <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>${fmt(s.strategyValue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Monte Carlo */}
+            {mc && (
+              <div>
+                <p style={{ ...mutedText, marginBottom: "var(--space-sm)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: "var(--font-size-xs)" }}>
+                  Simulación Monte Carlo ({mc.iterations ?? 1000} iteraciones) — valores en $
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "var(--space-sm)" }}>
+                  {[
+                    ["P&L Medio", `$${fmt(mc.meanPnl)}`],
+                    ["Mediana", `$${fmt(mc.medianPnl)}`],
+                    ["VaR 95%", `$${fmt(mc.var95)}`],
+                    ["P5", `$${fmt(mc.percentile5)}`],
+                    ["P95", `$${fmt(mc.percentile95)}`],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-xs)", padding: "var(--space-xs) var(--space-sm)" }}>
+                      <div style={{ fontSize: "0.6rem", color: "var(--color-text-muted)", fontWeight: 700, textTransform: "uppercase" }}>{label}</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 700 }}>{value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Payoff Chart */}
+            {payoff.length > 0 && (
+              <div>
+                <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-sm)" }}>
+                  Diagrama de payoff — {termResult.structureName ?? sectionTitle}
+                </p>
+                <PayoffChart
+                  points={payoff.map((p: any) => ({
+                    underlyingPrice: Number(p.price ?? p.underlyingPrice ?? 0),
+                    pnl: Number(p.pnl ?? 0),
+                  }))}
+                  breakEvenPrice={breakEvenPrice}
+                  height={200}
+                />
+              </div>
+            )}
+
+          </div>
+        );
+      })()}
 
       {/* Unknown strategies */}
       {!isCoverageStrategy && !isTermStrategy && !isCoreOptionStrategy && !isWheelStrategy && (
@@ -195,7 +364,6 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
       {/* Coverage strategies */}
       {isCoverageStrategy && (
         <>
-          {/* Waiting for params */}
           {!coverageRequest && !loading && !results && (
             <p style={mutedText}>
               Selecciona los parámetros en el panel de control para ver el análisis de {sectionTitle}.
@@ -212,26 +380,11 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
 
           {results && (
             <>
-              {/* Strategy table */}
               <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "var(--space-lg)" }}>
                 <thead>
                   <tr>
                     {["Estrategia", "Score", "Max Profit", "Max Loss", "Break-even", "Stop-loss", "Nivel"].map((h) => (
-                      <th
-                        key={h}
-                        style={{
-                          textAlign: "left",
-                          padding: "var(--space-xs) var(--space-sm)",
-                          fontSize: "var(--font-size-xs)",
-                          color: "var(--color-text-muted)",
-                          fontWeight: 600,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                          borderBottom: "1px solid var(--color-border-subtle)",
-                        }}
-                      >
-                        {h}
-                      </th>
+                      <th key={h} style={{ textAlign: "left", padding: "var(--space-xs) var(--space-sm)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--color-border-subtle)" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -275,11 +428,6 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
                 </tbody>
               </table>
 
-              <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "var(--space-sm) 0" }}>
-                Haz clic en una fila para ver su diagrama de payoff
-              </p>
-
-              {/* PayoffChart */}
               {selectedResult && payoffPoints.length > 0 && (
                 <div style={{ marginBottom: "var(--space-lg)" }}>
                   <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-sm)" }}>
@@ -289,32 +437,11 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
                 </div>
               )}
 
-              {/* Alerts */}
               {selectedResult && selectedResult.alerts.length > 0 && (
                 <div>
-                  <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-sm)" }}>
-                    Alertas:
-                  </p>
+                  <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-sm)" }}>Alertas:</p>
                   {selectedResult.alerts.map((a, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        padding: "var(--space-xs) var(--space-sm)",
-                        marginBottom: "var(--space-xs)",
-                        borderRadius: "var(--radius-xs)",
-                        backgroundColor:
-                          a.severity === "critical" ? "rgba(226,59,74,0.12)"
-                          : a.severity === "warning" ? "rgba(176,144,0,0.12)"
-                          : "rgba(255,255,255,0.04)",
-                        border: `1px solid ${
-                          a.severity === "critical" ? "rgba(226,59,74,0.3)"
-                          : a.severity === "warning" ? "rgba(176,144,0,0.3)"
-                          : "rgba(255,255,255,0.06)"
-                        }`,
-                        fontSize: "var(--font-size-xs)",
-                        color: "var(--color-text)",
-                      }}
-                    >
+                    <div key={i} style={{ padding: "var(--space-xs) var(--space-sm)", marginBottom: "var(--space-xs)", borderRadius: "var(--radius-xs)", backgroundColor: a.severity === "critical" ? "rgba(226,59,74,0.12)" : a.severity === "warning" ? "rgba(176,144,0,0.12)" : "rgba(255,255,255,0.04)", border: `1px solid ${a.severity === "critical" ? "rgba(226,59,74,0.3)" : a.severity === "warning" ? "rgba(176,144,0,0.3)" : "rgba(255,255,255,0.06)"}`, fontSize: "var(--font-size-xs)", color: "var(--color-text)" }}>
                       <strong>{a.code}</strong>: {a.message}
                     </div>
                   ))}
@@ -352,15 +479,7 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
             return (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "var(--space-md)" }}>
                 {rows.map((r) => (
-                  <div
-                    key={r.label}
-                    style={{
-                      background: "var(--color-surface)",
-                      borderRadius: "var(--radius-sm)",
-                      padding: "var(--space-sm) var(--space-md)",
-                      border: "1px solid var(--color-border-subtle)",
-                    }}
-                  >
+                  <div key={r.label} style={{ background: "var(--color-surface)", borderRadius: "var(--radius-sm)", padding: "var(--space-sm) var(--space-md)", border: "1px solid var(--color-border-subtle)" }}>
                     <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: 2 }}>
                       {r.label}
                     </div>

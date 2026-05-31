@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   BarChart2, BookOpen, TrendingUp, Building2, Newspaper,
   Cpu, Play, ChevronDown, Calendar,
@@ -463,6 +463,8 @@ const DEFAULT_TERM_PARAMS: TermStrategyParams = {
   expirationLong: new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10),
   premiumShort: 0,
   premiumLong: 0,
+  shortIv: 0.25,
+  longIv: 0.30,
   contracts: 1,
   riskFreeRate: 0.05,
 };
@@ -527,6 +529,7 @@ interface Props {
   onCoverageParamsConfirmed?: (params: CoverageModalParams, kind: string) => void;
   onOptionStrategyCalculated?: (analysis: OptionStrategyAnalysis) => void;
   onWheelParamsConfirmed?: (params: WheelModalParams) => void;
+  onTermResult?: (data: any) => void;
 }
 
 // ─── Main component ────────────────────────────────────────────────────────────
@@ -538,6 +541,7 @@ export function SimulationControlPanel({
   onCoverageParamsConfirmed,
   onOptionStrategyCalculated,
   onWheelParamsConfirmed,
+  onTermResult,
 }: Props) {
   const [preset, setPreset]               = useState<Preset>("3M");
   const [estrategiaFrom, setEstrategiaFrom] = useState(isoToday());
@@ -589,6 +593,34 @@ export function SimulationControlPanel({
       .catch(() => { /* user can enter manually */ });
   }, [wheelModalOpen, ticket, wheelParams.csp.currentPrice]);
 
+  // Sync term params dates from dashboard date range
+  useEffect(() => {
+    setTermParams((prev) => ({
+      ...prev,
+      expirationShort: estrategiaFrom,
+      expirationLong: estrategiaTo,
+    }));
+  }, [estrategiaFrom, estrategiaTo]);
+
+  const handleTermDatesCorrected = useCallback(
+    (short: string, long: string) => {
+      setEstrategiaFrom(short);
+      setEstrategiaTo(long);
+    },
+    []
+  );
+
+  // Fetch current price for term modal when it opens
+  useEffect(() => {
+    if (!termModalOpen || coverageParams.currentPrice > 0) return;
+    getMarketQuotes([ticket])
+      .then((data) => {
+        const q = data.quotes.find((qt) => qt.symbol === ticket.toUpperCase());
+        if (q && q.price > 0) setCoverageParams((prev) => ({ ...prev, currentPrice: q.price }));
+      })
+      .catch(() => {});
+  }, [termModalOpen, ticket, coverageParams.currentPrice]);
+
   const handleEstrategiaChange = (e: string) => {
     setEstrategia(e);
     onStrategyChange?.(e);
@@ -614,7 +646,7 @@ export function SimulationControlPanel({
     const activeCoreIds = ALL_CORES.filter((c) => coresOn[c]);
     onExecute?.(activeCoreIds);
     try {
-      const payload: SimulationRequestPayload = {
+      const simPayload: SimulationRequestPayload = {
         ticket,
         rangoHistorico: preset,
         rangoEstrategia: { from: estrategiaFrom, to: estrategiaTo },
@@ -625,7 +657,70 @@ export function SimulationControlPanel({
         estrategia,
         toleranciaRiesgo: tolerancia,
       };
-      onResult(await runSimulation(payload));
+
+      if (isTermStrategy(estrategia)) {
+        const strategyType = estrategia === "CALENDAR_SPREAD" ? "calendar" : "diagonal";
+        const optionStyle  = termParams.optionStyle.toLowerCase();
+        const endpoint     = `/api/v1/strategies/term/${strategyType}/${optionStyle}`;
+
+        const shortDte = Math.max(1, Math.round(
+          (new Date(termParams.expirationShort).getTime() - Date.now()) / 86_400_000
+        ));
+        const longDte = Math.max(1, Math.round(
+          (new Date(termParams.expirationLong).getTime() - Date.now()) / 86_400_000
+        ));
+        const ivCurve = [
+          { dte: shortDte, iv: termParams.shortIv > 0 ? termParams.shortIv : 0.25 },
+          { dte: longDte,  iv: termParams.longIv  > 0 ? termParams.longIv  : 0.30 },
+        ];
+
+        const termBody = {
+          underlying: ticket,
+          riskFreeRate: termParams.riskFreeRate,
+          ivCurve,
+          riskTolerance: tolerancia,
+          legs: [
+            {
+              strike:      termParams.strikeShort || termParams.strikeLong,
+              expiration:  termParams.expirationShort,
+              premium:     termParams.premiumShort,
+              contracts:   termParams.contracts,
+              optionStyle,
+            },
+            {
+              strike:      termParams.strikeLong || termParams.strikeShort,
+              expiration:  termParams.expirationLong,
+              premium:     termParams.premiumLong,
+              contracts:   termParams.contracts,
+              optionStyle,
+            },
+          ],
+        };
+
+        const [simResult, termRes] = await Promise.all([
+          runSimulation(simPayload),
+          fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(termBody),
+          }),
+        ]);
+
+        if (!termRes.ok) {
+          const err = await termRes.json().catch(() => ({ error: termRes.statusText }));
+          const details = Array.isArray(err.details)
+            ? err.details.map((d: any) => d.message ?? String(d)).join("; ")
+            : "";
+          throw new Error(`${err.error ?? "term_strategy_failed"}${details ? `: ${details}` : ""}`);
+        }
+
+        const termData = await termRes.json();
+        onTermResult?.(termData);
+        onResult(simResult);
+        return;
+      }
+
+      onResult(await runSimulation(simPayload));
     } catch (err) {
       setError(err instanceof Error ? err.message : "simulation_failed");
     } finally {
@@ -833,9 +928,12 @@ export function SimulationControlPanel({
       <TermStrategyModal
         open={termModalOpen}
         estrategia={estrategia}
+        ticker={ticket}
+        currentPrice={coverageParams.currentPrice}
         params={termParams}
         onChange={setTermParams}
         onClose={() => setTermModalOpen(false)}
+        onDatesCorrected={handleTermDatesCorrected}
       />
       <CoverageParamsModal
         open={coverageModalOpen}

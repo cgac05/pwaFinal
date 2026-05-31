@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.7.0",
+    "@inversions/utils": "*",
     "@supabase/supabase-js": "^2.105.4",
     "dotenv": "^17.4.2",
     "express": "^4.21.0",
