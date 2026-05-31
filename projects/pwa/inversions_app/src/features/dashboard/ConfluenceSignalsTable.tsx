@@ -18,19 +18,19 @@ import { MarkdownContent } from "../../components/ui/MarkdownContent";
 
 // FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
 const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia"; label: string; width: number }> = [
-  { key: "ticket",    label: "TICKET",     width: 76  },
-  { key: "core",      label: "CORE",       width: 150 },
-  { key: "subCore",   label: "SUBCORE",    width: 110 },
-  { key: "precio",    label: "PRECIO",     width: 96  },
+  { key: "ticket", label: "TICKET", width: 76 },
+  { key: "core", label: "CORE", width: 150 },
+  { key: "subCore", label: "SUBCORE", width: 110 },
+  { key: "precio", label: "PRECIO", width: 96 },
   { key: "tipoSenal", label: "TIPO SEÑAL", width: 108 },
-  { key: "fecha",     label: "FECHA",      width: 110 },
-  { key: "timeframe", label: "TIMEFRAME",  width: 112 },
-  { key: "tendencia", label: "TENDENCIA",  width: 128 },
-  { key: "score",     label: "SCORE",      width: 86  },
-  { key: "peso",      label: "PESO",       width: 82  },
-  { key: "invertir",  label: "INVERTIR",   width: 96  },
-  { key: "estado",    label: "ESTADO",     width: 118 },
-  { key: "estrategia",label: "ESTRATEGIA", width: 170 },
+  { key: "fecha", label: "FECHA", width: 110 },
+  { key: "timeframe", label: "TIMEFRAME", width: 112 },
+  { key: "tendencia", label: "TENDENCIA", width: 128 },
+  { key: "score", label: "SCORE", width: 86 },
+  { key: "peso", label: "PESO", width: 82 },
+  { key: "invertir", label: "INVERTIR", width: 96 },
+  { key: "estado", label: "ESTADO", width: 118 },
+  { key: "estrategia", label: "ESTRATEGIA", width: 170 },
 ];
 
 function buildResumen(
@@ -202,6 +202,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                   } else {
                     setStubCore(row.core);
                     setStubResumen(row.resumen_analisis ?? "");
+<<<<<<< HEAD
                     setStubRow(row.core === "A_TECNICO" ? row : null);
                     if (row.core === "A_IA") {
                       setStubRow(row);
@@ -209,6 +210,10 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                       setStubCore(null); // Clear stubCore so the right panel doesn't open
                       setStubResumen("");
                     }
+=======
+                    // FIC: Store full row for both A_TECNICO and A_IA structured panels; null for others. (EN)
+                    setStubRow(row.core === "A_TECNICO" || row.core === "A_IA" ? row : null);
+>>>>>>> ia-chat-contexto
                   }
                 };
 
@@ -287,7 +292,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="stub-dialog-title" style={{ marginBottom: "0.25rem", flexShrink: 0 }}>
-              {stubCore === "A_TECNICO" ? "Análisis Técnico" : stubCore.replace("A_", "")}
+              {stubCore === "A_TECNICO" ? "Análisis Técnico" : stubCore === "A_IA" ? "Auditoría de Inteligencia Artificial" : stubCore.replace("A_", "")}
             </h2>
             {stubCore !== "A_TECNICO" && (
               <p style={{ color: "var(--color-text-muted)", fontSize: "0.8rem", marginBottom: "1.25rem", flexShrink: 0 }}>
@@ -306,21 +311,29 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
               const met = stubRow.observacion?.metricas ?? {};
               const trendColor = stubRow.tendencia === "ALCISTA" ? "var(--color-buy)"
                 : stubRow.tendencia === "BAJISTA" ? "var(--color-sell)"
-                : "var(--color-text-muted)";
-              const subCard = { background: "var(--color-surface-raised)", borderRadius: "var(--radius-sm)",
-                padding: "0.75rem 1rem", border: "1px solid var(--color-border-subtle)" };
-              const subTitle = { fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase" as const,
-                letterSpacing: "0.07em", color: "var(--color-accent)", marginBottom: "0.5rem" };
+                  : "var(--color-text-muted)";
+              const subCard = {
+                background: "var(--color-surface-raised)", borderRadius: "var(--radius-sm)",
+                padding: "0.75rem 1rem", border: "1px solid var(--color-border-subtle)"
+              };
+              const subTitle = {
+                fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase" as const,
+                letterSpacing: "0.07em", color: "var(--color-accent)", marginBottom: "0.5rem"
+              };
               const dataRow = (label: string, value: React.ReactNode, color?: string) => (
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0",
-                  borderBottom: "1px solid var(--color-border-subtle)", fontSize: "0.75rem" }}>
+                <div style={{
+                  display: "flex", justifyContent: "space-between", padding: "2px 0",
+                  borderBottom: "1px solid var(--color-border-subtle)", fontSize: "0.75rem"
+                }}>
                   <span style={{ color: "var(--color-text-muted)" }}>{label}</span>
                   <span style={{ fontWeight: 600, color: color ?? "var(--color-text)" }}>{value}</span>
                 </div>
               );
               return (
-                <div style={{ flex: 1, overflowY: "auto", display: "grid",
-                  gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.25rem" }}>
+                <div style={{
+                  flex: 1, overflowY: "auto", display: "grid",
+                  gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.25rem"
+                }}>
                   {/* Tendencia */}
                   <div style={subCard}>
                     <div style={subTitle}>Tendencia</div>
@@ -333,8 +346,8 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                     {dataRow("ADX", ev.adx ? `${ev.adx}` : "—")}
                     {dataRow("Interpretación",
                       Number(ev.adx ?? 0) >= 40 ? "Muy fuerte" :
-                      Number(ev.adx ?? 0) >= 25 ? "Fuerte" :
-                      Number(ev.adx ?? 0) >= 15 ? "Débil" : "Sin tendencia")}
+                        Number(ev.adx ?? 0) >= 25 ? "Fuerte" :
+                          Number(ev.adx ?? 0) >= 15 ? "Débil" : "Sin tendencia")}
                     {dataRow("Líneas", `${ev.trendLines ?? "0"} totales`)}
                   </div>
                   {/* Medias */}
@@ -368,13 +381,56 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
               );
             })() : null}
 
+<<<<<<< HEAD
             {/* FIC: Non-A_TECNICO/A_IA: ObservationsTab when stubRow available (upstream), else plain stubResumen. (EN) */}
+=======
+            {/* FIC: Non-A_TECNICO & Non-A_IA: ObservationsTab when stubRow available (upstream), else plain stubResumen. (EN) */}
+            {/* FIC: No-A_TECNICO y No-A_IA: ObservationsTab si stubRow disponible (upstream), si no texto plano. (ES) */}
+>>>>>>> ia-chat-contexto
             {stubCore !== "A_TECNICO" && stubCore !== "A_IA" && stubRow && (
               <div style={{ flex: 1, overflowY: "auto", marginBottom: "1.25rem" }}>
                 <ObservationsTab row={stubRow} activeStrategy={activeStrategy} />
               </div>
             )}
 
+<<<<<<< HEAD
+=======
+            {/* FIC: Custom scrollable complete text for A_IA core without truncations */}
+            {stubCore === "A_IA" && stubRow && (
+              <>
+                <div style={{
+                  borderTop: "1px solid var(--color-border-subtle)",
+                  paddingTop: "0.75rem",
+                  marginBottom: "0.5rem",
+                  flexShrink: 0
+                }}>
+                  <span style={{
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
+                    color: "var(--color-accent)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.07em"
+                  }}>
+                    Auditoría Cuantitativa — Explicación Completa de la IA
+                  </span>
+                </div>
+                <div style={{
+                  flex: 1,
+                  maxHeight: "450px",
+                  overflowY: "auto",
+                  background: "var(--color-surface-raised)",
+                  borderRadius: "var(--radius-sm)",
+                  padding: "1rem",
+                  marginBottom: "1.25rem",
+                  whiteSpace: "pre-wrap",
+                  lineHeight: 1.6
+                }}>
+                  <MarkdownContent content={stubRow.observacion?.explicacion || stubResumen} />
+                </div>
+              </>
+            )}
+
+>>>>>>> ia-chat-contexto
             {stubCore !== "A_TECNICO" && stubCore !== "A_IA" && !stubRow && stubResumen && (
               <>
                 <div style={{

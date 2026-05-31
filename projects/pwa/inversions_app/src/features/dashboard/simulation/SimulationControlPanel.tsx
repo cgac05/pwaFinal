@@ -3,6 +3,7 @@ import {
   BarChart2, BookOpen, TrendingUp, Building2, Newspaper,
   Cpu, Play, ChevronDown, Calendar,
 } from "lucide-react";
+import { useSignalStore } from "../../../store/signals";
 import { getMarketQuotes } from "../../../services/signals/marketApi";
 import {
   runSimulation,
@@ -177,20 +178,20 @@ const PANEL_CSS = `
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
 const CORE_META: Record<CoreId, { label: string; icon: React.ReactNode; tooltip: string }> = {
-  A_INDICADORES:  { label: "Indicadores",   icon: <BarChart2 size={13} />,  tooltip: "Señales técnicas clásicas (RSI, MACD, EMA). Analiza momentum y tendencia a través de indicadores matemáticos." },
-  A_FUNDAMENTAL:  { label: "Fundamental",   icon: <BookOpen size={13} />,   tooltip: "Datos de balance, ingresos y valoración. Evalúa la salud económica y el valor intrínseco de la empresa." },
-  A_TECNICO:      { label: "Técnico",       icon: <TrendingUp size={13} />, tooltip: "Patrones de precio y volumen en el chart. Detecta soportes, resistencias y formaciones técnicas clave." },
-  A_INSTITUCIONAL:{ label: "Institucional", icon: <Building2 size={13} />,  tooltip: "Actividad de grandes capitales: fondos, opciones institucionales y flujo de dinero inteligente (smart money)." },
-  A_NOTICIAS:     { label: "Noticias",      icon: <Newspaper size={13} />,  tooltip: "Sentimiento del mercado basado en noticias y eventos recientes que afectan directamente al ticker." },
-  A_IA:           { label: "IA",            icon: <Cpu size={13} />,        tooltip: "Motor de inteligencia artificial que sintetiza señales multi-fuente y detecta patrones no lineales." },
+  A_INDICADORES: { label: "Indicadores", icon: <BarChart2 size={13} />, tooltip: "Señales técnicas clásicas (RSI, MACD, EMA). Analiza momentum y tendencia a través de indicadores matemáticos." },
+  A_FUNDAMENTAL: { label: "Fundamental", icon: <BookOpen size={13} />, tooltip: "Datos de balance, ingresos y valoración. Evalúa la salud económica y el valor intrínseco de la empresa." },
+  A_TECNICO: { label: "Técnico", icon: <TrendingUp size={13} />, tooltip: "Patrones de precio y volumen en el chart. Detecta soportes, resistencias y formaciones técnicas clave." },
+  A_INSTITUCIONAL: { label: "Institucional", icon: <Building2 size={13} />, tooltip: "Actividad de grandes capitales: fondos, opciones institucionales y flujo de dinero inteligente (smart money)." },
+  A_NOTICIAS: { label: "Noticias", icon: <Newspaper size={13} />, tooltip: "Sentimiento del mercado basado en noticias y eventos recientes que afectan directamente al ticker." },
+  A_IA: { label: "IA", icon: <Cpu size={13} />, tooltip: "Motor de inteligencia artificial que sintetiza señales multi-fuente y detecta patrones no lineales." },
 };
 
 const SUBCORE_TOOLTIP: Record<string, string> = {
-  RSI:  "Relative Strength Index — mide si el activo está sobrecomprado (>70) o sobrevendido (<30).",
+  RSI: "Relative Strength Index — mide si el activo está sobrecomprado (>70) o sobrevendido (<30).",
   MACD: "Moving Average Convergence/Divergence — señal de cambio de tendencia por cruce de medias exponenciales.",
-  EMA:  "Exponential Moving Average — media dinámica que pondera más el precio reciente para reducir el ruido.",
-  ADX:  "Average Directional Index — cuantifica la fuerza de la tendencia sin importar su dirección.",
-  BB:   "Bandas de Bollinger — mide volatilidad y marca niveles dinámicos de soporte y resistencia.",
+  EMA: "Exponential Moving Average — media dinámica que pondera más el precio reciente para reducir el ruido.",
+  ADX: "Average Directional Index — cuantifica la fuerza de la tendencia sin importar su dirección.",
+  BB: "Bandas de Bollinger — mide volatilidad y marca niveles dinámicos de soporte y resistencia.",
 };
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
@@ -362,10 +363,10 @@ const RISK_OPTS: Array<{
   activeColor: string;
   activeBg: string;
 }> = [
-  { key: "BAJO",  label: "Bajo",  activeColor: "var(--color-buy)",     activeBg: "rgba(0,168,126,0.15)" },
-  { key: "MEDIO", label: "Medio", activeColor: "var(--color-accent)",  activeBg: "var(--color-accent-subtle)" },
-  { key: "ALTO",  label: "Alto",  activeColor: "var(--color-warning)", activeBg: "rgba(236,126,0,0.15)" },
-];
+    { key: "BAJO", label: "Bajo", activeColor: "var(--color-buy)", activeBg: "rgba(0,168,126,0.15)" },
+    { key: "MEDIO", label: "Medio", activeColor: "var(--color-accent)", activeBg: "var(--color-accent-subtle)" },
+    { key: "ALTO", label: "Alto", activeColor: "var(--color-warning)", activeBg: "rgba(236,126,0,0.15)" },
+  ];
 
 function RiskSegmented({
   value,
@@ -420,9 +421,9 @@ function ChipButton({
         onClick={onClick}
         aria-pressed={active}
         style={{
-          background:  active ? "var(--color-accent-subtle)" : "var(--color-surface-raised)",
+          background: active ? "var(--color-accent-subtle)" : "var(--color-surface-raised)",
           borderColor: active ? "var(--color-accent)" : "var(--color-border)",
-          color:       active ? "var(--color-accent)" : "var(--color-text-muted)",
+          color: active ? "var(--color-accent)" : "var(--color-text-muted)",
         }}
       >
         <span style={{
@@ -443,9 +444,9 @@ function ChipButton({
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
-function isTermStrategy(e: string)     { return TERM_STRATEGIES.has(e); }
+function isTermStrategy(e: string) { return TERM_STRATEGIES.has(e); }
 function isCoverageStrategy(e: string) { return e === "COVERED_CALL"; }
-function isWheelStrategy(e: string)    { return e === "WHEEL"; }
+function isWheelStrategy(e: string) { return e === "WHEEL"; }
 
 const DEFAULT_TERM_PARAMS: TermStrategyParams = {
   optionStyle: "CALL",
@@ -489,15 +490,15 @@ type Preset = "2A" | "1A" | "6M" | "3M" | "1M";
 const PRESETS: Preset[] = ["2A", "1A", "6M", "3M", "1M"];
 const TIMEFRAMES: Array<"1m" | "5m" | "15m" | "1h" | "4h" | "1d"> = ["1m", "5m", "15m", "1h", "4h", "1d"];
 
-const PRESET_OPTIONS: SelectOption[]    = PRESETS.map((p) => ({ value: p, label: p }));
+const PRESET_OPTIONS: SelectOption[] = PRESETS.map((p) => ({ value: p, label: p }));
 const TIMEFRAME_OPTIONS: SelectOption[] = TIMEFRAMES.map((t) => ({ value: t, label: t }));
-const STRATEGY_OPTIONS: SelectOption[]  = CANONICAL_ESTRATEGIAS.map((s) => ({
+const STRATEGY_OPTIONS: SelectOption[] = CANONICAL_ESTRATEGIAS.map((s) => ({
   value: s,
   label: s.replace(/_/g, " "),
 }));
 
-function isoToday(): string       { return new Date().toISOString().slice(0, 10); }
-function isoPlusDays(n: number)   { return new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10); }
+function isoToday(): string { return new Date().toISOString().slice(0, 10); }
+function isoPlusDays(n: number) { return new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10); }
 
 // ─── Section label style (shared) ─────────────────────────────────────────────
 const sectionLabelStyle: React.CSSProperties = {
@@ -532,28 +533,29 @@ export function SimulationControlPanel({
   onCoverageParamsConfirmed,
   onWheelParamsConfirmed,
 }: Props) {
-  const [preset, setPreset]               = useState<Preset>("3M");
+  const { incrementSimulationRunCount } = useSignalStore();
+  const [preset, setPreset] = useState<Preset>("3M");
   const [estrategiaFrom, setEstrategiaFrom] = useState(isoToday());
-  const [estrategiaTo, setEstrategiaTo]   = useState(isoPlusDays(30));
-  const [temporalidad, setTemporalidad]   = useState<"1m" | "5m" | "15m" | "1h" | "4h" | "1d">("1h");
-  const [estrategia, setEstrategia]       = useState("IRON_CONDOR");
-  const [tolerancia, setTolerancia]       = useState<"BAJO" | "MEDIO" | "ALTO">("MEDIO");
-  const [coresOn, setCoresOn]             = useState<Record<CoreId, boolean>>(
+  const [estrategiaTo, setEstrategiaTo] = useState(isoPlusDays(30));
+  const [temporalidad, setTemporalidad] = useState<"1m" | "5m" | "15m" | "1h" | "4h" | "1d">("1h");
+  const [estrategia, setEstrategia] = useState("IRON_CONDOR");
+  const [tolerancia, setTolerancia] = useState<"BAJO" | "MEDIO" | "ALTO">("MEDIO");
+  const [coresOn, setCoresOn] = useState<Record<CoreId, boolean>>(
     ALL_CORES.reduce((acc, c) => ({ ...acc, [c]: true }), {} as Record<CoreId, boolean>)
   );
   const [indicadoresOn, setIndicadoresOn] = useState<Record<SubCoreIndicador, boolean>>(
     ALL_SUBCORES.reduce((acc, s) => ({ ...acc, [s]: true }), {} as Record<SubCoreIndicador, boolean>)
   );
-  const [loading, setLoading]             = useState(false);
-  const [error, setError]                 = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [termModalOpen, setTermModalOpen] = useState(false);
-  const [termParams, setTermParams]       = useState<TermStrategyParams>(DEFAULT_TERM_PARAMS);
+  const [termParams, setTermParams] = useState<TermStrategyParams>(DEFAULT_TERM_PARAMS);
   const [coverageModalOpen, setCoverageModalOpen] = useState(false);
-  const [coverageParams, setCoverageParams]       = useState<CoverageModalParams>(DEFAULT_COVERAGE_PARAMS);
+  const [coverageParams, setCoverageParams] = useState<CoverageModalParams>(DEFAULT_COVERAGE_PARAMS);
   // FIC: Wheel modal state — independent from Coverage modal state. (EN)
   // FIC: Estado del modal Wheel — independiente del estado del modal Coverage. (ES)
-  const [wheelModalOpen, setWheelModalOpen]       = useState(false);
-  const [wheelParams, setWheelParams]             = useState<WheelModalParams>({ ...DEFAULT_WHEEL_PARAMS, csp: { ...DEFAULT_WHEEL_PARAMS.csp, ticker: ticket } });
+  const [wheelModalOpen, setWheelModalOpen] = useState(false);
+  const [wheelParams, setWheelParams] = useState<WheelModalParams>({ ...DEFAULT_WHEEL_PARAMS, csp: { ...DEFAULT_WHEEL_PARAMS.csp, ticker: ticket } });
 
   useEffect(() => {
     if (!coverageModalOpen || coverageParams.currentPrice > 0) return;
@@ -580,15 +582,15 @@ export function SimulationControlPanel({
   const handleEstrategiaChange = (e: string) => {
     setEstrategia(e);
     onStrategyChange?.(e);
-    if (isTermStrategy(e))          setTermModalOpen(true);
+    if (isTermStrategy(e)) setTermModalOpen(true);
     else if (isCoverageStrategy(e)) setCoverageModalOpen(true);
     // FIC: Wheel opens its own independent modal — does not touch Coverage flow. (EN)
     // FIC: Wheel abre su propio modal independiente — no toca el flujo de Coverage. (ES)
-    else if (isWheelStrategy(e))    setWheelModalOpen(true);
+    else if (isWheelStrategy(e)) setWheelModalOpen(true);
   };
 
-  const toggleCore = (c: CoreId)          => setCoresOn((p) => ({ ...p, [c]: !p[c] }));
-  const toggleSub  = (s: SubCoreIndicador) => setIndicadoresOn((p) => ({ ...p, [s]: !p[s] }));
+  const toggleCore = (c: CoreId) => setCoresOn((p) => ({ ...p, [c]: !p[c] }));
+  const toggleSub = (s: SubCoreIndicador) => setIndicadoresOn((p) => ({ ...p, [s]: !p[s] }));
 
   const run = async () => {
     setLoading(true);
@@ -607,7 +609,9 @@ export function SimulationControlPanel({
         estrategia,
         toleranciaRiesgo: tolerancia,
       };
-      onResult(await runSimulation(payload));
+      const result = await runSimulation(payload);
+      onResult(result);
+      incrementSimulationRunCount();
     } catch (err) {
       setError(err instanceof Error ? err.message : "simulation_failed");
     } finally {

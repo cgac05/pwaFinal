@@ -35,6 +35,7 @@ interface SignalStoreState {
   selectedStrike?: SelectedStrike;
   runtimeMode: RuntimeMode;
   operationalMode: OperationalMode;
+  simulationRunCount: number;
 }
 
 type Listener = () => void;
@@ -56,7 +57,8 @@ let state: SignalStoreState = {
   selectedInstrument: undefined,
   selectedSignal: undefined,
   runtimeMode: initialRuntimeMode,
-  operationalMode: initialOperationalMode
+  operationalMode: initialOperationalMode,
+  simulationRunCount: 0
 };
 
 function emit() {
@@ -105,6 +107,10 @@ export function useSignalStore() {
       if (typeof window !== "undefined") {
         window.localStorage.setItem("inversions.runtime.operational", mode);
       }
+      emit();
+    },
+    incrementSimulationRunCount: () => {
+      state = { ...state, simulationRunCount: state.simulationRunCount + 1 };
       emit();
     },
   };
