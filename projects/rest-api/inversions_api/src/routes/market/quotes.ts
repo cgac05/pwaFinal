@@ -12,6 +12,9 @@ const YAHOO_CHART_URLS = [
 const YAHOO_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 const YAHOO_QUOTE_TIMEOUT_MS = 5_000;
+const QUOTE_CACHE_TTL_MS = 300_000;
+
+const quoteCache = new Map<string, { data: MarketQuote; expiresAt: number }>();
 
 export const marketQuotesRouter = Router();
 
@@ -41,6 +44,9 @@ interface TradierQuotesResponse {
 // FIC: Fetch a single quote from Yahoo Finance v8 chart — returns regularMarketPrice + daily change. (EN)
 // FIC: Obtiene una cotización de Yahoo Finance v8 chart — devuelve regularMarketPrice + cambio diario. (ES)
 async function fetchSingleYahooQuote(symbol: string): Promise<MarketQuote | null> {
+  const cached = quoteCache.get(symbol);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
   for (const base of YAHOO_CHART_URLS) {
     const ac = new AbortController();
     const tid = setTimeout(() => ac.abort(), YAHOO_QUOTE_TIMEOUT_MS);
@@ -77,13 +83,15 @@ async function fetchSingleYahooQuote(symbol: string): Promise<MarketQuote | null
       const changePercent =
         meta.regularMarketChangePercent ?? (prevClose > 0 ? (change / prevClose) * 100 : 0);
 
-      return {
+      const quote: MarketQuote = {
         symbol,
         price: Number(price.toFixed(2)),
         change: Number(change.toFixed(2)),
         changePercent: Number(changePercent.toFixed(3)),
         timestamp: new Date().toISOString(),
       };
+      quoteCache.set(symbol, { data: quote, expiresAt: Date.now() + QUOTE_CACHE_TTL_MS });
+      return quote;
     } catch {
       // try next base URL
     } finally {
