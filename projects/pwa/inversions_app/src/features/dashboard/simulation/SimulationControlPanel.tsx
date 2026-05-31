@@ -16,6 +16,12 @@ import {
 } from "../../../services/signals/confluenceTableApi";
 import { TermStrategyModal, type TermStrategyParams } from "./TermStrategyModal";
 import { CoverageParamsModal, type CoverageModalParams } from "./CoverageParamsModal";
+import {
+  OptionStrategyParamsModal,
+  OPTION_STRATEGY_OPTIONS,
+  type CoreOptionStrategy,
+  type OptionStrategyAnalysis,
+} from "./OptionStrategyParamsModal";
 import { WheelParamsModal, type WheelModalParams } from "./WheelParamsModal";
 
 // ─── Panel CSS ─────────────────────────────────────────────────────────────────
@@ -443,8 +449,10 @@ function ChipButton({
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
+const CORE_OPTION_STRATEGIES = new Set<string>(["LONG_CALL", "LONG_PUT", "SHORT_CALL", "SHORT_PUT"]);
 function isTermStrategy(e: string)     { return TERM_STRATEGIES.has(e); }
 function isCoverageStrategy(e: string) { return e === "COVERED_CALL"; }
+function isCoreOptionStrategy(e: string): e is CoreOptionStrategy { return CORE_OPTION_STRATEGIES.has(e); }
 function isWheelStrategy(e: string)    { return e === "WHEEL"; }
 
 const DEFAULT_TERM_PARAMS: TermStrategyParams = {
@@ -465,8 +473,6 @@ const DEFAULT_COVERAGE_PARAMS: CoverageModalParams = {
   riskTolerancePct: 0.05,
 };
 
-// FIC: Default params for Wheel modal — isolated from CoverageModalParams. (EN)
-// FIC: Parámetros por defecto para el modal Wheel — aislados de CoverageModalParams. (ES)
 const DEFAULT_WHEEL_PARAMS: WheelModalParams = {
   csp: {
     ticker: "",
@@ -491,9 +497,10 @@ const TIMEFRAMES: Array<"1m" | "5m" | "15m" | "1h" | "4h" | "1d"> = ["1m", "5m",
 
 const PRESET_OPTIONS: SelectOption[]    = PRESETS.map((p) => ({ value: p, label: p }));
 const TIMEFRAME_OPTIONS: SelectOption[] = TIMEFRAMES.map((t) => ({ value: t, label: t }));
-const STRATEGY_OPTIONS: SelectOption[]  = CANONICAL_ESTRATEGIAS.map((s) => ({
-  value: s,
-  label: s.replace(/_/g, " "),
+const OPTION_STRATEGY_LABELS = new Map(OPTION_STRATEGY_OPTIONS.map((strategy) => [strategy.value, strategy.label]));
+const STRATEGY_OPTIONS: SelectOption[] = CANONICAL_ESTRATEGIAS.map((strategy) => ({
+  value: strategy,
+  label: OPTION_STRATEGY_LABELS.get(strategy as CoreOptionStrategy) ?? strategy.replace(/_/g, " "),
 }));
 
 function isoToday(): string       { return new Date().toISOString().slice(0, 10); }
@@ -518,8 +525,7 @@ interface Props {
   onExecute?: (activeCoreIds: CoreId[]) => void;
   onStrategyChange?: (estrategia: string) => void;
   onCoverageParamsConfirmed?: (params: CoverageModalParams, kind: string) => void;
-  // FIC: Callback fired when user clicks "Analizar Wheel" — lifts params to MainDashboard. (EN)
-  // FIC: Callback al hacer click en "Analizar Wheel" — sube params a MainDashboard. (ES)
+  onOptionStrategyCalculated?: (analysis: OptionStrategyAnalysis) => void;
   onWheelParamsConfirmed?: (params: WheelModalParams) => void;
 }
 
@@ -530,6 +536,7 @@ export function SimulationControlPanel({
   onExecute,
   onStrategyChange,
   onCoverageParamsConfirmed,
+  onOptionStrategyCalculated,
   onWheelParamsConfirmed,
 }: Props) {
   const [preset, setPreset]               = useState<Preset>("3M");
@@ -550,10 +557,17 @@ export function SimulationControlPanel({
   const [termParams, setTermParams]       = useState<TermStrategyParams>(DEFAULT_TERM_PARAMS);
   const [coverageModalOpen, setCoverageModalOpen] = useState(false);
   const [coverageParams, setCoverageParams]       = useState<CoverageModalParams>(DEFAULT_COVERAGE_PARAMS);
-  // FIC: Wheel modal state — independent from Coverage modal state. (EN)
-  // FIC: Estado del modal Wheel — independiente del estado del modal Coverage. (ES)
-  const [wheelModalOpen, setWheelModalOpen]       = useState(false);
-  const [wheelParams, setWheelParams]             = useState<WheelModalParams>({ ...DEFAULT_WHEEL_PARAMS, csp: { ...DEFAULT_WHEEL_PARAMS.csp, ticker: ticket } });
+  const [optionParamsModalOpen, setOptionParamsModalOpen] = useState(false);
+  const [optionParamsStrategy, setOptionParamsStrategy] = useState<CoreOptionStrategy>("LONG_CALL");
+  const [wheelModalOpen, setWheelModalOpen] = useState(false);
+  const [wheelParams, setWheelParams] = useState<WheelModalParams>({
+    ...DEFAULT_WHEEL_PARAMS,
+    csp: { ...DEFAULT_WHEEL_PARAMS.csp, ticker: ticket },
+  });
+
+  useEffect(() => {
+    setWheelParams((prev) => ({ ...prev, csp: { ...prev.csp, ticker: ticket } }));
+  }, [ticket]);
 
   useEffect(() => {
     if (!coverageModalOpen || coverageParams.currentPrice > 0) return;
@@ -565,8 +579,6 @@ export function SimulationControlPanel({
       .catch(() => { /* user can enter manually */ });
   }, [coverageModalOpen, ticket, coverageParams.currentPrice]);
 
-  // FIC: Fetch current price when Wheel modal opens, same pattern as Coverage modal. (EN)
-  // FIC: Obtiene el precio actual al abrir el modal Wheel, mismo patrón que Coverage. (ES)
   useEffect(() => {
     if (!wheelModalOpen || wheelParams.csp.currentPrice > 0) return;
     getMarketQuotes([ticket])
@@ -580,11 +592,17 @@ export function SimulationControlPanel({
   const handleEstrategiaChange = (e: string) => {
     setEstrategia(e);
     onStrategyChange?.(e);
-    if (isTermStrategy(e))          setTermModalOpen(true);
-    else if (isCoverageStrategy(e)) setCoverageModalOpen(true);
-    // FIC: Wheel opens its own independent modal — does not touch Coverage flow. (EN)
-    // FIC: Wheel abre su propio modal independiente — no toca el flujo de Coverage. (ES)
-    else if (isWheelStrategy(e))    setWheelModalOpen(true);
+
+    if (isCoreOptionStrategy(e)) {
+      setOptionParamsStrategy(e);
+      setOptionParamsModalOpen(true);
+    } else if (isTermStrategy(e)) {
+      setTermModalOpen(true);
+    } else if (isCoverageStrategy(e)) {
+      setCoverageModalOpen(true);
+    } else if (isWheelStrategy(e)) {
+      setWheelModalOpen(true);
+    }
   };
 
   const toggleCore = (c: CoreId)          => setCoresOn((p) => ({ ...p, [c]: !p[c] }));
@@ -828,8 +846,13 @@ export function SimulationControlPanel({
         onClose={() => setCoverageModalOpen(false)}
         onConfirm={(params) => onCoverageParamsConfirmed?.(params, estrategia)}
       />
-      {/* FIC: WheelParamsModal — coexists with CoverageParamsModal, fully independent. (EN) */}
-      {/* FIC: WheelParamsModal — coexiste con CoverageParamsModal, completamente independiente. (ES) */}
+      <OptionStrategyParamsModal
+        open={optionParamsModalOpen}
+        strategy={optionParamsStrategy}
+        ticker={ticket}
+        onClose={() => setOptionParamsModalOpen(false)}
+        onCalculated={onOptionStrategyCalculated}
+      />
       <WheelParamsModal
         open={wheelModalOpen}
         ticker={ticket}

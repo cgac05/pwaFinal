@@ -1,7 +1,5 @@
 // FIC: Option chain table — 3-column layout (calls | strike | puts), auto-updates on ticker change. (EN)
-// FIC: Tabla de cadena de opciones — layout 3 columnas (calls | strike | puts), se actualiza al cambiar ticker. (ES)
-
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useSignalStore } from "../../store/signals";
 import { SkeletonCard } from "../../components/ui/SkeletonCard";
 import {
@@ -17,7 +15,14 @@ export interface OptionChainTableProps {
     strike: number,
     type: "call" | "put",
     premium: number,
-    iv: number
+    iv: number,
+    meta?: {
+      expiration: string;
+      underlyingPrice: number;
+      callPremium: number;
+      putPremium: number;
+      estimatedRiskFreeRate?: number;
+    }
   ) => void;
 }
 
@@ -37,6 +42,24 @@ function fmtDelta(n: number): string {
 
 function midpoint(bid: number, ask: number): number {
   return bid > 0 && ask > 0 ? (bid + ask) / 2 : bid || ask;
+}
+
+function estimateRiskFreeRateFromParity(input: {
+  underlyingPrice: number;
+  strike: number;
+  callPremium: number;
+  putPremium: number;
+  expiration: string;
+}): number | undefined {
+  const days = Math.max(1, Math.round((new Date(input.expiration).getTime() - Date.now()) / 86_400_000));
+  const years = days / 365;
+  const discountedStrike = input.underlyingPrice - input.callPremium + input.putPremium;
+  if (input.underlyingPrice <= 0 || input.strike <= 0 || input.callPremium <= 0 || input.putPremium <= 0 || discountedStrike <= 0 || years <= 0) {
+    return undefined;
+  }
+  const rate = -Math.log(discountedStrike / input.strike) / years;
+  if (!Number.isFinite(rate)) return undefined;
+  return Math.max(0, Math.min(0.1, rate)) * 100;
 }
 
 // ─── Styles (reusing existing CSS tokens only) ────────────────────────────────
@@ -199,34 +222,39 @@ export function OptionChainTable({ symbol, onSelectStrike }: OptionChainTablePro
     return () => { cancelled = true; };
   }, [symbol, selectedExpiration]);
 
+  const underlyingPrice = chain?.underlyingPrice ?? 0;
+  const isLoading = loadingExp || loadingChain;
+
   const handleCallClick = useCallback(
     (row: OptionChainRow) => {
-      const premium = midpoint(row.callBid, row.callAsk) || row.callLastPrice;
-      // TEMP-LOG [Punto 1 — OptionChainTable] antes de emitir callback
-      console.log("[WHEEL-AUDIT][1-OptionChainTable] call click →", {
-        strike: row.strike, type: "call", premium,
-        callBid: row.callBid, callAsk: row.callAsk, callLastPrice: row.callLastPrice,
+      const callPremium = midpoint(row.callBid, row.callAsk) || row.callLastPrice;
+      const putPremium = midpoint(row.putBid, row.putAsk) || row.putLastPrice;
+      onSelectStrike?.(row.strike, "call", callPremium, row.callIV, {
+        expiration: selectedExpiration,
+        underlyingPrice,
+        callPremium,
+        putPremium,
+        estimatedRiskFreeRate: estimateRiskFreeRateFromParity({ underlyingPrice, strike: row.strike, callPremium, putPremium, expiration: selectedExpiration }),
       });
-      onSelectStrike?.(row.strike, "call", premium, row.callIV);
     },
-    [onSelectStrike]
+    [onSelectStrike, selectedExpiration, underlyingPrice]
   );
 
   const handlePutClick = useCallback(
     (row: OptionChainRow) => {
-      const premium = midpoint(row.putBid, row.putAsk) || row.putLastPrice;
-      // TEMP-LOG [Punto 1 — OptionChainTable] antes de emitir callback
-      console.log("[WHEEL-AUDIT][1-OptionChainTable] put click →", {
-        strike: row.strike, type: "put", premium,
-        putBid: row.putBid, putAsk: row.putAsk, putLastPrice: row.putLastPrice,
+      const callPremium = midpoint(row.callBid, row.callAsk) || row.callLastPrice;
+      const putPremium = midpoint(row.putBid, row.putAsk) || row.putLastPrice;
+      onSelectStrike?.(row.strike, "put", putPremium, row.putIV, {
+        expiration: selectedExpiration,
+        underlyingPrice,
+        callPremium,
+        putPremium,
+        estimatedRiskFreeRate: estimateRiskFreeRateFromParity({ underlyingPrice, strike: row.strike, callPremium, putPremium, expiration: selectedExpiration }),
       });
-      onSelectStrike?.(row.strike, "put", premium, row.putIV);
     },
-    [onSelectStrike]
+    [onSelectStrike, selectedExpiration, underlyingPrice]
   );
 
-  const underlyingPrice = chain?.underlyingPrice ?? 0;
-  const isLoading = loadingExp || loadingChain;
 
   // ─── Header ───────────────────────────────────────────────────────────────
 

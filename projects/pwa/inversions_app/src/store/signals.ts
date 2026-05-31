@@ -24,6 +24,11 @@ export interface SelectedStrike {
   type: "call" | "put";
   premium: number;
   iv: number;
+  expiration?: string;
+  underlyingPrice?: number;
+  callPremium?: number;
+  putPremium?: number;
+  estimatedRiskFreeRate?: number;
 }
 
 type RuntimeMode = "online" | "offline";

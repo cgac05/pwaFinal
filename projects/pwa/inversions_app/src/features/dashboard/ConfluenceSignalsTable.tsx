@@ -10,9 +10,10 @@ import {
   type ConfluenceTableResponse
 } from "../../services/signals/confluenceTableApi";
 import type { InstitutionalAnalysisResponse } from "../../services/institutional/institutionalApi";
+import type { FundamentalAnalysisResponse } from "../../services/fundamental/fundamentalApi";
 import { OptionGreeksRow } from "./OptionGreeksRow";
 import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailModal";
-import { ObservationsTab } from "./ObservationsTab";
+import { MarkdownContent } from "../../components/ui/MarkdownContent";
 
 // FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
 const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia"; label: string; width: number }> = [
@@ -58,11 +59,80 @@ function buildResumen(
   return [obs.objetivo, obs.senal, obs.explicacion, met ? `Métricas: ${met}` : ""].filter(Boolean).join(". ");
 }
 
+function formatMetrics(row: ConfluenceSignalRow): string {
+  return Object.entries(row.observacion?.metricas ?? {})
+    .map(([key, value]) => `- ${key}: ${value}`)
+    .join("\n");
+}
+
+function explainScore(row: ConfluenceSignalRow): string {
+  const score = Number(row.score);
+  if (!Number.isFinite(score)) return "El score no viene como numero valido, por eso se usa la observacion original.";
+  const abs = Math.abs(score);
+  const strength = abs >= 0.8 ? "muy fuerte" : abs >= 0.6 ? "fuerte" : abs >= 0.35 ? "media" : "debil";
+  const direction = score > 0 ? "sesgo alcista" : score < 0 ? "sesgo bajista" : "lectura neutral";
+  return `El score ${score.toFixed(3)} indica una conviccion ${strength} con ${direction}.`;
+}
+
+function explainTrend(row: ConfluenceSignalRow): string {
+  if (row.tendencia === "ALCISTA") {
+    return "La tendencia queda ALCISTA porque la senal y el score apuntan a mejora relativa del subcore.";
+  }
+  if (row.tendencia === "BAJISTA") {
+    return "La tendencia queda BAJISTA porque la senal y el score apuntan a deterioro o presion negativa dominante.";
+  }
+  return "La tendencia queda LATERAL porque la fila no trae suficiente direccion para justificar CALL/PUT direccional.";
+}
+
+function buildLocalChatExplanation(row: ConfluenceSignalRow, resumen: string): string {
+  const metrics = formatMetrics(row);
+  return [
+    `- El core **${row.core}${row.subCore ? ` / ${row.subCore}` : ""}** evaluo las metricas mostradas arriba y produjo un score de **${Number(row.score).toFixed(3)}** (peso **${Number(row.peso).toFixed(3)}**) con tendencia **${row.tendencia}**.`,
+    `- Por eso la observacion concluye una senal **${row.tipoSenal}**: ${row.observacion?.senal ?? "sin senal detallada"}.`,
+    `- Esto sustenta la estrategia **${(row as any).estrategia ?? "segun dashboard"}**, coherente con ${row.tendencia === "ALCISTA" ? "un sesgo alcista" : row.tendencia === "BAJISTA" ? "un sesgo bajista" : "un sesgo neutral"}.`,
+    metrics ? `\nMetricas consideradas:\n${metrics}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function buildChatContext(row: ConfluenceSignalRow, resumen: string, activeStrategy?: string): string {
+  const metrics = formatMetrics(row) || "Sin metricas estructuradas.";
+  return [
+    `## Senal de Confluencia: ${row.ticket}`,
+    "",
+    "| Campo | Valor |",
+    "|---|---|",
+    `| Core | ${row.core}${row.subCore ? ` / ${row.subCore}` : ""} |`,
+    `| Tipo Senal | **${row.tipoSenal}** |`,
+    `| Tendencia | ${row.tendencia} |`,
+    `| Score | ${Number(row.score).toFixed(3)} |`,
+    `| Peso | ${Number(row.peso).toFixed(3)} |`,
+    `| Invertir | ${row.invertir ? "SI" : "NO"} |`,
+    `| Estado | ${row.estado} |`,
+    `| Timeframe | ${row.timeframe} |`,
+    `| Fecha | ${row.fecha} |`,
+    `| Estrategia activa | ${activeStrategy?.replace(/_/g, " ") ?? "N/A"} |`,
+    "",
+    "### Observacion",
+    `**Objetivo:** ${row.observacion?.objetivo ?? "-"}`,
+    "",
+    `**Senal:** ${row.observacion?.senal ?? "-"}`,
+    "",
+    `**Explicacion:** ${row.observacion?.explicacion ?? resumen}`,
+    "",
+    "### Metricas consideradas",
+    metrics,
+    "",
+    "### Razonamiento (como llegamos a esta conclusion)",
+    buildLocalChatExplanation(row, resumen),
+  ].join("\n");
+}
+
 interface Props {
   symbol?: string;
   /** FIC: Permite sobrescribir las filas (por ejemplo desde una corrida de simulacion). */
   rows?: ConfluenceSignalRow[];
   activeStrategy?: string;
+  fundamentalAnalysis?: FundamentalAnalysisResponse | null;
 }
 
 function colorForTipo(tipo: string): string {
@@ -77,7 +147,48 @@ function colorForEstado(estado: string): string {
   return "var(--color-buy, #2ec27e)";
 }
 
-export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy }: Props) {
+function clampScore(value: number): number {
+  return Math.max(-1, Math.min(1, value));
+}
+
+function buildFundamentalRow(data: FundamentalAnalysisResponse, timeframe: string): ConfluenceSignalRow {
+  const score = clampScore(((data.overallScore ?? 5) - 5) / 5);
+  const verdict = String(data.verdict ?? "").toLowerCase();
+  const tipoSenal = verdict.includes("comprar") || verdict.includes("buy") ? "CALL" : verdict.includes("vender") || verdict.includes("sell") ? "PUT" : "HOLD";
+  return {
+    ticket: data.ticker,
+    core: "A_FUNDAMENTAL",
+    subCore: "FUNDAMENTAL",
+    precio: data.fundamentalData?.price ?? 0,
+    tipoSenal,
+    fecha: new Date(data.timestamp).toISOString().slice(0, 10),
+    timeframe: timeframe as any,
+    tendencia: tipoSenal === "CALL" ? "ALCISTA" : tipoSenal === "PUT" ? "BAJISTA" : "LATERAL",
+    score,
+    peso: Math.abs(score),
+    invertir: tipoSenal !== "HOLD" && score > 0,
+    estado: "ACTIVA",
+    vigencia: data.timestamp,
+    fuente: data.sourceId ?? "fundamental",
+    evidencia_refs: [`fundamental:${data.ticker}:${data.timestamp}`],
+    ia_revisada: false,
+    delta_vs_anterior: "CONFIRMADA",
+    observacion: {
+      objetivo: `Analisis fundamental de ${data.companyName || data.ticker}`,
+      senal: String(data.verdict ?? "Sin veredicto"),
+      explicacion: `Score fundamental ${Number(data.overallScore ?? 0).toFixed(1)}/10.`,
+      metricas: {
+        MARKET_CAP: data.fundamentalData?.marketCap ?? 0,
+        VOLATILIDAD: data.fundamentalData?.volatility ?? 0,
+      },
+    },
+    algorithm_version: "fundamental-frontend-1.0",
+    computed_at: data.timestamp,
+    source_input_hash: `fundamental:${data.ticker}:${data.timestamp}`,
+  };
+}
+
+export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy, fundamentalAnalysis }: Props) {
   const [rows, setRows] = useState<ConfluenceSignalRow[]>(rowsProp ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,21 +196,18 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
   const [modalTicker, setModalTicker] = useState<string | null>(null);
   const [modalResumen, setModalResumen] = useState<string>("");
   const [modalRow, setModalRow] = useState<ConfluenceSignalRow | null>(null);
-  const [stubCore, setStubCore] = useState<string | null>(null);
-  const [stubResumen, setStubResumen] = useState<string>("");
-  // FIC: Full row stored for A_TECNICO structured detail panel. (EN)
-  // FIC: Fila completa almacenada para el panel de detalle estructurado de A_TECNICO. (ES)
-  const [stubRow, setStubRow] = useState<ConfluenceSignalRow | null>(null);
+  const [observationRow, setObservationRow] = useState<(ConfluenceSignalRow & { resumen_analisis?: string }) | null>(null);
+  const [detailTab, setDetailTab] = useState<"analysis" | "context">("analysis");
 
   const { setSelectedSignal } = useSignalStore();
   const { results: institutionalResults } = useInstitutionalStore();
 
   useEffect(() => {
-    if (!stubCore) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setStubCore(null); setStubRow(null); } };
+    if (!observationRow) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setObservationRow(null); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [stubCore]);
+  }, [observationRow]);
 
   useEffect(() => {
     if (rowsProp) {
@@ -125,10 +233,20 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
 
   const enrichedSorted = useMemo(() => {
     const order = ["A_INDICADORES", "A_FUNDAMENTAL", "A_TECNICO", "A_INSTITUCIONAL", "A_NOTICIAS", "A_IA"];
-    return [...rows]
+    const timeframe = rows[0]?.timeframe ?? "1h";
+    let mergedRows = [...rows];
+    if (fundamentalAnalysis) {
+      mergedRows = mergedRows.filter((row) => row.core !== "A_FUNDAMENTAL");
+      if (Array.isArray(fundamentalAnalysis.confluenceRows) && fundamentalAnalysis.confluenceRows.length > 0) {
+        mergedRows.push(...fundamentalAnalysis.confluenceRows);
+      } else {
+        mergedRows.push(buildFundamentalRow(fundamentalAnalysis, timeframe));
+      }
+    }
+    return mergedRows
       .sort((a, b) => order.indexOf(a.core) - order.indexOf(b.core))
       .map((row) => ({ ...row, resumen_analisis: buildResumen(row, institutionalResults) }));
-  }, [rows, institutionalResults]);
+  }, [rows, institutionalResults, fundamentalAnalysis]);
 
   const totalCols = TABLE_COLUMNS.length;
   const sorted = enrichedSorted;
@@ -183,25 +301,30 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                       setModalTicker(row.ticket ?? null);
                       setModalResumen(row.resumen_analisis ?? "");
                       setModalRow(row);
-                    } else {
-                      setSelectedSignal({
-                        id: rowKey,
-                        symbol: row.ticket,
-                        metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
-                      } as SelectedSignal);
+                      return;
                     }
-                  } else if (row.core === "A_INDICADORES") {
                     setSelectedSignal({
                       id: rowKey,
                       symbol: row.ticket,
                       metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
                     } as SelectedSignal);
-                  } else {
-                    setStubCore(row.core);
-                    setStubResumen(row.resumen_analisis ?? "");
-                    // FIC: Store full row for A_TECNICO structured panel; null for others. (EN)
-                    setStubRow(row.core === "A_TECNICO" ? row : null);
+                    return;
                   }
+                  if (row.core === "A_INDICADORES") {
+                    setSelectedSignal({
+                      id: rowKey,
+                      symbol: row.ticket,
+                      metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
+                    } as SelectedSignal);
+                    return;
+                  }
+                  if (row.core === "A_FUNDAMENTAL") {
+                    setDetailTab("analysis");
+                    setObservationRow(row);
+                    return;
+                  }
+                  setDetailTab("analysis");
+                  setObservationRow(row);
                 };
 
                 const cells = (
@@ -248,163 +371,159 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
         </table>
       </div>
 
-      {stubCore && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="stub-dialog-title"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.72)",
-            zIndex: 1100,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "1.25rem"
-          }}
-          onClick={() => { setStubCore(null); setStubRow(null); }}
-        >
-          <div
-            className="card"
-            style={{
-              width: "min(560px, 94vw)",
-              maxHeight: "80vh",
-              display: "flex",
-              flexDirection: "column",
-              border: "1px solid var(--color-border)",
-              boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
-              padding: "1.75rem"
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="stub-dialog-title" style={{ marginBottom: "0.25rem", flexShrink: 0 }}>
-              {stubCore === "A_TECNICO" ? "Análisis Técnico" : stubCore.replace("A_", "")}
-            </h2>
-            {stubCore !== "A_TECNICO" && (
-              <p style={{ color: "var(--color-text-muted)", fontSize: "0.8rem", marginBottom: "1.25rem", flexShrink: 0 }}>
-                Análisis gráfico en construcción — próximamente disponible.
-              </p>
-            )}
-
-            {/* FIC: A_TECNICO structured panel — replaces plain text for this core. (EN) */}
-            {stubCore === "A_TECNICO" && stubRow ? (() => {
-              // Parse evidencia_refs: ["trend:ALCISTA", "adx:28.7", ...]
-              const ev: Record<string, string> = {};
-              for (const ref of (stubRow.evidencia_refs ?? [])) {
-                const i = ref.indexOf(":");
-                if (i > 0) ev[ref.slice(0, i)] = ref.slice(i + 1);
-              }
-              const met = stubRow.observacion?.metricas ?? {};
-              const trendColor = stubRow.tendencia === "ALCISTA" ? "var(--color-buy)"
-                : stubRow.tendencia === "BAJISTA" ? "var(--color-sell)"
-                : "var(--color-text-muted)";
-              const subCard = { background: "var(--color-surface-raised)", borderRadius: "var(--radius-sm)",
-                padding: "0.75rem 1rem", border: "1px solid var(--color-border-subtle)" };
-              const subTitle = { fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase" as const,
-                letterSpacing: "0.07em", color: "var(--color-accent)", marginBottom: "0.5rem" };
-              const dataRow = (label: string, value: React.ReactNode, color?: string) => (
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0",
-                  borderBottom: "1px solid var(--color-border-subtle)", fontSize: "0.75rem" }}>
-                  <span style={{ color: "var(--color-text-muted)" }}>{label}</span>
-                  <span style={{ fontWeight: 600, color: color ?? "var(--color-text)" }}>{value}</span>
-                </div>
-              );
-              return (
-                <div style={{ flex: 1, overflowY: "auto", display: "grid",
-                  gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.25rem" }}>
-                  {/* Tendencia */}
-                  <div style={subCard}>
-                    <div style={subTitle}>Tendencia</div>
-                    {dataRow("Detectada", ev.trend ?? stubRow.tendencia, trendColor)}
-                    {dataRow("Fuerza", ev.trendStrength ?? (met.TREND_STRENGTH as string) ?? "—")}
-                  </div>
-                  {/* Momentum */}
-                  <div style={subCard}>
-                    <div style={subTitle}>Momentum</div>
-                    {dataRow("ADX", ev.adx ? `${ev.adx}` : "—")}
-                    {dataRow("Interpretación",
-                      Number(ev.adx ?? 0) >= 40 ? "Muy fuerte" :
-                      Number(ev.adx ?? 0) >= 25 ? "Fuerte" :
-                      Number(ev.adx ?? 0) >= 15 ? "Débil" : "Sin tendencia")}
-                    {dataRow("Líneas", `${ev.trendLines ?? "0"} totales`)}
-                  </div>
-                  {/* Medias */}
-                  <div style={subCard}>
-                    <div style={subTitle}>Medias Móviles</div>
-                    {dataRow("EMA50", met.SMA_50 ? `$${Number(met.SMA_50).toFixed(2)}` : "—")}
-                    {dataRow("Último cierre", stubRow.precio > 0 ? `$${stubRow.precio.toFixed(2)}` : "—")}
-                    {dataRow("Candles analizadas", met.CANDLES_ANALYZED ?? "—")}
-                  </div>
-                  {/* Soportes */}
-                  <div style={subCard}>
-                    <div style={subTitle}>Soportes</div>
-                    {dataRow("Cantidad", ev.supports ?? (met.SOPORTES as string) ?? "0",
-                      Number(ev.supports ?? 0) > 0 ? "var(--color-buy)" : undefined)}
-                  </div>
-                  {/* Resistencias */}
-                  <div style={subCard}>
-                    <div style={subTitle}>Resistencias</div>
-                    {dataRow("Cantidad", ev.resistances ?? (met.RESISTENCIAS as string) ?? "0",
-                      Number(ev.resistances ?? 0) > 0 ? "var(--color-sell)" : undefined)}
-                  </div>
-                  {/* Métricas */}
-                  <div style={subCard}>
-                    <div style={subTitle}>Métricas</div>
-                    {Object.entries(met).map(([k, v]) => dataRow(k, String(v)))}
-                    {Object.keys(met).length === 0 && (
-                      <span style={{ fontSize: "0.72rem", color: "var(--color-text-muted)" }}>Sin métricas</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })() : null}
-
-            {/* FIC: Non-A_TECNICO: ObservationsTab when stubRow available (upstream), else plain stubResumen. (EN) */}
-            {/* FIC: No-A_TECNICO: ObservationsTab si stubRow disponible (upstream), si no texto plano. (ES) */}
-            {stubCore !== "A_TECNICO" && stubRow && (
-              <div style={{ flex: 1, overflowY: "auto", marginBottom: "1.25rem" }}>
-                <ObservationsTab row={stubRow} activeStrategy={activeStrategy} />
-              </div>
-            )}
-
-            {stubCore !== "A_TECNICO" && !stubRow && stubResumen && (
-              <>
-                <div style={{
-                  borderTop: "1px solid var(--color-border-subtle)",
-                  paddingTop: "1rem",
-                  marginBottom: "0.5rem",
-                  flexShrink: 0
-                }}>
-                  <span style={{
-                    fontSize: "0.68rem",
-                    fontWeight: 700,
-                    color: "var(--color-text-muted)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.07em"
-                  }}>
-                    Observaciones
-                  </span>
-                </div>
-                <div style={{
-                  flex: 1,
-                  overflowY: "auto",
-                  background: "var(--color-surface-raised)",
-                  borderRadius: "var(--radius-sm)",
-                  padding: "0.9rem 1rem",
-                  marginBottom: "1.25rem"
-                }}>
-                  <MarkdownContent content={stubResumen} />
-                </div>
-              </>
-            )}
-
-            <button className="btn-ghost" type="button" onClick={() => { setStubCore(null); setStubRow(null); }} style={{ flexShrink: 0, alignSelf: "flex-end" }}>
-              Cerrar
-            </button>
+      {observationRow && (() => {
+        const resumen = observationRow.resumen_analisis ?? buildResumen(observationRow, institutionalResults);
+        const contextMarkdown = buildChatContext(observationRow, resumen, activeStrategy);
+        const reasoning = buildLocalChatExplanation(observationRow, resumen);
+        const metrics = Object.entries(observationRow.observacion?.metricas ?? {});
+        const technicalEvidence = (observationRow.evidencia_refs ?? []).reduce<Record<string, string>>((acc, ref) => {
+          const separator = ref.indexOf(":");
+          if (separator > 0) acc[ref.slice(0, separator)] = ref.slice(separator + 1);
+          return acc;
+        }, {});
+        const fieldCard = (label: string, value: React.ReactNode) => (
+          <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.7rem", background: "var(--color-surface)" }}>
+            <div style={{ fontSize: "0.65rem", color: "var(--color-text-muted)", textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>{label}</div>
+            <strong style={{ fontSize: "0.9rem" }}>{value}</strong>
           </div>
-        </div>
-      )}
+        );
+
+        return (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="observation-dialog-title"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.72)",
+              zIndex: 1100,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "1.25rem"
+            }}
+            onClick={() => setObservationRow(null)}
+          >
+            <div
+              className="card"
+              style={{
+                width: "min(960px, 96vw)",
+                maxHeight: "88vh",
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+                border: "1px solid var(--color-border)",
+                boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
+                padding: "0"
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ padding: "1rem 1.25rem 0.5rem", display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start" }}>
+                <div>
+                  <h2 id="observation-dialog-title" style={{ margin: "0 0 0.25rem", fontSize: "1rem", letterSpacing: "0.04em", textTransform: "uppercase" }}>Detalle de Señal</h2>
+                  <p style={{ color: "var(--color-text-muted)", fontSize: "0.78rem", margin: 0, fontWeight: 700 }}>
+                    {observationRow.ticket} - {observationRow.core} / {observationRow.subCore ?? "General"}
+                  </p>
+                </div>
+                <button className="btn-ghost" type="button" onClick={() => setObservationRow(null)} style={{ borderRadius: "var(--radius-pill)", fontWeight: 700 }}>
+                  Cerrar
+                </button>
+              </div>
+
+              <div style={{ display: "flex", gap: "0.4rem", padding: "0 1.25rem 0.5rem", borderBottom: "1px solid var(--color-border)" }}>
+                {[
+                  ["analysis", "Análisis"],
+                  ["context", "Contexto para Chat"],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setDetailTab(id as "analysis" | "context")}
+                    style={{
+                      padding: "0.55rem 0.9rem",
+                      background: detailTab === id ? "var(--color-surface-raised)" : "transparent",
+                      color: "var(--color-text)",
+                      border: "1px solid var(--color-border)",
+                      borderBottom: detailTab === id ? "2px solid var(--color-accent)" : "1px solid var(--color-border)",
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {detailTab === "analysis" ? (
+                <div style={{ padding: "1rem 1.25rem", overflowY: "auto" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "0.65rem", marginBottom: "1rem" }}>
+                    {fieldCard("Subcore", observationRow.subCore ?? "-")}
+                    {fieldCard("Precio", Number(observationRow.precio).toFixed(2))}
+                    {fieldCard("Señal", observationRow.tipoSenal)}
+                    {fieldCard("Tendencia", observationRow.tendencia)}
+                    {fieldCard("Score", Number(observationRow.score).toFixed(3))}
+                    {fieldCard("Peso", Number(observationRow.peso).toFixed(3))}
+                    {fieldCard("Invertir", observationRow.invertir ? "SI" : "NO")}
+                    {fieldCard("Estado", observationRow.estado)}
+                    {fieldCard("Fecha", observationRow.fecha)}
+                    {fieldCard("Timeframe", observationRow.timeframe)}
+                    {fieldCard("Estrategia", activeStrategy?.replace(/_/g, " ") ?? "N/A")}
+                  </div>
+
+                  {observationRow.core === "A_TECNICO" && (
+                    <>
+                      <h3 style={{ margin: "0 0 0.6rem", fontSize: "0.98rem", textTransform: "uppercase", color: "var(--color-text-muted)" }}>Detalle técnico</h3>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "0.5rem", marginBottom: "1rem" }}>
+                        {fieldCard("Trend", technicalEvidence.trend ?? observationRow.tendencia)}
+                        {fieldCard("ADX", technicalEvidence.adx ?? "-")}
+                        {fieldCard("Trend strength", technicalEvidence.trendStrength ?? observationRow.observacion?.metricas?.TREND_STRENGTH ?? "-")}
+                        {fieldCard("Soportes", technicalEvidence.supports ?? observationRow.observacion?.metricas?.SOPORTES ?? "0")}
+                        {fieldCard("Resistencias", technicalEvidence.resistances ?? observationRow.observacion?.metricas?.RESISTENCIAS ?? "0")}
+                        {fieldCard("Candles", observationRow.observacion?.metricas?.CANDLES_ANALYZED ?? "-")}
+                      </div>
+                    </>
+                  )}
+
+                  <h3 style={{ margin: "0 0 0.6rem", fontSize: "0.98rem", textTransform: "uppercase", color: "var(--color-text-muted)" }}>Observación</h3>
+                  <div style={{ fontSize: "0.82rem", lineHeight: 1.35, marginBottom: "1rem" }}>
+                    <strong>Objetivo:</strong> {observationRow.observacion?.objetivo ?? "-"}<br />
+                    <strong>Señal:</strong> {observationRow.observacion?.senal ?? "-"}<br />
+                    <strong>Explicación:</strong> {observationRow.observacion?.explicacion ?? resumen}
+                  </div>
+
+                  <h3 style={{ margin: "0 0 0.35rem", fontSize: "0.98rem", textTransform: "uppercase", color: "var(--color-text-muted)" }}>Métricas consideradas para esta señal</h3>
+                  <p style={{ margin: "0 0 0.65rem", color: "var(--color-text-muted)", fontSize: "0.78rem" }}>
+                    Valores que el algoritmo evaluó para emitir la señal {observationRow.tipoSenal} con score {Number(observationRow.score).toFixed(3)}.
+                  </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.5rem", marginBottom: "1rem" }}>
+                    {metrics.length > 0 ? metrics.map(([key, value]) => fieldCard(key, String(value))) : fieldCard("Sin métricas", "-")}
+                  </div>
+
+                  <h3 style={{ margin: "0 0 0.5rem", fontSize: "0.98rem", textTransform: "uppercase", color: "var(--color-text-muted)" }}>Razonamiento</h3>
+                  <MarkdownContent content={reasoning} />
+                </div>
+              ) : (
+                <div style={{ padding: "1rem 1.25rem", overflow: "hidden", display: "flex", flexDirection: "column", gap: "0.8rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
+                    <p style={{ margin: 0, color: "var(--color-text-muted)", fontSize: "0.78rem" }}>
+                      Representación MD de esta señal lista para enviar al chat.
+                    </p>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <button className="btn-ghost" type="button" onClick={() => void navigator.clipboard?.writeText(contextMarkdown)}>Copiar</button>
+                      <button className="btn-primary" type="button" onClick={() => void navigator.clipboard?.writeText(contextMarkdown)}>Usar en chat</button>
+                    </div>
+                  </div>
+                  <pre style={{ margin: 0, flex: 1, overflow: "auto", minHeight: 420, background: "#000", color: "var(--color-text)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "1rem", fontSize: "0.72rem", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
+                    {contextMarkdown}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       <InstitutionalDetailModal
         isOpen={modalTicker !== null}
