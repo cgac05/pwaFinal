@@ -356,7 +356,7 @@ export function OptionStrategyParamsModal({ open, strategy, ticker, onClose, onC
     });
     onClose();
     } catch (error) {
-      setCalculationError(error instanceof Error ? error.message : "No se pudo calcular con datos reales");
+      setCalculationError(error instanceof Error ? error.message : "No se pudo calcular");
     } finally {
       setCalculating(false);
     }
@@ -425,9 +425,6 @@ export function OptionStrategyParamsModal({ open, strategy, ticker, onClose, onC
               Datos de option chain
             </span>
           )}
-          <span style={{ color: "var(--color-buy)", background: "rgba(0,168,126,0.12)", borderRadius: "var(--radius-pill)", padding: "2px 10px", fontSize: "var(--font-size-xs)", fontWeight: 700 }}>
-            Calculo backend real
-          </span>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "var(--space-sm)" }}>
@@ -509,7 +506,7 @@ export function OptionStrategyParamsModal({ open, strategy, ticker, onClose, onC
           }}
         >
           <Play size={13} fill="currentColor" strokeWidth={0} />
-          {calculating ? "Calculando..." : "Calcular con datos reales"}
+          {calculating ? "Calculando..." : "Guardar parametros"}
         </button>
       </div>
     </ContentModal>

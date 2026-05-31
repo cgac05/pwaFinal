@@ -49,6 +49,12 @@ interface YahooQuoteSummaryResult {
     country?: string;
     fullTimeEmployees?: number;
   };
+  summaryProfile?: {
+    sector?: string;
+    industry?: string;
+    country?: string;
+    fullTimeEmployees?: number;
+  };
 }
 
 interface FmpProfile {
@@ -328,6 +334,7 @@ async function fetchYahooSummary(ticker: string): Promise<YahooQuoteSummaryResul
     "defaultKeyStatistics",
     "financialData",
     "assetProfile",
+    "summaryProfile",
   ].join(",");
 
   for (const host of ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]) {
@@ -398,6 +405,31 @@ async function fetchYahooChartSnapshot(ticker: string): Promise<YahooChartSnapsh
   return null;
 }
 
+async function fetchYahooSectorFallback(ticker: string): Promise<{ sector?: string; industry?: string } | null> {
+  for (const host of ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]) {
+    const url = `https://${host}/v7/finance/quote?symbols=${encodeURIComponent(ticker)}&fields=sector,industry`;
+    const ac = new AbortController();
+    const tid = setTimeout(() => ac.abort(), 8_000);
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": YAHOO_USER_AGENT, Accept: "application/json" },
+        signal: ac.signal,
+      });
+      if (!res.ok) continue;
+      const payload = (await res.json()) as {
+        quoteResponse?: { result?: Array<{ sector?: string; industry?: string }> };
+      };
+      const result = payload.quoteResponse?.result?.[0];
+      if (result?.sector) return { sector: result.sector, industry: result.industry };
+    } catch {
+      // try next host
+    } finally {
+      clearTimeout(tid);
+    }
+  }
+  return null;
+}
+
 async function fetchFromYahoo(ticker: string, lookbackDays: number): Promise<FundamentalAnalysisData | null> {
   const [summary, chartSnapshot, candles] = await Promise.all([
     fetchYahooSummary(ticker),
@@ -428,7 +460,18 @@ async function fetchFromYahoo(ticker: string, lookbackDays: number): Promise<Fun
   if (currentPrice === undefined && asNumber(summary?.price?.marketCap) === undefined) return null;
 
   const marketCap = asNumber(summary?.price?.marketCap);
-  const sec = await fetchFromSec(ticker, currentPrice, marketCap).catch(() => null);
+
+  // Resolve sector: try assetProfile/summaryProfile first, fallback to v7/quote
+  const profileSector = summary?.assetProfile?.sector ?? summary?.summaryProfile?.sector;
+  const profileIndustry = summary?.assetProfile?.industry ?? summary?.summaryProfile?.industry;
+
+  const [sec, sectorFallback] = await Promise.all([
+    fetchFromSec(ticker, currentPrice, marketCap).catch(() => null),
+    !profileSector ? fetchYahooSectorFallback(ticker).catch(() => null) : Promise.resolve(null),
+  ]);
+
+  const resolvedSector = profileSector ?? sectorFallback?.sector;
+  const resolvedIndustry = profileIndustry ?? sectorFallback?.industry;
 
   return {
     companyName:
@@ -451,7 +494,7 @@ async function fetchFromYahoo(ticker: string, lookbackDays: number): Promise<Fun
         priceChange52WeekPercent: change52,
       },
       marketCap: { value: marketCap, currency: summary?.price?.currency ?? chartSnapshot?.meta.currency ?? "USD" },
-      sector: { sector: summary?.assetProfile?.sector, industry: summary?.assetProfile?.industry },
+      sector: { sector: resolvedSector, industry: resolvedIndustry },
       financialRatios: {
         peRatio: asNumber(summary?.summaryDetail?.trailingPE) ?? sec?.peRatio,
         pbRatio: asNumber(summary?.defaultKeyStatistics?.priceToBook) ?? sec?.pbRatio,
@@ -478,8 +521,8 @@ async function fetchFromYahoo(ticker: string, lookbackDays: number): Promise<Fun
         annualRevenue: asNumber(summary?.financialData?.totalRevenue) ?? sec?.annualRevenue,
         revenueGrowthPercent: percentFromRatio(asNumber(summary?.financialData?.revenueGrowth)) ?? sec?.revenueGrowthPercent,
       },
-      employees: { count: summary?.assetProfile?.fullTimeEmployees },
-      country: { primaryListing: summary?.assetProfile?.country ?? chartSnapshot?.meta.exchangeName },
+      employees: { count: summary?.assetProfile?.fullTimeEmployees ?? summary?.summaryProfile?.fullTimeEmployees },
+      country: { primaryListing: summary?.assetProfile?.country ?? summary?.summaryProfile?.country ?? chartSnapshot?.meta.exchangeName },
     },
   };
 }

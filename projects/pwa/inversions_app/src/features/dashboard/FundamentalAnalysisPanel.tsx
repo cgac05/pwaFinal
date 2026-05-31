@@ -34,8 +34,8 @@ function metricColor(val: number | undefined, goodThreshold: number, badThreshol
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function ScoreGauge({ score }: { score: number }) {
-  const pct = Math.max(0, Math.min(100, score * 10));
-  const color = score >= 7 ? "var(--color-buy)" : score >= 4 ? "var(--color-hold)" : "var(--color-sell)";
+  const pct = Math.max(0, Math.min(100, score));
+  const color = score >= 70 ? "var(--color-buy)" : score >= 40 ? "var(--color-hold)" : "var(--color-sell)";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
       <div style={{
@@ -44,8 +44,8 @@ function ScoreGauge({ score }: { score: number }) {
         color,
         lineHeight: 1,
       }}>
-        {score.toFixed(1)}
-        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontWeight: "normal" }}>/10</span>
+        {Math.round(score)}
+        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontWeight: "normal" }}>/100</span>
       </div>
       <div style={{
         width: "100%",

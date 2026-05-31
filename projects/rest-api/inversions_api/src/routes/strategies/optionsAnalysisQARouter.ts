@@ -68,7 +68,7 @@ export function createOptionsAnalysisQARouter(supabaseClient: SupabaseClient): R
       candidates = buildOptionStrategyCandidates(enrichedContract.contract);
     } catch (err) {
       return res.status(400).json({
-        error: "No se pudieron resolver datos reales de opciones para el Q&A",
+        error: "No se pudieron resolver datos de opciones para el Q&A",
         details: String(err),
       });
     }

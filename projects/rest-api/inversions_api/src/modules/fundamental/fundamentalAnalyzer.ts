@@ -716,7 +716,7 @@ async function buildFundamentalProjection(
     calculationSteps: [
       `1. Se calcula score fundamental promedio: ${overallScore}/100 => ${projectionVerdict(verdict)}.`,
       `2. Se usa volatilidad anualizada ${vol.toFixed(1)}% para estimar movimiento esperado de +/-$${expectedMove}.`,
-      `3. Se usa prima real de cadena de opciones: strike $${strike}, vencimiento ${marketContext.expirationDate}, prima $${premium} por accion.`,
+      `3. Se usa prima de cadena de opciones: strike $${strike}, vencimiento ${marketContext.expirationDate}, prima $${premium} por accion.`,
       `4. Se evalua ${parts.label} contra escenarios ATM, +5% y -5%, mas trayectoria base/alcista/bajista.`,
       "5. La simulacion es explicativa: no ejecuta ni recomienda operar automaticamente."
     ],
