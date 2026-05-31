@@ -42,6 +42,11 @@ import { coverageCompareRouter } from "./routes/coverage/compare";
 import { coverageSimulateRouter } from "./routes/coverage/simulate";
 import { optionChainRouter } from "./routes/options/chain";
 import { optionExpirationsRouter } from "./routes/options/expirations";
+import { supabaseClient } from "./database/supabase/client";
+import { createFundamentalAnalyzeRouter } from "./routes/fundamental/analyze";
+import { createCompanyProfileRouter } from "./routes/fundamental/companyProfile";
+import { createOptionsRouter } from "./routes/strategies/optionsRouter";
+import { createOptionsAnalysisQARouter } from "./routes/strategies/optionsAnalysisQARouter";
 
 const envValidation = validateEnvironment();
 if (!envValidation.isValid) {
@@ -98,6 +103,12 @@ app.use("/api/coverage", coverageCompareRouter);
 app.use("/api/coverage", coverageSimulateRouter);
 app.use("/api/options", indicatorsRateLimit, optionChainRouter);
 app.use("/api/options", indicatorsRateLimit, optionExpirationsRouter);
+
+// ── Team-03 routes ──────────────────────────────────────────────────
+app.use("/api/team-03/fundamental", createFundamentalAnalyzeRouter(supabaseClient));
+app.use("/api/team-03/fundamental", createCompanyProfileRouter(supabaseClient));
+app.use("/api/team-03/options", createOptionsRouter(supabaseClient));
+app.use("/api/team-03/options", createOptionsAnalysisQARouter(supabaseClient));
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });

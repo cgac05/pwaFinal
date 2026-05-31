@@ -6,10 +6,6 @@ import { respondError } from "../../modules/indicators/errors";
 import { runSimulation, validateSimulationRequest } from "../../modules/simulation/runner";
 import { persistSimulationRun } from "../../modules/simulation/persistence";
 import type { SimulationRequest } from "../../modules/indicators/types";
-import {
-  getInstitutionalRouteContext,
-  buildInstitutionalContractForSimulation,
-} from "../institutional/bootstrap";
 
 export const simulationRunRouter = Router();
 
@@ -21,11 +17,7 @@ simulationRunRouter.post("/run", async (req, res) => {
   const request = req.body as SimulationRequest;
 
   try {
-    const institutionalContext = request.coresHabilitados.includes("A_INSTITUCIONAL")
-      ? { ...getInstitutionalRouteContext(), buildContract: buildInstitutionalContractForSimulation }
-      : undefined;
-
-    const result = await runSimulation(request, { institutionalContext });
+    const result = await runSimulation(request);
     // FIC: T088 — best-effort persistence; never blocks the response.
     void persistSimulationRun(result, req.authContext?.userId);
     return res.status(200).json(result);

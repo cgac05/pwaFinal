@@ -1,65 +1,46 @@
-// FIC: OHLC route — triple fallback: Tradier history → Yahoo v8 chart → deterministic mock. (EN)
-// FIC: Ruta OHLC — triple fallback: historial Tradier → chart Yahoo v8 → mock determinista. (ES)
+// FIC: OHLC market data route — fetches real historical prices from Yahoo Finance.
+// Falls back to deterministic mock candles if Yahoo is unavailable.
 
 import { Router } from "express";
-import { isTradierConfigured, tradierGet } from "../../modules/market/tradierClient";
-import { fetchYahooOhlc, type OhlcCandle } from "../../modules/institutional/yahooChartParser";
 
-export const marketDataOhlcRouter = Router();
+const YAHOO_BASE = "https://query1.finance.yahoo.com";
+const YAHOO_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (compatible; inversions-app/1.0)",
+  Accept: "application/json"
+};
 
-// FIC: Tradier history day shape. (EN)
-interface TradierHistoryDay {
-  date: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-interface TradierHistoryResponse {
-  history: {
-    day: TradierHistoryDay | TradierHistoryDay[];
-  } | null;
-}
-
-// FIC: Map timeframe to Tradier interval param and lookback start date. (EN)
-// FIC: Mapea timeframe al parámetro interval de Tradier y fecha de inicio. (ES)
-function timeframeToTradierParams(timeframe: string, startDateIso?: string): { interval: string; start: string } {
-  const now = new Date();
-  const ago = (days: number): string => {
-    const d = new Date(now);
-    d.setDate(d.getDate() - days);
-    return d.toISOString().slice(0, 10);
-  };
-  // If caller provides a startDate, use it directly (clamped to Tradier max per interval)
-  if (startDateIso) {
-    const start = startDateIso.slice(0, 10);
-    switch (timeframe) {
-      case "1w": return { interval: "weekly",  start };
-      case "1M": return { interval: "monthly", start };
-      default:   return { interval: "daily",   start };
-    }
-  }
+function intervalMs(timeframe: string): number {
   switch (timeframe) {
-    case "1w":  return { interval: "weekly",  start: ago(365 * 10) };
-    case "1M":  return { interval: "monthly", start: ago(365 * 20) };
-    default:    return { interval: "daily",   start: ago(365 * 5) }; // 5 years for daily
+    case "1m":  return 60_000;
+    case "5m":  return 300_000;
+    case "15m": return 900_000;
+    case "1h":  return 3_600_000;
+    case "4h":  return 14_400_000;
+    case "1w":  return 604_800_000;
+    case "1M":  return 2_592_000_000;
+    default:    return 86_400_000; // 1d
   }
 }
 
-// FIC: Generate deterministic mock candles — existing behaviour, always succeeds. (EN)
-// FIC: Genera velas mock deterministas — comportamiento existente, siempre funciona. (ES)
-function mockCandles(symbol: string, timeframe: string): OhlcCandle[] {
-  const intervalMs: Record<string, number> = {
-    "1m": 60_000, "5m": 300_000, "15m": 900_000,
-    "1h": 3_600_000, "4h": 14_400_000,
-    "1w": 604_800_000, "1M": 2_592_000_000,
-  };
-  const step = intervalMs[timeframe] ?? 86_400_000;
+/** Map timeframe string to Yahoo Finance range + interval params. */
+function yahooParams(timeframe: string): { range: string; interval: string } {
+  switch (timeframe) {
+    case "1m":  return { range: "1d",  interval: "1m" };
+    case "5m":  return { range: "5d",  interval: "5m" };
+    case "15m": return { range: "5d",  interval: "15m" };
+    case "1h":  return { range: "1mo", interval: "60m" };
+    case "4h":  return { range: "3mo", interval: "60m" }; // Yahoo max is 60m; aggregate client-side if needed
+    case "1w":  return { range: "5y",  interval: "1wk" };
+    case "1M":  return { range: "10y", interval: "1mo" };
+    default:    return { range: "1y",  interval: "1d" };
+  }
+}
+
+function mockCandles(symbol: string, timeframe: string, count = 300) {
+  const step = intervalMs(timeframe);
   const now = Date.now();
-  return Array.from({ length: 300 }).map((_, index) => {
-    const t = now - (300 - index) * step;
+  return Array.from({ length: count }).map((_, index) => {
+    const t = now - (count - index) * step;
     const base = 100 + Math.sin(index / 12) * 8 + (symbol.charCodeAt(0) % 7);
     const open  = Number((base + Math.sin(index / 3)).toFixed(2));
     const close = Number((base + Math.cos(index / 4)).toFixed(2));
@@ -69,62 +50,62 @@ function mockCandles(symbol: string, timeframe: string): OhlcCandle[] {
   });
 }
 
-// FIC: Fetch real OHLC from Tradier history endpoint — returns null on any failure. (EN)
-// FIC: Obtiene OHLC real del endpoint de historial Tradier — retorna null en cualquier fallo. (ES)
-async function fetchFromTradier(symbol: string, timeframe: string, startDateIso?: string): Promise<OhlcCandle[] | null> {
-  try {
-    const { interval, start } = timeframeToTradierParams(timeframe, startDateIso);
-    const data = await tradierGet<TradierHistoryResponse>("/markets/history", {
-      symbol,
-      interval,
-      start,
-    });
+async function fetchYahooOhlc(symbol: string, timeframe: string) {
+  const { range, interval } = yahooParams(timeframe);
+  const url = `${YAHOO_BASE}/v8/finance/chart/${symbol}?range=${range}&interval=${interval}&includeAdjustedClose=true`;
 
-    const raw = data?.history?.day;
-    if (!raw) return null;
+  const res = await fetch(url, { headers: YAHOO_HEADERS, signal: AbortSignal.timeout(8000) });
+  if (!res.ok) return null;
 
-    const days: TradierHistoryDay[] = Array.isArray(raw) ? raw : [raw];
-    const candles: OhlcCandle[] = days
-      .filter((d) => d.open != null && d.close != null)
-      .map((d) => ({
-        time: Math.floor(new Date(d.date).getTime() / 1000),
-        open: d.open, high: d.high, low: d.low, close: d.close, volume: d.volume,
-      }));
+  const json = await res.json() as any;
+  const result = json?.chart?.result?.[0];
+  if (!result) return null;
 
-    return candles.length >= 2 ? candles : null;
-  } catch {
-    return null;
-  }
+  const timestamps: number[] = result.timestamp ?? [];
+  const quote = result.indicators?.quote?.[0];
+  const adjClose: number[] = result.indicators?.adjclose?.[0]?.adjclose ?? quote?.close ?? [];
+
+  if (!timestamps.length || !quote) return null;
+
+  const candles = timestamps
+    .map((t, i) => {
+      const open  = quote.open?.[i];
+      const high  = quote.high?.[i];
+      const low   = quote.low?.[i];
+      const close = adjClose[i] ?? quote.close?.[i];
+      const volume = quote.volume?.[i] ?? 0;
+      if (open == null || high == null || low == null || close == null) return null;
+      return {
+        time: t,
+        open:   Number(open.toFixed(2)),
+        high:   Number(high.toFixed(2)),
+        low:    Number(low.toFixed(2)),
+        close:  Number(close.toFixed(2)),
+        volume: Math.round(volume)
+      };
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null);
+
+  return candles;
 }
 
+export const marketDataOhlcRouter = Router();
+
 marketDataOhlcRouter.get("/ohlc", async (req, res) => {
-  const symbol      = String(req.query.symbol    ?? "SPY").toUpperCase();
-  const timeframe   = String(req.query.timeframe ?? "1d");
-  const startDate   = req.query.startDate ? String(req.query.startDate) : undefined;
+  const symbol    = String(req.query.symbol   ?? "SPY").toUpperCase();
+  const timeframe = String(req.query.timeframe ?? "1d");
 
-  let candles: OhlcCandle[] | null = null;
-  let source: "tradier" | "yahoo" | "mock" = "mock";
+  try {
+    const candles = await fetchYahooOhlc(symbol, timeframe);
 
-  // FIC: Source 1 — Tradier history (only when TRADIER_API_KEY is configured). (EN)
-  // FIC: Fuente 1 — historial Tradier (solo si TRADIER_API_KEY está configurado). (ES)
-  if (isTradierConfigured()) {
-    candles = await fetchFromTradier(symbol, timeframe, startDate);
-    if (candles) source = "tradier";
+    if (candles && candles.length > 0) {
+      return res.status(200).json({ symbol, timeframe, candles, source: "yahoo_finance" });
+    }
+  } catch (err) {
+    console.warn(`[ohlc] Yahoo fetch failed for ${symbol}:`, err);
   }
 
-  // FIC: Source 2 — Yahoo Finance v8 chart (no auth required, real data). (EN)
-  // FIC: Fuente 2 — chart Yahoo Finance v8 (sin auth, datos reales). (ES)
-  if (!candles) {
-    candles = await fetchYahooOhlc(symbol, timeframe, globalThis.fetch, startDate).catch(() => null);
-    if (candles) source = "yahoo";
-  }
-
-  // FIC: Source 3 — deterministic mock (always succeeds, never breaks SuperChart). (EN)
-  // FIC: Fuente 3 — mock determinista (siempre funciona, nunca rompe SuperChart). (ES)
-  if (!candles) {
-    candles = mockCandles(symbol, timeframe);
-    source = "mock";
-  }
-
-  res.status(200).json({ symbol, timeframe, candles, source });
+  // Fallback: deterministic mock
+  const candles = mockCandles(symbol, timeframe);
+  return res.status(200).json({ symbol, timeframe, candles, source: "mock" });
 });
