@@ -3,6 +3,7 @@ import { Play, Shield } from "lucide-react";
 import { ContentModal } from "../../../components/ui/ContentModal";
 import { getMarketQuotes } from "../../../services/signals/marketApi";
 import { useSignalStore } from "../../../store/signals";
+import { postOptionsCalculate, type OptionStrategyResult } from "../../../services/fundamental/fundamentalApi";
 
 export type CoreOptionStrategy = "LONG_CALL" | "LONG_PUT" | "SHORT_CALL" | "SHORT_PUT";
 
@@ -142,57 +143,30 @@ function payoff(
   return totalPremium - putIntrinsic;
 }
 
-function calculateResult(strategy: CoreOptionStrategy, form: OptionStrategyFormState): StrategyResult {
-  const current = toNumber(form.currentPrice);
-  const strike = toNumber(form.strikePrice);
-  const premium = toNumber(form.premium);
-  const contracts = Math.max(1, toNumber(form.contracts));
-  const multiplier = contracts * 100;
-  const totalPremium = premium * multiplier;
-
-  const breakeven =
-    strategy === "LONG_CALL" || strategy === "SHORT_CALL"
-      ? strike + premium
-      : strike - premium;
-
-  let maxProfit: StrategyResult["maxProfit"];
-  let maxLoss: StrategyResult["maxLoss"];
-
-  if (strategy === "LONG_CALL") {
-    maxProfit = "Ilimitado";
-    maxLoss = totalPremium;
-  } else if (strategy === "LONG_PUT") {
-    maxProfit = Math.max(strike * multiplier - totalPremium, 0);
-    maxLoss = totalPremium;
-  } else if (strategy === "SHORT_CALL") {
-    maxProfit = totalPremium;
-    maxLoss = "Ilimitado";
-  } else {
-    maxProfit = totalPremium;
-    maxLoss = Math.max((strike - premium) * multiplier, 0);
-  }
-
-  const outOfTheMoney =
-    strategy === "SHORT_CALL"
-      ? Math.max(strike - current, 0)
-      : strategy === "SHORT_PUT"
-      ? Math.max(current - strike, 0)
-      : 0;
-  const shortOptionMargin = Math.max(
-    totalPremium,
-    (premium + Math.max(current * 0.2 - outOfTheMoney, current * 0.1)) * multiplier
-  );
-
+function resultFromApi(result: OptionStrategyResult): StrategyResult {
+  const netPremium = result.premium * result.quantity * 100;
   return {
-    maxProfit,
-    maxLoss,
-    breakeven,
-    netPremium: totalPremium,
-    requiredMargin:
-      strategy === "LONG_CALL" || strategy === "LONG_PUT" ? totalPremium : shortOptionMargin,
-    scenarioAtm: payoff(strategy, current, strike, premium, contracts),
-    scenarioPlus5: payoff(strategy, current * 1.05, strike, premium, contracts),
-    scenarioMinus5: payoff(strategy, current * 0.95, strike, premium, contracts),
+    maxProfit: result.maxProfit === null ? "Ilimitado" : result.maxProfit,
+    maxLoss: result.maxLoss === null ? "Ilimitado" : result.maxLoss,
+    breakeven: result.breakEvenPrice,
+    netPremium,
+    requiredMargin: result.requiredMargin,
+    scenarioAtm: result.scenarioAtm.profitLoss,
+    scenarioPlus5: result.scenarioPlus5.profitLoss,
+    scenarioMinus5: result.scenarioMinus5.profitLoss,
+  };
+}
+
+function formFromApi(currentForm: OptionStrategyFormState, result: OptionStrategyResult): OptionStrategyFormState {
+  return {
+    ...currentForm,
+    currentPrice: result.scenarioAtm.priceAtScenario.toFixed(2),
+    premium: result.premium.toString(),
+    contracts: result.quantity.toString(),
+    impliedVolatility:
+      typeof result.assumptions.impliedVolatility === "number"
+        ? Number(result.assumptions.impliedVolatility.toFixed(2)).toString()
+        : currentForm.impliedVolatility,
   };
 }
 
@@ -273,17 +247,19 @@ export function OptionStrategyParamsModal({ open, strategy, ticker, onClose, onC
     ticker,
     currentPrice: "",
     strikePrice: "100",
-    premium: "2.50",
+    premium: "",
     contracts: "1",
     expiration: isoPlusDays(30),
-    capital: "10000",
-    impliedVolatility: "25",
+    capital: "",
+    impliedVolatility: "",
     thetaDecay: "LINEAR",
     riskFreeRate: "4",
   });
   const [result, setResult] = useState<StrategyResult | null>(null);
   const [priceLoading, setPriceLoading] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
+  const [calculating, setCalculating] = useState(false);
+  const [calculationError, setCalculationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -298,7 +274,7 @@ export function OptionStrategyParamsModal({ open, strategy, ticker, onClose, onC
           ? selectedStrike.underlyingPrice.toFixed(2)
           : prev.currentPrice,
         strikePrice: selectedStrikeMatchesStrategy ? String(selectedStrike.strike) : prev.strikePrice,
-        premium: selectedStrikeMatchesStrategy && selectedStrike.premium > 0 ? String(selectedStrike.premium) : prev.premium,
+        premium: selectedStrikeMatchesStrategy && selectedStrike.premium > 0 ? String(selectedStrike.premium) : "",
         expiration: selectedStrikeMatchesStrategy && selectedStrike.expiration ? selectedStrike.expiration : prev.expiration,
         impliedVolatility: selectedStrikeMatchesStrategy ? (ivToPercent(selectedStrike.iv) ?? prev.impliedVolatility) : prev.impliedVolatility,
         riskFreeRate: selectedStrikeMatchesStrategy && typeof selectedStrike.estimatedRiskFreeRate === "number"
@@ -341,26 +317,49 @@ export function OptionStrategyParamsModal({ open, strategy, ticker, onClose, onC
   }, [open, form.ticker, selectedStrikeMatchesStrategy]);
 
   const canCalculate = useMemo(() => {
-    return toNumber(form.strikePrice) > 0 && toNumber(form.premium) >= 0 && toNumber(form.contracts) > 0;
-  }, [form.strikePrice, form.premium, form.contracts]);
+    return toNumber(form.strikePrice) > 0 && toNumber(form.contracts) > 0 && !calculating;
+  }, [form.strikePrice, form.contracts, calculating]);
 
   const update = (field: keyof OptionStrategyFormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setResult(null);
+    setCalculationError(null);
   };
 
-  const calculateAndPublish = () => {
-    const nextResult = calculateResult(strategy, form);
+  const calculateAndPublish = async () => {
+    setCalculating(true);
+    setCalculationError(null);
+    try {
+      const apiResult = await postOptionsCalculate({
+        ticker: form.ticker.toUpperCase(),
+        optionType: meta.optionType,
+        direction: meta.direction,
+        strikePrice: toNumber(form.strikePrice),
+        quantity: Math.max(1, toNumber(form.contracts)),
+        capitalAvailable: toNumber(form.capital) > 0 ? toNumber(form.capital) : undefined,
+        riskTolerance: "MEDIUM",
+        assumptions: {
+          timeDecayModel: form.thetaDecay,
+          interestRate: toNumber(form.riskFreeRate),
+        },
+      });
+      const resolvedForm = formFromApi(form, apiResult);
+      const nextResult = resultFromApi(apiResult);
     setResult(nextResult);
     onCalculated?.({
       strategy,
-      ticker: form.ticker.toUpperCase(),
-      params: form,
+        ticker: resolvedForm.ticker.toUpperCase(),
+        params: resolvedForm,
       result: nextResult,
-      payoffPoints: buildPayoffPoints(strategy, form),
-      calculatedAt: new Date().toISOString(),
+        payoffPoints: buildPayoffPoints(strategy, resolvedForm),
+        calculatedAt: apiResult.calculatedAt,
     });
     onClose();
+    } catch (error) {
+      setCalculationError(error instanceof Error ? error.message : "No se pudo calcular con datos reales");
+    } finally {
+      setCalculating(false);
+    }
   };
 
   const inputStyle: React.CSSProperties = {
@@ -426,6 +425,9 @@ export function OptionStrategyParamsModal({ open, strategy, ticker, onClose, onC
               Datos de option chain
             </span>
           )}
+          <span style={{ color: "var(--color-buy)", background: "rgba(0,168,126,0.12)", borderRadius: "var(--radius-pill)", padding: "2px 10px", fontSize: "var(--font-size-xs)", fontWeight: 700 }}>
+            Calculo backend real
+          </span>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "var(--space-sm)" }}>
@@ -480,6 +482,12 @@ export function OptionStrategyParamsModal({ open, strategy, ticker, onClose, onC
           </div>
         </fieldset>
 
+        {calculationError && (
+          <div style={{ color: "var(--color-sell)", fontSize: "var(--font-size-xs)", fontWeight: 700 }}>
+            {calculationError}
+          </div>
+        )}
+
         <button
           type="button"
           disabled={!canCalculate}
@@ -501,7 +509,7 @@ export function OptionStrategyParamsModal({ open, strategy, ticker, onClose, onC
           }}
         >
           <Play size={13} fill="currentColor" strokeWidth={0} />
-          Guardar parametros
+          {calculating ? "Calculando..." : "Calcular con datos reales"}
         </button>
       </div>
     </ContentModal>

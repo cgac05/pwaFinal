@@ -133,7 +133,7 @@ export function evaluateShortPut(params: OptionStrategyInput): OptionStrategyOut
   
   // Probability ITM at expiration (probability of assignment)
   // For puts, ITM means price < strike
-  const volatility = params.assumptions.impliedVolatility ?? 25;
+  const volatility = params.assumptions.impliedVolatility;
   const probItm = probabilityInTheMoney("PUT", currentPrice, strikePrice, volatility, daysToExp);
   
   // Warnings for Short Put

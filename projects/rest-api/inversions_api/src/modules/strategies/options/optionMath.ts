@@ -1,9 +1,6 @@
 import type { OptionStrategyInput, OptionStrategyContract, OptionType, OptionDirection, RiskTolerance } from "../optionsStrategyContract";
 //Operaciones matematicas relacionadas con opciones, como cálculos de primas, márgenes, probabilidades, etc.
 export const CONTRACT_MULTIPLIER = 100;
-export const DEFAULT_IMPLIED_VOLATILITY = 25;
-export const DEFAULT_INTEREST_RATE = 4;
-export const DEFAULT_TIME_DECAY_MODEL = "LINEAR" as const;
 
 export function roundMoney(value: number): number {
   return Number(value.toFixed(2));
@@ -112,23 +109,44 @@ export function normalizeOptionStrategyInput(
   const daysToExpiration = typeof raw.daysToExpiration === "number"
     ? raw.daysToExpiration
     : calculateDaysToExpiration(expirationDate);
+  const currentPrice = typeof raw.currentPrice === "number" ? raw.currentPrice : undefined;
+  const premiumPerContract = typeof raw.premiumPerContract === "number" ? raw.premiumPerContract : raw.premium;
+  const numberOfContracts = typeof raw.numberOfContracts === "number" ? raw.numberOfContracts : raw.quantity;
+  const availableCapital = typeof raw.availableCapital === "number" ? raw.availableCapital : raw.capitalAvailable;
+  const impliedVolatility = raw.assumptions?.impliedVolatility;
+
+  if (currentPrice === undefined) {
+    throw new Error("currentPrice is required; enrich with real market data before calculation");
+  }
+  if (premiumPerContract === undefined) {
+    throw new Error("premium is required; enrich with real option market data before calculation");
+  }
+  if (numberOfContracts === undefined) {
+    throw new Error("quantity is required");
+  }
+  if (availableCapital === undefined) {
+    throw new Error("availableCapital is required");
+  }
+  if (impliedVolatility === undefined) {
+    throw new Error("assumptions.impliedVolatility is required; enrich with real option IV before calculation");
+  }
 
   return {
     ticker: params.ticker,
     optionType: normalizedOptionType,
     direction: normalizedDirection,
     strikePrice: params.strikePrice,
-    currentPrice: typeof raw.currentPrice === "number" ? raw.currentPrice : params.strikePrice,
+    currentPrice,
     expirationDate,
     daysToExpiration,
-    premiumPerContract: typeof raw.premiumPerContract === "number" ? raw.premiumPerContract : raw.premium,
-    numberOfContracts: typeof raw.numberOfContracts === "number" ? raw.numberOfContracts : raw.quantity,
-    availableCapital: typeof raw.availableCapital === "number" ? raw.availableCapital : raw.capitalAvailable ?? 10000,
+    premiumPerContract,
+    numberOfContracts,
+    availableCapital,
     riskTolerance: normalizeRiskTolerance(raw.riskTolerance),
     assumptions: {
-      impliedVolatility: raw.assumptions?.impliedVolatility ?? DEFAULT_IMPLIED_VOLATILITY,
-      timeDecayModel: raw.assumptions?.timeDecayModel ?? DEFAULT_TIME_DECAY_MODEL,
-      interestRate: raw.assumptions?.interestRate ?? DEFAULT_INTEREST_RATE,
+      impliedVolatility,
+      timeDecayModel: raw.assumptions?.timeDecayModel ?? "LINEAR",
+      interestRate: raw.assumptions?.interestRate ?? 0,
       expectedReturn: raw.assumptions?.expectedReturn
     }
   };

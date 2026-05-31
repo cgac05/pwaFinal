@@ -4,13 +4,15 @@ import type { OptionStrategyContract } from "../../modules/strategies/optionsStr
 import { buildOptionStrategyResult, buildOptionStrategyCandidates } from "../../modules/strategies/optionsStrategyService";
 import { simulateStrategy } from "../../modules/strategies/simulationEngine";
 import { rankOptionStrategies } from "../../modules/strategies/strategyRecommendationService";
+import { enrichOptionContractWithMarketData, fetchRealPricePath } from "../../modules/strategies/realOptionMarketData";
 
 export function createOptionsRouter(supabaseClient: SupabaseClient): Router {
   const router = Router();
 
   router.post("/calculate", async (req: Request, res: Response) => {
     try {
-      const params = req.body as OptionStrategyContract;
+      const enriched = await enrichOptionContractWithMarketData(req.body as Partial<OptionStrategyContract>);
+      const params = enriched.contract;
       const strategyResult = buildOptionStrategyResult(params);
 
       await auditLog(supabaseClient, {
@@ -24,7 +26,14 @@ export function createOptionsRouter(supabaseClient: SupabaseClient): Router {
         timestamp: new Date().toISOString()
       });
 
-      return res.status(200).json({ strategy: strategyResult });
+      return res.status(200).json({
+        strategy: strategyResult,
+        marketData: {
+          source: "real-option-chain",
+          usedFields: enriched.marketDataUsed,
+          context: enriched.marketContext,
+        },
+      });
     } catch (error) {
       return res.status(400).json({ error: "Invalid strategy request", details: String(error) });
     }
@@ -32,7 +41,8 @@ export function createOptionsRouter(supabaseClient: SupabaseClient): Router {
 
   router.post("/recommend", async (req: Request, res: Response) => {
     try {
-      const params = req.body as OptionStrategyContract;
+      const enriched = await enrichOptionContractWithMarketData(req.body as Partial<OptionStrategyContract>);
+      const params = enriched.contract;
       const viabilityScore = Number(req.body.viabilityScore ?? 1);
       const recommendation = rankOptionStrategies(params, viabilityScore);
 
@@ -44,10 +54,24 @@ export function createOptionsRouter(supabaseClient: SupabaseClient): Router {
       });
 
       if (recommendation.warning) {
-        return res.status(422).json(recommendation);
+        return res.status(422).json({
+          ...recommendation,
+          marketData: {
+            source: "real-option-chain",
+            usedFields: enriched.marketDataUsed,
+            context: enriched.marketContext,
+          },
+        });
       }
 
-      return res.status(200).json(recommendation);
+      return res.status(200).json({
+        ...recommendation,
+        marketData: {
+          source: "real-option-chain",
+          usedFields: enriched.marketDataUsed,
+          context: enriched.marketContext,
+        },
+      });
     } catch (error) {
       return res.status(400).json({ error: "Invalid recommendation request", details: String(error) });
     }
@@ -57,22 +81,33 @@ export function createOptionsRouter(supabaseClient: SupabaseClient): Router {
     try {
       const { contract, pricePath } = req.body as {
         contract: OptionStrategyContract;
-        pricePath: number[];
+        pricePath?: number[];
       };
-      if (!Array.isArray(pricePath) || pricePath.length === 0) {
-        return res.status(400).json({ error: "pricePath must be a non-empty array" });
-      }
+      const enriched = await enrichOptionContractWithMarketData(contract);
+      const resolvedPricePath =
+        Array.isArray(pricePath) && pricePath.length > 0
+          ? pricePath
+          : await fetchRealPricePath(enriched.contract.ticker);
 
-      const simulation = simulateStrategy(contract, pricePath);
+      const simulation = simulateStrategy(enriched.contract, resolvedPricePath);
 
       await auditLog(supabaseClient, {
         action: "options_simulation_requested",
-        ticker: contract.ticker,
-        price_path_length: pricePath.length,
+        ticker: enriched.contract.ticker,
+        price_path_length: resolvedPricePath.length,
+        price_path_source: Array.isArray(pricePath) && pricePath.length > 0 ? "request" : "yahoo_chart",
         timestamp: new Date().toISOString()
       });
 
-      return res.status(200).json({ simulation });
+      return res.status(200).json({
+        simulation,
+        marketData: {
+          optionSource: "real-option-chain",
+          pricePathSource: Array.isArray(pricePath) && pricePath.length > 0 ? "request" : "yahoo_chart",
+          usedFields: enriched.marketDataUsed,
+          context: enriched.marketContext,
+        },
+      });
     } catch (error) {
       return res.status(400).json({ error: "Invalid simulation request", details: String(error) });
     }

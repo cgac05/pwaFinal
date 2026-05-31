@@ -126,7 +126,7 @@ export function evaluateLongCall(params: OptionStrategyInput): OptionStrategyOut
   const upsideScenarioPnl = calculateLongCallPnL(0, strikePrice, premium, numberOfContracts, roundMoney(currentPrice * 1.2));
   const riskAdjustedReturn = maxLoss > 0 ? upsideScenarioPnl / maxLoss : 0;
   
-  const volatility = params.assumptions.impliedVolatility ?? 25;
+  const volatility = params.assumptions.impliedVolatility;
   const probItm = probabilityInTheMoney("CALL", currentPrice, strikePrice, volatility, daysToExp);
   
   // Warnings

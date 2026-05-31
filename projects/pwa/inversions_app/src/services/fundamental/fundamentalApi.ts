@@ -27,9 +27,9 @@ export interface OptionsCalculateRequest {
   optionType: string;
   direction: string;
   strikePrice: number;
-  expirationDate: string;
-  premium: number;
-  quantity: number;
+  expirationDate?: string;
+  premium?: number;
+  quantity?: number;
   currentPrice?: number;
   capitalAvailable?: number;
   riskTolerance?: string;
@@ -97,8 +97,8 @@ export interface OptionStrategyResult {
   premium: number;
   quantity: number;
   breakEvenPrice: number;
-  maxProfit: number;
-  maxLoss: number;
+  maxProfit: number | null;
+  maxLoss: number | null;
   requiredMargin: number;
   scenarioAtm: PriceScenario;
   scenarioPlus5: PriceScenario;
@@ -191,7 +191,7 @@ export async function postOptionsCalculate(
   params: OptionsCalculateRequest,
   signal?: AbortSignal
 ): Promise<OptionStrategyResult> {
-  const cacheKey = `options:calculate:${params.ticker}:${params.optionType}:${params.direction}:${params.strikePrice}:${params.premium}`;
+  const cacheKey = `options:calculate:${params.ticker}:${params.optionType}:${params.direction}:${params.strikePrice}:${params.quantity ?? "auto"}`;
   const cached = getCached<OptionStrategyResult>(cacheKey);
   if (cached) return cached;
 

@@ -130,7 +130,7 @@ export function evaluateLongPut(params: OptionStrategyInput): OptionStrategyOutp
   
   // Probability ITM at expiration (simplified)
   // For puts, ITM means price < strike
-  const volatility = params.assumptions.impliedVolatility ?? 25;
+  const volatility = params.assumptions.impliedVolatility;
   const probItm = probabilityInTheMoney("PUT", currentPrice, strikePrice, volatility, daysToExp);
   
   // Warnings

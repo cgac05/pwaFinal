@@ -139,7 +139,7 @@ export function evaluateShortCall(params: OptionStrategyInput): OptionStrategyOu
   
   const riskAdjustedReturn = 0; // Unlimited max loss, so this is intentionally capped.
   
-  const volatility = params.assumptions.impliedVolatility ?? 25;
+  const volatility = params.assumptions.impliedVolatility;
   const probItm = probabilityInTheMoney("CALL", currentPrice, strikePrice, volatility, daysToExp);
   
   // CRITICAL WARNINGS for Short Call

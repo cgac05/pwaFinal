@@ -5,6 +5,7 @@
  */
 
 import type { FundamentalAnalysisData } from "./fundamentalSourceContract";
+import { resolveOptionContext } from "../market/optionChainService";
 
 export interface AnalysisOptions {
   ticker?: string;
@@ -503,7 +504,10 @@ function localFallbackAnalysis(
   lines.push(`*Fuente: ${data.metadata.sourceId.toUpperCase()} | Perfil: ${opts.investmentProfile} | Horizonte: ${opts.horizon}*`);
   lines.push("");
   lines.push("### Resumen Ejecutivo");
-  const price = data.metrics.priceHistory?.currentPrice ?? 0;
+  const price = data.metrics.priceHistory?.currentPrice;
+  if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) {
+    throw new Error(`No real current price available for ${ticker}`);
+  }
   const pe = data.metrics.financialRatios?.peRatio ?? 0;
   const roe = data.metrics.financialRatios?.roe ?? 0;
   lines.push(`${ticker} cotiza a $${price.toFixed(2)} con un P/E de ${pe.toFixed(1)} y ROE del ${roe.toFixed(1)}%. ` +
@@ -621,28 +625,42 @@ function buildProjectionDrivers(sections: MetricSection[]): string[] {
     .map((section) => `${section.metric}: ${section.finding} (score ${section.score}/100, ${section.tendencia})`);
 }
 
-function buildFundamentalProjection(
+async function buildFundamentalProjection(
   ticker: string,
   data: FundamentalAnalysisData,
   opts: AnalysisOptions,
   sections: MetricSection[],
   overallScore: number,
   verdict: FundamentalAnalysisResult["verdict"]
-): FundamentalProjection {
+): Promise<FundamentalProjection> {
   const projectionFrom = opts.projectionFrom ?? new Date().toISOString().slice(0, 10);
-  const projectionTo = opts.projectionTo ?? addDaysIso(projectionFrom, 30);
-  const days = daysBetween(projectionFrom, projectionTo);
-  const initialPrice = clampPrice(data.metrics.priceHistory?.currentPrice ?? 100);
+  let projectionTo = opts.projectionTo ?? addDaysIso(projectionFrom, 30);
+  let days = daysBetween(projectionFrom, projectionTo);
+  const marketPrice = data.metrics.priceHistory?.currentPrice;
+  if (typeof marketPrice !== "number" || !Number.isFinite(marketPrice) || marketPrice <= 0) {
+    throw new Error(`No real current price available for ${ticker}`);
+  }
+  const initialPrice = clampPrice(marketPrice);
   const vol = Math.max(5, data.metrics.volatility?.annualizedVolatility ?? 25);
+  const parts = strategyParts(opts.strategy);
+  const strike = Math.max(1, Math.round(initialPrice / 5) * 5);
+  const marketContext = await resolveOptionContext(ticker, strike, strike, days);
+  const rawPremium = parts.optionType === "CALL" ? marketContext?.callPremium : marketContext?.putPremium;
+  const premium = roundMoney(rawPremium ?? 0);
+
+  if (!marketContext || premium <= 0) {
+    throw new Error(`No real option premium available for ${ticker} ${parts.optionType} near strike ${strike}`);
+  }
+
+  projectionTo = marketContext.expirationDate;
+  days = marketContext.dte;
+
   const expectedMove = roundMoney(initialPrice * (vol / 100) * Math.sqrt(days / 252));
   const expectedMovePercent = roundMoney((expectedMove / initialPrice) * 100);
   const drift = initialPrice * ((overallScore - 50) / 100) * Math.min(days / 365, 1);
   const baseFinal = clampPrice(initialPrice + drift);
   const bullishFinal = clampPrice(baseFinal + expectedMove);
   const bearishFinal = clampPrice(baseFinal - expectedMove);
-  const parts = strategyParts(opts.strategy);
-  const strike = Math.max(1, Math.round(initialPrice / 5) * 5);
-  const premium = roundMoney(Math.max(0.25, initialPrice * (vol / 100) * Math.sqrt(days / 252) * 0.28));
   const risk = strategyRisk(strike, premium, parts.direction, parts.optionType);
 
   const pointCount = Math.max(2, Math.min(60, days + 1));
@@ -698,7 +716,7 @@ function buildFundamentalProjection(
     calculationSteps: [
       `1. Se calcula score fundamental promedio: ${overallScore}/100 => ${projectionVerdict(verdict)}.`,
       `2. Se usa volatilidad anualizada ${vol.toFixed(1)}% para estimar movimiento esperado de +/-$${expectedMove}.`,
-      `3. Se define strike ATM aproximado en $${strike} y prima teorica de $${premium} por accion.`,
+      `3. Se usa prima real de cadena de opciones: strike $${strike}, vencimiento ${marketContext.expirationDate}, prima $${premium} por accion.`,
       `4. Se evalua ${parts.label} contra escenarios ATM, +5% y -5%, mas trayectoria base/alcista/bajista.`,
       "5. La simulacion es explicativa: no ejecuta ni recomienda operar automaticamente."
     ],
@@ -716,6 +734,10 @@ export async function analyzeFundamental(
 ): Promise<FundamentalAnalysisResult> {
   const ticker = opts.ticker ?? data.companyName;
   const timestamp = new Date().toISOString();
+  const observedPrice = data.metrics.priceHistory?.currentPrice;
+  if (typeof observedPrice !== "number" || !Number.isFinite(observedPrice) || observedPrice <= 0) {
+    throw new Error(`No real current price available for ${ticker}`);
+  }
 
   const sections = scoreMetrics(data, opts);
 
@@ -726,14 +748,13 @@ export async function analyzeFundamental(
   const verdict: "VIABLE" | "NEUTRAL" | "NOT_VIABLE" =
     overallScore >= 65 ? "VIABLE" : overallScore >= 40 ? "NEUTRAL" : "NOT_VIABLE";
 
-  const projection = buildFundamentalProjection(ticker, data, opts, sections, overallScore, verdict);
+  const projection = await buildFundamentalProjection(ticker, data, opts, sections, overallScore, verdict);
 
   const prompt = buildPrompt(ticker, data, opts);
   const aiText = await callClaude(prompt);
   const aiAnalysis = aiText ?? localFallbackAnalysis(ticker, data, sections, opts);
 
-  const price = data.metrics.priceHistory?.currentPrice ?? 0;
-  const confluenceRows = buildConfluenceRows(ticker, price, sections, data.metadata.sourceId, timestamp, opts.projectionFrom, opts.projectionTo);
+  const confluenceRows = buildConfluenceRows(ticker, observedPrice, sections, data.metadata.sourceId, timestamp, opts.projectionFrom, opts.projectionTo);
 
   const callCount = sections.filter((s) => s.tipoSenal === "CALL").length;
   const putCount = sections.filter((s) => s.tipoSenal === "PUT").length;
