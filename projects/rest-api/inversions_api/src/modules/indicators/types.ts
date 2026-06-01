@@ -139,7 +139,11 @@ export type MetricKey =
   | "ATR"
   | "CANDLES_ANALYZED"
   | "PREPROMPT"
-  | "VALOR_ENTRADA";
+  | "VALOR_ENTRADA"
+  // FIC: A_NOTICIAS engine metrics (TEAM-06).
+  | "CONFIANZA"
+  | "CREDIBILIDAD"
+  | "PROVEEDOR";
 
 // FIC: Observacion estructurada que reemplaza el texto libre de la confluencia v1.
 // FIC: Replaces the free-form metadata bag with a typed observation (FR-020).
@@ -203,6 +207,26 @@ export interface SimulationRequest {
   indicadoresHabilitados: SubCoreIndicador[];
   estrategia: string; // "IRON_CONDOR" | ... — lista canonica abierta (T111)
   toleranciaRiesgo: "BAJO" | "MEDIO" | "ALTO";
+  // FIC: Optional historical "as-of" date (ISO yyyy-mm-dd). When set, the core truncates the
+  // FIC: candle series at end-of-day of this date and computes the signal AS IF it were that day,
+  // FIC: so the operator can backtest whether buy/hold/sell applied at a past point (US8).
+  // FIC: Fecha historica opcional. Cuando se envia, el core trunca la serie a ese dia y calcula
+  // FIC: la senal como si fuera ese dia, para ver en el pasado si hubo buy/hold/sell (US8).
+  fechaHistorica?: string;
+  // FIC: When true (default) and >=2 indicators are enabled, only indicator rows whose tipoSenal
+  // FIC: coincides with at least one other indicator are returned (US7 — consensus filter).
+  // FIC: Cuando es true (default) y hay >=2 indicadores, solo se devuelven las filas de indicador
+  // FIC: cuya tipoSenal coincide con al menos otro indicador (US7 — filtro de coincidencias).
+  soloCoincidencias?: boolean;
+}
+
+// FIC: Aggregated buy/sell/hold counters returned by the simulation (US5).
+// FIC: Conteo agregado de senales compra/venta/hold devuelto por la simulacion (US5).
+export interface SignalMetrics {
+  buy: number; // CALL signals (compra)
+  sell: number; // PUT signals (venta)
+  hold: number; // HOLD signals
+  total: number; // total rows generated
 }
 
 // FIC: Config metadata-driven de columnas. Persiste en `confluence_columns` y se sirve al PWA.

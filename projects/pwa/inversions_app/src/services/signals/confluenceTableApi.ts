@@ -77,6 +77,18 @@ export interface SimulationRequestPayload {
   indicadoresHabilitados: SubCoreIndicador[];
   estrategia: string;
   toleranciaRiesgo: "BAJO" | "MEDIO" | "ALTO";
+  // FIC: Optional historical as-of date (ISO yyyy-mm-dd) — backtest a past day (US8).
+  fechaHistorica?: string;
+  // FIC: When true and >=2 indicators are enabled, only coinciding indicator rows return (US7).
+  soloCoincidencias?: boolean;
+}
+
+// FIC: Aggregated buy/sell/hold counters returned by the simulation (US5).
+export interface SignalMetrics {
+  buy: number;
+  sell: number;
+  hold: number;
+  total: number;
 }
 
 export interface SimulationResponse {
@@ -85,6 +97,7 @@ export interface SimulationResponse {
   inputs_echo: SimulationRequestPayload;
   computed_at: string;
   algorithm_version: string;
+  signalMetrics?: SignalMetrics;
 }
 
 function authHeaders(): HeadersInit {
@@ -127,12 +140,15 @@ export async function runSimulation(payload: SimulationRequestPayload): Promise<
 
 export const CANONICAL_ESTRATEGIAS = [
   "IRON_CONDOR",
+  "IRON_BUTTERFLY",
+  "BUTTERFLY_SPREAD",
+  "CONDOR",
   "BULL_CALL_SPREAD",
   "BEAR_PUT_SPREAD",
-  "BUY_CALL",
-  "BUY_PUT",
-  "SELL_CALL",
-  "SELL_PUT",
+  "LONG_CALL",
+  "LONG_PUT",
+  "SHORT_CALL",
+  "SHORT_PUT",
   "STRADDLE",
   "STRANGLE",
   "BUTTERFLY",
@@ -153,112 +169,13 @@ export const ALL_CORES: CoreId[] = [
 
 export const ALL_SUBCORES: SubCoreIndicador[] = ["RSI", "MACD", "EMA", "ADX", "BB"];
 
-// FIC: Cadena canónica requerida por estandarizacion_de_salida.txt. (ES)
-// FIC: Canonical string required by estandarizacion_de_salida.txt. (EN)
-export function buildCanonicalOutputString(row: ConfluenceSignalRow): string {
-  const señal = row.tipoSenal === "CALL" ? "bullish"
-              : row.tipoSenal === "PUT" ? "bearish" : "neutral";
-  const decision = row.tipoSenal === "CALL" ? "buy"
-                 : row.tipoSenal === "PUT" ? "sell" : "wait";
-  const opcion = row.tipoSenal === "CALL" ? "call"
-               : row.tipoSenal === "PUT" ? "put" : "n/a";
-  const confianza = Math.round(Math.abs(row.score) * 100);
-  const riesgo = row.score < 0
-    ? "Señal débil o inversa"
-    : row.score > 0.5 ? "Riesgo moderado" : "Riesgo bajo";
-  const resultadoFinal = `Señal ${row.tipoSenal} — ${row.observacion.senal}`;
-
-  const metricEntries = Object.entries(row.observacion.metricas)
-    .filter(([, v]) => v != null);
-  const confluenciaStr = metricEntries.length > 0
-    ? metricEntries.map(([k, v], i) => {
-        const num = typeof v === "number" ? v : parseFloat(String(v));
-        const impacto = isNaN(num) ? "neutral"
-                      : num > 0 ? "positivo" : num < 0 ? "negativo" : "neutral";
-        return `SEÑAL_${String(i + 1).padStart(2, "0")}=${k}|LECTURA=${String(v)}|IMPACTO=${impacto}|PESO=${row.peso.toFixed(3)}|JUSTIFICACIÓN=${k} del análisis institucional`;
-      }).join("; ")
-    : "n/a";
-
-  return (
-    `CORE=${row.core}` +
-    ` || OBJETIVO=${row.observacion.objetivo}` +
-    ` || SEÑAL=${señal}` +
-    ` || DECISIÓN=${decision}` +
-    ` || OPCIÓN=${opcion}` +
-    ` || EXPLICACIÓN_TÉCNICA=${row.observacion.explicacion}` +
-    ` || CONFLUENCIA=[${confluenciaStr}]` +
-    ` || RIESGO=${riesgo}` +
-    ` || CONFIANZA=${confianza}` +
-    ` || RESULTADO_FINAL=${resultadoFinal}`
-  );
-}
-
-// FIC: Contexto de señal en formato markdown para exportación y trazabilidad. (ES)
-// FIC: Signal context in markdown table format for export and traceability. (EN)
-export function buildSignalContextMD(row: ConfluenceSignalRow, activeStrategy?: string): string {
-  const lines: string[] = [
-    `## Señal de Confluencia: ${row.ticket}`,
-    ``,
-    `| Campo | Valor |`,
-    `|-------|-------|`,
-    `| Core | ${row.core}${row.subCore ? ` / ${row.subCore}` : ""} |`,
-    `| Tipo Señal | **${row.tipoSenal}** |`,
-    `| Tendencia | ${row.tendencia} |`,
-    `| Score | ${row.score.toFixed(3)} |`,
-    `| Peso | ${row.peso.toFixed(3)} |`,
-    `| Invertir | ${row.invertir ? "SI" : "NO"} |`,
-    `| Estado | ${row.estado} |`,
-    `| Timeframe | ${row.timeframe} |`,
-    `| Fecha | ${row.fecha} |`,
-    activeStrategy ? `| Estrategia activa | ${activeStrategy.replace(/_/g, " ")} |` : "",
-    ``,
-    `### Observación`,
-    `**Objetivo:** ${row.observacion.objetivo}`,
-    ``,
-    `**Señal:** ${row.observacion.senal}`,
-    ``,
-    `**Explicación:** ${row.observacion.explicacion}`,
-  ];
-
-  const metricEntries = Object.entries(row.observacion.metricas)
-    .filter(([, v]) => v != null);
-  if (metricEntries.length > 0) {
-    lines.push(``, `### Métricas consideradas`);
-    for (const [k, v] of metricEntries) {
-      lines.push(`- **${k}:** ${String(v)}`);
-    }
-  }
-
-  const metricList = metricEntries.map(([k, v]) => `${k}=${String(v)}`).join(", ");
-  lines.push(
-    ``,
-    `### Razonamiento`,
-    `- El core **${row.core}**${row.subCore ? ` / **${row.subCore}**` : ""} evaluó ${metricEntries.length > 0 ? `las métricas (${metricList})` : "sus indicadores"}.`,
-    `- Esas métricas produjeron un score de **${row.score.toFixed(3)}** (peso ${row.peso.toFixed(3)}) con tendencia **${row.tendencia}**.`,
-    `- Por eso la observación concluye una señal **${row.tipoSenal}**${row.invertir ? " (invertida)" : ""}: ${row.observacion.explicacion}`,
-    activeStrategy
-      ? `- Esto sustenta la estrategia **${activeStrategy.replace(/_/g, " ")}**, coherente con un sesgo ${row.tipoSenal === "CALL" ? "alcista" : row.tipoSenal === "PUT" ? "bajista" : "neutral"}.`
-      : "",
-  );
-
-  lines.push(
-    ``,
-    `### Qué se usó para el cálculo`,
-    `- **Insumos del score:** ${metricEntries.length > 0 ? `las métricas listadas (${metricList})` : "los indicadores del core"}, ponderadas por peso ${row.peso.toFixed(3)}.`,
-    `- **Objetivo del análisis:** ${row.observacion.objetivo}`,
-    `- **Algoritmo / versión:** ${row.algorithm_version}`,
-    `- **Fuente de datos:** ${row.fuente}`,
-    `- **Timeframe evaluado:** ${row.timeframe}`,
-    `- **Calculado:** ${row.computed_at}${row.ia_revisada ? " · revisado por IA" : ""}`,
-    row.source_input_hash ? `- **Hash de insumos:** ${row.source_input_hash}` : "",
-  );
-
-  if (row.evidencia_refs?.length) {
-    lines.push(``, `### Evidencia`);
-    for (const ref of row.evidencia_refs) {
-      lines.push(`- ${ref}`);
-    }
-  }
-
-  return lines.filter((l) => l !== undefined).join("\n");
-}
+export {
+  buildCanonicalOutputString,
+  buildSignalContextMD,
+} from "@inversions/utils";
+export type {
+  CanonicalOutputRow,
+  CanonicalCoreId,
+  CanonicalTipoSenal,
+  CanonicalSignalObservation,
+} from "@inversions/utils";

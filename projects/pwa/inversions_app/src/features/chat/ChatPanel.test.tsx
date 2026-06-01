@@ -27,7 +27,7 @@ const sessionStorageMock = (() => {
   };
 })();
 
-Object.defineProperty(global, "sessionStorage", { value: sessionStorageMock, writable: true });
+Object.defineProperty(globalThis, "sessionStorage", { value: sessionStorageMock, writable: true });
 
 describe("ChatPanel", () => {
   beforeEach(() => {

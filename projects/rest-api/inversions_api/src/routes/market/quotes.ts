@@ -23,8 +23,6 @@ interface MarketQuote {
   timestamp: string;
 }
 
-// FIC: Tradier quote shape — single symbol or array depending on request count. (EN)
-// FIC: Shape de cotización Tradier — símbolo único o array según cantidad de request. (ES)
 interface TradierQuote {
   symbol: string;
   last: number | null;
@@ -95,8 +93,6 @@ async function fetchSingleYahooQuote(symbol: string): Promise<MarketQuote | null
   return null;
 }
 
-// FIC: Fetch quotes for all symbols from Yahoo Finance in parallel. (EN)
-// FIC: Obtiene cotizaciones de Yahoo Finance para todos los símbolos en paralelo. (ES)
 async function fetchFromYahoo(symbols: string[]): Promise<MarketQuote[] | null> {
   try {
     const results = await Promise.all(symbols.map(fetchSingleYahooQuote));
@@ -108,8 +104,8 @@ async function fetchFromYahoo(symbols: string[]): Promise<MarketQuote[] | null> 
   }
 }
 
-// FIC: Generate deterministic demo prices seeded by symbol name.
-// FIC: Genera precios demo deterministas sembrados por nombre del símbolo.
+// FIC: Generate deterministic demo prices seeded by symbol name — last resort only. (EN)
+// FIC: Genera precios demo deterministas sembrados por nombre del símbolo — solo último recurso. (ES)
 function demoPriceForSymbol(symbol: string): MarketQuote {
   const seed = symbol.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   const base = 50 + (seed % 450);
@@ -124,8 +120,6 @@ function demoPriceForSymbol(symbol: string): MarketQuote {
   };
 }
 
-// FIC: Map a Tradier quote to the existing MarketQuote interface — no interface changes. (EN)
-// FIC: Mapea una cotización Tradier a la interfaz MarketQuote existente — sin cambios de interfaz. (ES)
 function mapTradierQuote(q: TradierQuote): MarketQuote {
   return {
     symbol: q.symbol,
@@ -136,8 +130,6 @@ function mapTradierQuote(q: TradierQuote): MarketQuote {
   };
 }
 
-// FIC: Fetch quotes from Tradier — normalises single-vs-array response shape. (EN)
-// FIC: Obtiene cotizaciones de Tradier — normaliza la respuesta de símbolo único vs array. (ES)
 async function fetchFromTradier(symbols: string[]): Promise<MarketQuote[]> {
   const data = await tradierGet<TradierQuotesResponse>("/markets/quotes", {
     symbols: symbols.join(","),
@@ -147,7 +139,6 @@ async function fetchFromTradier(symbols: string[]): Promise<MarketQuote[]> {
   const raw = data?.quotes?.quote;
   if (!raw) return symbols.map(demoPriceForSymbol);
 
-  // Tradier returns an object for 1 symbol, array for multiple
   const quoteArr: TradierQuote[] = Array.isArray(raw) ? raw : [raw];
   const quoteMap = new Map(quoteArr.map((q) => [q.symbol, q]));
 
@@ -157,21 +148,15 @@ async function fetchFromTradier(symbols: string[]): Promise<MarketQuote[]> {
   });
 }
 
-// FIC: Fetch real-time quotes from Alpaca data API — uses bars/latest for reliable last-trade price. (EN)
-// FIC: Obtiene cotizaciones en tiempo real de la API de datos de Alpaca (endpoint de producción). (ES)
-// Uses ALPACA_API_KEY / ALPACA_SECRET_KEY (production) with fallback to _PAPER variants.
 async function fetchFromAlpaca(
   symbols: string[],
   apiKey: string,
   secretKey: string
 ): Promise<MarketQuote[] | null> {
-  // Filter out futures/non-equity symbols Alpaca doesn't support (e.g. GC=F)
   const equitySymbols = symbols.filter((s) => /^[A-Z]{1,5}$/.test(s));
   if (equitySymbols.length === 0) return null;
 
   try {
-    // FIC: Use bars/latest (last trade price) — more reliable than quotes/latest which has stale spreads on IEX. (EN)
-    // FIC: Usar bars/latest (precio del último trade) — más confiable que quotes/latest con spreads stale en IEX. (ES)
     const res = await fetch(
       `https://data.alpaca.markets/v2/stocks/bars/latest?symbols=${equitySymbols.join(",")}&feed=iex`,
       {
@@ -230,16 +215,14 @@ marketQuotesRouter.get("/quotes", async (req: Request, res: Response) => {
   try {
     let quotes: MarketQuote[];
 
-    // FIC: Source 1 — Yahoo Finance v8 chart (same source as options chain + OHLC, no API key needed). (EN)
-    // FIC: Fuente 1 — Yahoo Finance v8 chart (misma fuente que cadena de opciones + OHLC, sin API key). (ES)
+    // Source 1 — Yahoo Finance
     const yahooResult = await fetchFromYahoo(symbols);
     if (yahooResult) {
       res.status(200).json({ quotes: yahooResult, source: "yahoo" });
       return;
     }
 
-    // FIC: Source 2 — Alpaca production keys (ALPACA_API_KEY) with _PAPER as secondary. (EN)
-    // FIC: Fuente 2 — Keys de producción Alpaca (ALPACA_API_KEY) con _PAPER como secundario. (ES)
+    // Source 2 — Alpaca production keys
     const alpacaApiKey    = process.env.ALPACA_API_KEY    ?? process.env.ALPACA_API_KEY_PAPER;
     const alpacaSecretKey = process.env.ALPACA_SECRET_KEY ?? process.env.ALPACA_SECRET_KEY_PAPER;
 
@@ -251,26 +234,22 @@ marketQuotesRouter.get("/quotes", async (req: Request, res: Response) => {
       }
     }
 
-    // FIC: Source 3 — Tradier (only if TRADIER_API_KEY is configured). (EN)
-    // FIC: Fuente 3 — Tradier (solo si TRADIER_API_KEY está configurado). (ES)
+    // Source 3 — Tradier
     if (isTradierConfigured()) {
       try {
         quotes = await fetchFromTradier(symbols);
         res.status(200).json({ quotes, source: "tradier" });
         return;
       } catch {
-        // Tradier failed — continue to deterministic mock
+        // fall through to mock
       }
     }
 
-    // FIC: Source 4 — deterministic mock (always succeeds). (EN)
-    // FIC: Fuente 4 — mock determinista (siempre tiene éxito). (ES)
+    // Source 4 — deterministic mock
     quotes = symbols.map(demoPriceForSymbol);
     res.status(200).json({ quotes, source: "mock" });
   } catch (err) {
     console.error("Market quotes error:", err);
-    // FIC: Last-resort fallback — never return 502 to the frontend. (EN)
-    // FIC: Fallback de último recurso — nunca retornar 502 al frontend. (ES)
     res.status(200).json({ quotes: symbols.map(demoPriceForSymbol), source: "mock" });
   }
 });

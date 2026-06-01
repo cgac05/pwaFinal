@@ -21,7 +21,7 @@ vi.mock("../../../hooks/useAnimatedValue", () => ({
   useAnimatedValue: (val: number) => val,
 }));
 
-global.fetch = vi.fn().mockResolvedValue({
+globalThis.fetch = vi.fn().mockResolvedValue({
   ok: true,
   json: async () => ({ items: [] }),
 } as Response);
@@ -38,13 +38,13 @@ describe("WatchlistView", () => {
   it("muestra estado de carga inicial antes de que resuelva el fetch", () => {
     // FIC: Fetch stays pending — loading indicator should render immediately.
     // FIC: Fetch queda pendiente — el indicador de carga debe renderizarse de inmediato.
-    global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
+    globalThis.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
     render(<WatchlistView />);
     expect(screen.getByText(/cargando/i)).toBeDefined();
   });
 
   it("muestra estado vacío cuando el watchlist está vacío", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ items: [] }),
     } as Response);
