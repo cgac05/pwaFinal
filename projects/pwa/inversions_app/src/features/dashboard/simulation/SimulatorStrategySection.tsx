@@ -423,9 +423,9 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
                             {p.posicion}
                           </span>
                         </td>
-                        <td style={{ padding: "var(--space-xs)", borderBottom: "1px solid var(--color-border-subtle)", fontWeight: 600 }}>${p.strike}</td>
+                        <td style={{ padding: "var(--space-xs)", borderBottom: "1px solid var(--color-border-subtle)", fontWeight: 600 }}>{p.strike != null ? `$${p.strike}` : "—"}</td>
                         <td style={{ padding: "var(--space-xs)", borderBottom: "1px solid var(--color-border-subtle)" }}>{p.tipo}</td>
-                        <td style={{ padding: "var(--space-xs)", borderBottom: "1px solid var(--color-border-subtle)", fontWeight: 700, color: "var(--color-accent)" }}>${p.prima.toFixed(2)}</td>
+                        <td style={{ padding: "var(--space-xs)", borderBottom: "1px solid var(--color-border-subtle)", fontWeight: 700, color: "var(--color-accent)" }}>${fmt(p.prima)}</td>
                       </tr>
                     ))}
                   </tbody>

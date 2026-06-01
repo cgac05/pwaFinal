@@ -12,6 +12,7 @@ import { ConfluenceSignalsTable } from "./ConfluenceSignalsTable";
 import { SimulationControlPanel } from "./simulation/SimulationControlPanel";
 import { SimulatorStrategySection } from "./simulation/SimulatorStrategySection";
 import { FundamentalAnalysisPanel } from "./FundamentalAnalysisPanel";
+import { NewsSection } from "./NewsSection";
 import type { CoverageModalParams } from "./simulation/CoverageParamsModal";
 import type { OptionStrategyAnalysis } from "./simulation/OptionStrategyParamsModal";
 import type { WheelModalParams } from "./simulation/WheelParamsModal";
@@ -587,10 +588,7 @@ export function MainDashboard() {
         autoRunKey={fundamentalAutoRunKey}
         onAnalysisComplete={setFundamentalAnalysis}
       />
-      <PlaceholderSection
-        title="Noticias y Sentimiento"
-        description="Sentimiento del mercado, noticias relevantes y análisis de redes sociales."
-      />
+      <NewsSection symbol={selectedSymbol} dateRange={undefined} />
     </div>
   );
 
