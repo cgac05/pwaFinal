@@ -11,12 +11,29 @@ import {
  * Parsea el texto devuelto por Gemini para extraer decisión y justificación.
  */
 function parseAiDecision(rawText: string): { decision: "CALL" | "PUT" | "HOLD"; justificacion: string; confidence: number } {
-  const upperText = rawText.toUpperCase();
+  const upperText = rawText.toUpperCase().trim();
   let decision: "CALL" | "PUT" | "HOLD" = "HOLD";
 
-  if (upperText.includes("DECISION: CALL") || upperText.includes("DECISION: SÍ") || upperText.includes("DECISIÓN: SÍ") || upperText.includes("DECISION: BUY")) {
+  if (
+    upperText.includes("DECISION: CALL") || 
+    upperText.includes("DECISION: SÍ") || 
+    upperText.includes("DECISIÓN: SÍ") || 
+    upperText.includes("DECISION: BUY") ||
+    upperText.startsWith("SÍ") ||
+    upperText.startsWith("SI") ||
+    upperText.startsWith("CALL") ||
+    upperText.startsWith("BUY")
+  ) {
     decision = "CALL";
-  } else if (upperText.includes("DECISION: PUT") || upperText.includes("DECISION: NO") || upperText.includes("DECISIÓN: NO") || upperText.includes("DECISION: SELL")) {
+  } else if (
+    upperText.includes("DECISION: PUT") || 
+    upperText.includes("DECISION: NO") || 
+    upperText.includes("DECISIÓN: NO") || 
+    upperText.includes("DECISION: SELL") ||
+    upperText.startsWith("NO") ||
+    upperText.startsWith("PUT") ||
+    upperText.startsWith("SELL")
+  ) {
     decision = "PUT";
   }
 
@@ -82,7 +99,8 @@ function buildDeterministicIaCoreFallback(params: {
       confidence = Number((sumScore / params.precalculatedRows.length).toFixed(3));
       if (confidence > 1) confidence = 1;
       
-      explicacion = `[Canal de Respaldo Cuantitativo] El modelo LLM principal no pudo responder (${params.reasonCode || "Timeout"}). Se aplicó una agregación determinista sobre ${params.precalculatedRows.length} cores pre-calculados:\n- Señales Alcistas (CALL): ${calls}\n- Señales Bajistas (PUT): ${puts}\n- Señales Neutrales (HOLD): ${holds}\n\nVeredicto inferido: ${decision}. Por favor, reintenta más tarde para obtener la síntesis profunda de la IA.`;
+      const viableDecision = decision === "CALL" || decision === "PUT" ? "SÍ" : "NO";
+      explicacion = `[Canal de Respaldo Cuantitativo] El modelo LLM principal no pudo responder (${params.reasonCode || "Timeout"}). Se aplicó una agregación determinista sobre ${params.precalculatedRows.length} cores pre-calculados:\n- Señales Alcistas (CALL): ${calls}\n- Señales Bajistas (PUT): ${puts}\n- Señales Neutrales (HOLD): ${holds}\n\nVeredicto inferido: ${viableDecision} (${decision}). Por favor, reintenta más tarde para obtener la síntesis profunda de la IA.`;
     } else {
       decision = "HOLD";
     }

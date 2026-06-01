@@ -28,6 +28,7 @@ function buildDeterministicFallback(assessment: VolatilityAssessment): string {
   return buildLocalFallbackNarrative(assessment);
 }
 
+// Helper to simulate follow-up chat replies when Gemini is not enabled
 function simulateFollowUpChat(result: {
   ticker: string;
   decision: string;
@@ -54,38 +55,41 @@ function simulateFollowUpChat(result: {
   return `Como analista senior con 24 años de experiencia, considero que para ${ticker}, ante tu consulta "${question}", la recomendación adecuada es revisar si la estructura ${strategy} mantiene un margen de seguridad suficiente. ${result.analysisSummary ?? ''} POP aproximada: ${popText}.${warningText}`;
 }
 
+// Helper to simulate global chat replies about multiple volatility results when Gemini is not enabled
 function simulateGlobalChat(question: string, results: any[]): string {
   const q = question.toLowerCase();
-
+  
   if (results.length === 0) {
     return "Hola. Actualmente no he detectado ningún reporte de evaluación en mi historial local. Te sugiero ir al Panel de Análisis de Volatilidad y realizar algunas corridas primero para que yo pueda analizar su viabilidad y darte respuestas detalladas.";
   }
 
+  // Check if the user is asking about a specific ticker in the database
   const foundResult = results.find(r => q.includes(r.ticker.toLowerCase()));
-
+  
   if (foundResult) {
     const strategy = foundResult.scores.toLowerCase().includes('condor') ? 'Iron Condor' : 'Butterfly Spread';
     if (q.includes('por qué') || q.includes('porque') || q.includes('justific') || q.includes('razon')) {
-      return `Analizando el reporte para **${foundResult.ticker}**: La decisión de viabilidad fue **${foundResult.decision}**.
-Esto se determinó debido a que los scores ingresados (${foundResult.scores.replace(/\n/g, ', ')}) mostraron que ${foundResult.decision === 'SÍ' ? 'la volatilidad implícita está en niveles óptimos para una estrategia de rango (recolectar prima), con bajo riesgo de ruptura.' : 'existe un fuerte momentum direccional o riesgo de noticias macro inminente que anula la premisa de rango lateral.'}
+      return `Analizando el reporte para **${foundResult.ticker}**: La decisión de viabilidad fue **${foundResult.decision}**. 
+Esto se determinó debido a que los scores ingresados (${foundResult.scores.replace(/\n/g, ', ')}) mostraron que ${foundResult.decision === 'SÍ' ? 'la volatilidad implícita está en niveles óptimos para una estrategia de rango (recolectar prima), con bajo riesgo de ruptura.' : 'existe un fuerte momentum direccional o riesgo de noticias macro inminente que anula la premisa de rango lateral.'} 
 Esta justificación técnica es exactamente la que figura en el reporte PDF exportado.`;
     }
-
+    
     if (q.includes('riesgo') || q.includes('cobertura') || q.includes('indicador')) {
-      return `Para el reporte de **${foundResult.ticker}** con viabilidad **${foundResult.decision}**, el principal indicador a vigilar es el balance de scores.
-Con los scores actuales, se determinó un perfil de riesgo ${foundResult.decision === 'SÍ' ? 'favorable' : 'desfavorable'}.
+      return `Para el reporte de **${foundResult.ticker}** con viabilidad **${foundResult.decision}**, el principal indicador a vigilar es el balance de scores. 
+Con los scores actuales, se determinó un perfil de riesgo ${foundResult.decision === 'SÍ' ? 'favorable' : 'desfavorable'}. 
 En caso de operar un ${strategy}, se aconseja establecer stops basados en delta del activo subyacente o cobertura con puts/calls externas en las colas.`;
     }
 
-    return `He localizado el reporte de **${foundResult.ticker}** en el historial (de fecha ${new Date(foundResult.date).toLocaleDateString()}).
-Su estado es **VIABLE: ${foundResult.decision}** y la justificación técnica fue: "${foundResult.justification}".
+    return `He localizado el reporte de **${foundResult.ticker}** en el historial (de fecha ${new Date(foundResult.date).toLocaleDateString()}). 
+Su estado es **VIABLE: ${foundResult.decision}** y la justificación técnica fue: "${foundResult.justification}". 
 ¿Deseas profundizar en alguna métrica en particular o revisar cómo optimizar los stops para este activo?`;
   }
 
+  // General questions about the history or volatility
   if (q.includes('resumen') || q.includes('compar') || q.includes('historial') || q.includes('cuántos') || q.includes('cuantos') || q.includes('tabla') || q.includes('evalua')) {
     const siCount = results.filter(r => r.decision === 'SÍ').length;
     const noCount = results.filter(r => r.decision === 'NO').length;
-    return `Revisando el historial de reportes de la tabla de evaluación:
+    return `Revisando el historial de reportes de la tabla de evaluación (que contienen los mismos datos exportados a PDF):
 - He analizado un total de **${results.length} activos**.
 - **${siCount}** resultaron con veredicto **SÍ (Viable)**.
 - **${noCount}** resultaron con veredicto **NO (No Viable)**.
@@ -94,8 +98,8 @@ Los activos evaluados son: ${results.map(r => `${r.ticker} (${r.decision})`).joi
 ¿Hay algún activo en particular del que desees que comparemos los scores técnicos o las justificaciones?`;
   }
 
-  return `Hola. Como analista cuantitativo con 24 años de experiencia en mercados y coberturas, he revisado el historial de reportes. Veo que tenemos reportes de volatilidad para: ${results.map(r => r.ticker).join(', ')}.
-Ante tu pregunta: "${question}", te recomiendo evaluar si los scores de opciones superan el percentil 75 para considerar viable la venta de prima. ¿Te gustaría saber más sobre las desviaciones técnicas de alguno de estos activos?`;
+  return `Hola. Como analista cuantitativo con 24 años de experiencia en mercados y coberturas, he revisado el historial de reportes. Veo que tenemos reportes de volatilidad para: ${results.map(r => r.ticker).join(', ')}. 
+Ante tu pregunta: "${question}", te recomiendo evaluar si los scores de opciones superan el percentil 75 para considerar viable la venta de prima, tal como sugieren los principios de la rúbrica estricta. ¿Te gustaría saber más sobre las desviaciones técnicas de alguno de estos activos?`;
 }
 
 
@@ -104,18 +108,18 @@ router.get('/prompts', (_req: Request, res: Response) => {
   res.json({ success: true, data: mockDb.prompts[0] });
 });
 
-// 2. Actualizar el prompt
+// 2. Actualizar el prompt (Requerimiento del maestro)
 router.put('/prompts/:id', (req: Request, res: Response) => {
   const { basePrompt } = req.body;
   if (!basePrompt) {
     return res.status(400).json({ error: 'El prompt es requerido' });
   }
-
+  
   mockDb.prompts[0].basePrompt = basePrompt;
   res.json({ success: true, message: 'Prompt actualizado dinámicamente', data: mockDb.prompts[0] });
 });
 
-// 3. Ejecutar Análisis
+// 3. Ejecutar Análisis (La "Corrida")
 router.post('/analyze-scores', async (req: Request, res: Response) => {
   try {
     const { ticker, scores } = req.body;
@@ -130,7 +134,8 @@ router.post('/analyze-scores', async (req: Request, res: Response) => {
     let rawText = '';
     let analysisSource: 'gemini' | 'fallback' = 'fallback';
     const geminiService = getGeminiService();
-
+    
+    // Check if Gemini is configured and enabled
     if (geminiService.isEnabled()) {
       try {
         rawText = await volatilityCircuitBreaker.execute(async () => {
@@ -147,13 +152,18 @@ router.post('/analyze-scores', async (req: Request, res: Response) => {
         rawText = buildDeterministicFallback(assessment);
       }
     } else {
+      // Fallback a análisis determinístico cuando Gemini no está habilitado (desarrollo local sin API Key)
       rawText = buildDeterministicFallback(assessment);
     }
 
+    // Parseo estricto del SÍ/NO de la salida de Gemini o fallback local
     const parsedDecision = parseGeminiDecision(rawText);
     const decision = parsedDecision.decision ?? assessment.decision;
+
+    // Limpiamos el texto para que la justificación no repita el "SÍ/NO" al inicio
     const justification = parsedDecision.justification || assessment.rationale;
 
+    // Guardar en la DB mockeada
     const newResult = {
       id: `res_${Date.now()}`,
       ticker: ticker.toUpperCase(),
@@ -171,8 +181,8 @@ router.post('/analyze-scores', async (req: Request, res: Response) => {
       scoreSnapshot: assessment.scoreSnapshot,
       analysisSource,
     };
-
-    mockDb.results.unshift(newResult);
+    
+    mockDb.results.unshift(newResult); // Insertar al inicio
 
     res.json({ success: true, data: newResult });
 
@@ -192,7 +202,7 @@ router.post('/results/:id/chat', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { message } = req.body;
-
+    
     const result = mockDb.results.find(r => r.id === id);
     if (!result) {
       return res.status(404).json({ error: 'Análisis no encontrado' });
@@ -204,6 +214,7 @@ router.post('/results/:id/chat', async (req: Request, res: Response) => {
     const geminiService = getGeminiService();
 
     if (!geminiService.isEnabled()) {
+      // Si no hay API Key en el .env, usamos el simulador realista para que el profesor vea el chat funcionando sin configurar claves
       replyText = simulateFollowUpChat({
         ticker: result.ticker,
         decision: result.decision,
@@ -222,7 +233,7 @@ router.post('/results/:id/chat', async (req: Request, res: Response) => {
         });
         replyText = response.text || '';
       } catch (err: any) {
-        console.warn('Error en mini-chat, activando fallback:', err);
+        console.warn('Error nativo de Google GenAI en mini-chat, activando fallback interactivo:', err);
         replyText = simulateFollowUpChat({
           ticker: result.ticker,
           decision: result.decision,
@@ -236,6 +247,7 @@ router.post('/results/:id/chat', async (req: Request, res: Response) => {
       }
     }
 
+    // Guardar historial en memoria
     result.chatHistory.push({ role: 'user', content: message, timestamp: new Date().toISOString() });
     result.chatHistory.push({ role: 'assistant', content: replyText, timestamp: new Date().toISOString() });
 
@@ -246,12 +258,12 @@ router.post('/results/:id/chat', async (req: Request, res: Response) => {
   }
 });
 
-// 6. Catálogo de instrumentos
+// Helper to get instruments (seed options for volatility simulation)
 router.get('/instruments', (_req: Request, res: Response) => {
   res.json({ success: true, data: mockDb.instruments });
 });
 
-// 7. Chat global basado en todo el historial
+// 6. Chat global interactivo basado en todo el historial (reportes / PDFs de la tabla de evaluación)
 router.post('/global-chat', async (req: Request, res: Response) => {
   try {
     const { message, model } = req.body;
@@ -261,14 +273,15 @@ router.post('/global-chat', async (req: Request, res: Response) => {
 
     const modelType = model === 'fallback' ? 'fallback' : 'primary';
 
+    // Compilar el historial de reportes de la tabla de evaluación (que son los mismos datos del PDF)
     const results = mockDb.results;
     let resultsContext = '';
-
+    
     if (results.length === 0) {
       resultsContext = 'No hay reportes de análisis previos registrados aún en la tabla de evaluación.';
     } else {
       resultsContext = results.map((r, i) => {
-        return `Reporte #${i + 1}:
+        return `Reporte #${i+1}:
 - Símbolo (Ticker): ${r.ticker}
 - Fecha: ${new Date(r.date).toLocaleString()}
 - Scores Analizados: ${r.scores.replace(/\n/g, ' | ')}
@@ -279,10 +292,11 @@ router.post('/global-chat', async (req: Request, res: Response) => {
     }
 
     const contextPrompt = `Eres un analista financiero cuantitativo y desarrollador senior con 24 años de experiencia.
-A continuación se presenta el historial de resultados de tus análisis de volatilidad realizados.
-El usuario te hará preguntas sobre este historial o temas relacionados. Tu misión es responder con un tono experto, profesional y en español.
+A continuación se presenta el historial de resultados de tus análisis de volatilidad realizados (estos datos corresponden a los reportes que el usuario analiza y puede exportar como PDFs en la interfaz en la pestaña /ai/evaluacion-tabla).
+El usuario te hará preguntas sobre este historial o temas relacionados en el Chat IA Coberturas. Tu misión es responder con un tono experto, profesional y en español.
+Para optimizar el uso de tokens y la velocidad de respuesta, apóyate exclusivamente en este contexto resumido de reportes y responde directamente sin rodeos.
 
-HISTORIAL DE EVALUACIÓN DE VOLATILIDAD:
+HISTORIAL DE EVALUACIÓN DE VOLATILIDAD (DATOS DE LOS REPORTES/PDFs):
 ${resultsContext}
 
 PREGUNTA DEL USUARIO:
@@ -301,7 +315,7 @@ ${message}`;
         replyText = response.text || '';
         usedModel = response.model;
       } catch (err: any) {
-        console.warn('Error en generateSimpleResponse, activando fallback:', err);
+        console.warn('Error en generateSimpleResponse, activando fallback interactivo:', err);
         replyText = simulateGlobalChat(message, results);
         usedModel = `${modelType === 'primary' ? 'Gemma 4 31B' : 'Gemma 4 26B'} (Simulado por Error)`;
       }

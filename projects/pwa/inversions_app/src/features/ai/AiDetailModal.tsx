@@ -107,7 +107,7 @@ export function AiDetailModal({ isOpen, onClose, ticker, signalRow, activeStrate
               <div>
                 <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-xs)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Decisión Final</p>
                 <span style={{ display: "inline-block", padding: "4px 12px", borderRadius: "var(--radius-pill)", backgroundColor: decisionBg, color: decisionColor, fontWeight: 700, fontSize: "var(--font-size-base)" }}>
-                  {signalRow.tipoSenal}
+                  {signalRow.tipoSenal === "CALL" || signalRow.tipoSenal === "PUT" ? "SÍ" : "NO"} ({signalRow.tipoSenal})
                 </span>
               </div>
               

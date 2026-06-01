@@ -337,19 +337,19 @@ ${scoresText}
 
 Resultado local:
 ${JSON.stringify(
-    {
-      decision: assessment.decision,
-      recommendedStrategy: assessment.recommendedStrategy,
-      riskLevel: assessment.riskLevel,
-      popEstimate: assessment.popEstimate,
-      confidence: assessment.confidence,
-      summary: assessment.summary,
-      warnings: assessment.warnings,
-      scoreSnapshot: assessment.scoreSnapshot,
-    },
-    null,
-    2
-  )}
+  {
+    decision: assessment.decision,
+    recommendedStrategy: assessment.recommendedStrategy,
+    riskLevel: assessment.riskLevel,
+    popEstimate: assessment.popEstimate,
+    confidence: assessment.confidence,
+    summary: assessment.summary,
+    warnings: assessment.warnings,
+    scoreSnapshot: assessment.scoreSnapshot,
+  },
+  null,
+  2
+)}
 
 INSTRUCCIONES:
 - Responde obligatoriamente comenzando con SÍ/NO.

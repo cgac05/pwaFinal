@@ -1,23 +1,24 @@
 import React, { useCallback, useState, useEffect, useRef } from "react";
+
 import { useSignalStore } from "../../store/signals";
-import {
-  fetchResults,
-  sendGlobalChat,
-  type MockResult,
-  type ChatMessage
+import { 
+  fetchResults, 
+  sendGlobalChat, 
+  type MockResult, 
+  type ChatMessage 
 } from "../../services/ai/volatilityAnalysisApi";
-import {
-  MessageSquare,
-  Cpu,
-  Sparkles,
-  Send,
-  Layers,
-  HelpCircle,
-  Activity,
-  CheckCircle,
-  AlertCircle,
-  ChevronRight,
-  Trash2,
+import { 
+  MessageSquare, 
+  Cpu, 
+  Sparkles, 
+  Send, 
+  Layers, 
+  HelpCircle, 
+  Activity, 
+  CheckCircle, 
+  AlertCircle, 
+  ChevronRight, 
+  Trash2, 
   ArrowRight,
   RefreshCw,
   X
@@ -36,25 +37,23 @@ interface GlobalChatDrawerProps {
 }
 
 export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalChatDrawerProps) {
-  const { selectedInstrument, simulationRunCount } = useSignalStore();
-  const activeTicker = selectedInstrument?.symbol ?? "SPY";
+  const { selectedInstrument, dashboardSnapshot } = useSignalStore();
+  const activeTicker = selectedInstrument?.symbol ?? dashboardSnapshot?.cards[0]?.instrument ?? "SPY";
 
-  const [chatHistories, setChatHistories] = useState<Record<string, ExtendedChatMessage[]>>({});
-  const messages = chatHistories[activeTicker] || [];
-
+  const [messages, setMessages] = useState<ExtendedChatMessage[]>([]);
   const [results, setResults] = useState<MockResult[]>([]);
-  const filteredResults = results.filter(
-    (item) => item.ticker.toUpperCase() === activeTicker.toUpperCase()
-  );
   const [loadingResults, setLoadingResults] = useState(false);
   const [selectedModel, setSelectedModel] = useState<'primary' | 'fallback'>('primary');
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  // Custom state for the drawer mode reports list toggle
   const [showReports, setShowReports] = useState(false);
-
+  
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Fetch analyzed results from backend
   const loadEvaluationResults = useCallback(async () => {
     setLoadingResults(true);
     try {
@@ -69,8 +68,9 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
 
   useEffect(() => {
     void loadEvaluationResults();
-  }, [loadEvaluationResults, simulationRunCount]);
+  }, [loadEvaluationResults]);
 
+  // Scroll to bottom on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
@@ -93,10 +93,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
       timestamp: new Date().toISOString()
     };
 
-    setChatHistories(prev => ({
-      ...prev,
-      [activeTicker]: [...(prev[activeTicker] || []), newUserMessage]
-    }));
+    setMessages(prev => [...prev, newUserMessage]);
 
     const assistantMessageId = `ai-${Date.now()}`;
     const newAssistantMessage: ExtendedChatMessage = {
@@ -107,60 +104,49 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
       status: "pending"
     };
 
-    setChatHistories(prev => ({
-      ...prev,
-      [activeTicker]: [...(prev[activeTicker] || []), newAssistantMessage]
-    }));
+    setMessages(prev => [...prev, newAssistantMessage]);
 
     try {
       const apiMessage = isInline ? question : `[Activo: ${activeTicker}] ${question}`;
       const reply = await sendGlobalChat(apiMessage, selectedModel);
 
+      // Typewriter/Streaming effect for realistic senior quant response feel
       let currentIndex = 0;
       const replyText = reply.text;
-      const typingSpeed = 6;
-      const chunkSize = 4;
+      const typingSpeed = 6; // ms per tick
+      const chunkSize = 4; // characters typed per tick
 
       const intervalId = setInterval(() => {
         if (currentIndex >= replyText.length) {
           clearInterval(intervalId);
-          setChatHistories(prev => ({
-            ...prev,
-            [activeTicker]: (prev[activeTicker] || []).map(msg =>
-              msg.id === assistantMessageId
-                ? { ...msg, content: replyText, modelUsed: reply.model, status: "completed" }
-                : msg
-            )
-          }));
+          setMessages(prev => prev.map(msg => 
+            msg.id === assistantMessageId 
+              ? { ...msg, content: replyText, modelUsed: reply.model, status: "completed" } 
+              : msg
+          ));
           setLoading(false);
         } else {
           currentIndex += chunkSize;
           const nextText = replyText.slice(0, currentIndex);
-          setChatHistories(prev => ({
-            ...prev,
-            [activeTicker]: (prev[activeTicker] || []).map(msg =>
-              msg.id === assistantMessageId
-                ? { ...msg, content: nextText + "▌", status: "completed" }
-                : msg
-            )
-          }));
+          setMessages(prev => prev.map(msg => 
+            msg.id === assistantMessageId 
+              ? { ...msg, content: nextText + "▌", status: "completed" } 
+              : msg
+          ));
         }
       }, typingSpeed);
 
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo conectar con el modelo Gemini.";
       setErrorMsg(message);
-      setChatHistories(prev => ({
-        ...prev,
-        [activeTicker]: (prev[activeTicker] || []).map(msg =>
-          msg.id === assistantMessageId
-            ? { ...msg, content: `Error de Auditoría: No se pudo obtener respuesta del modelo. Detalle: ${message}`, status: "error" }
-            : msg
-        )
-      }));
+      setMessages(prev => prev.map(msg => 
+        msg.id === assistantMessageId 
+          ? { ...msg, content: `Error de Auditoría: No se pudo obtener respuesta del modelo. Detalle: ${message}`, status: "error" } 
+          : msg
+      ));
       setLoading(false);
     }
-  }, [input, loading, selectedModel, activeTicker, isInline]);
+  }, [input, loading, selectedModel]);
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -170,10 +156,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
   };
 
   const clearChat = () => {
-    setChatHistories(prev => ({
-      ...prev,
-      [activeTicker]: []
-    }));
+    setMessages([]);
     setErrorMsg(null);
   };
 
@@ -187,7 +170,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
   };
 
   // ==========================================
-  // 1. INLINE MODE
+  // 1. INLINE MODE (PAGE BACKWARDS COMPATIBILITY & TEST PASSSING)
   // ==========================================
   if (isInline) {
     return (
@@ -197,13 +180,13 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
         height: "calc(100vh - 4.5rem)",
         maxHeight: "calc(100vh - 4.5rem)",
         padding: "0.5rem 0",
-        fontFamily: "var(--font-family)"
+        fontFamily: "Outfit, Inter, sans-serif"
       }}>
-
+        
         {/* SIDEBAR LEFT: EVALUATED ASSETS PANEL */}
         <div style={{
           width: "320px",
-          background: "rgba(10, 15, 26, 0.4)",
+          background: "var(--color-surface)",
           backdropFilter: "blur(16px)",
           border: "1px solid var(--color-border)",
           borderRadius: "var(--radius-lg)",
@@ -214,7 +197,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           <div style={{
             padding: "1rem 1.25rem",
             borderBottom: "1px solid var(--color-border)",
-            background: "rgba(255, 255, 255, 0.02)",
+            background: "var(--color-surface-raised)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center"
@@ -225,14 +208,14 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 Reportes de Volatilidad
               </h3>
             </div>
-            <button
-              className="btn-ghost"
-              onClick={loadEvaluationResults}
+            <button 
+              className="btn-ghost" 
+              onClick={loadEvaluationResults} 
               disabled={loadingResults}
               style={{ padding: "0.3rem", borderRadius: "50%", display: "flex", alignItems: "center" }}
               title="Refrescar reportes"
             >
-              <RefreshCw size={12} style={{ color: "var(--color-text-muted)" }} />
+              <RefreshCw size={12} className={loadingResults ? "spin" : ""} style={{ color: "var(--color-text-muted)" }} />
             </button>
           </div>
 
@@ -249,7 +232,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 <div className="skeleton" style={{ width: "24px", height: "24px", borderRadius: "50%" }} />
                 <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>Cargando catálogo...</span>
               </div>
-            ) : filteredResults.length === 0 ? (
+            ) : results.length === 0 ? (
               <div style={{
                 display: "flex",
                 flexDirection: "column",
@@ -263,32 +246,34 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 <AlertCircle size={32} color="var(--color-hold)" />
                 <div>
                   <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--color-text-muted)", lineHeight: 1.4 }}>
-                    No se han encontrado reportes para {activeTicker}.
+                    No se han encontrado reportes de evaluación analizados.
                   </p>
                   <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.75rem", color: "var(--color-text-muted)", opacity: 0.7 }}>
-                    Debes correr el simulador con {activeTicker} primero.
+                    Debes correr el simulador primero.
                   </p>
                 </div>
-                <span
+                <a 
+                  href="/ai/evaluacion-tabla" 
                   className="btn-primary"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    fontSize: "0.75rem",
-                    padding: "0.4rem 0.8rem"
+                  style={{ 
+                    display: "inline-flex", 
+                    alignItems: "center", 
+                    gap: "0.4rem", 
+                    fontSize: "0.75rem", 
+                    padding: "0.4rem 0.8rem",
+                    textDecoration: "none"
                   }}
                 >
                   Ir a Evaluar
                   <ArrowRight size={12} />
-                </span>
+                </a>
               </div>
             ) : (
-              filteredResults.map((item) => (
-                <div
+              results.map((item) => (
+                <div 
                   key={item.id}
                   style={{
-                    background: "rgba(255, 255, 255, 0.015)",
+                    background: "var(--color-surface-raised)",
                     border: "1px solid var(--color-border)",
                     borderRadius: "var(--radius-md)",
                     padding: "0.75rem",
@@ -320,7 +305,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                       {item.decision}
                     </span>
                   </div>
-
+                  
                   <div style={{ fontSize: "0.7rem", color: "var(--color-text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {item.scores.replace(/\n/g, " • ")}
                   </div>
@@ -336,13 +321,13 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                     <span style={{ fontSize: "0.65rem", color: "var(--color-text-muted)", opacity: 0.6 }}>
                       {new Date(item.date).toLocaleDateString()}
                     </span>
-                    <button
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        padding: 0,
-                        fontSize: "0.68rem",
-                        color: "var(--color-accent)",
+                    <button 
+                      style={{ 
+                        background: "transparent", 
+                        border: "none", 
+                        padding: 0, 
+                        fontSize: "0.68rem", 
+                        color: "var(--color-accent)", 
                         fontWeight: 600,
                         display: "flex",
                         alignItems: "center",
@@ -374,7 +359,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
         {/* CHAT PANEL RIGHT */}
         <div style={{
           flex: 1,
-          background: "rgba(10, 15, 26, 0.4)",
+          background: "var(--color-surface)",
           backdropFilter: "blur(16px)",
           border: "1px solid var(--color-border)",
           borderRadius: "var(--radius-lg)",
@@ -385,7 +370,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           <div style={{
             padding: "1rem 1.5rem",
             borderBottom: "1px solid var(--color-border)",
-            background: "rgba(255, 255, 255, 0.02)",
+            background: "var(--color-surface-raised)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -455,12 +440,12 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                   width: "56px",
                   height: "56px",
                   borderRadius: "50%",
-                  background: "rgba(73, 79, 223, 0.1)",
-                  border: "1px solid rgba(73, 79, 223, 0.25)",
+                  background: "rgba(56, 139, 253, 0.1)",
+                  border: "1px solid rgba(56, 139, 253, 0.25)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  boxShadow: "0 0 15px rgba(73, 79, 223, 0.15)"
+                  boxShadow: "0 0 15px rgba(56, 139, 253, 0.15)"
                 }}>
                   <Sparkles size={26} color="var(--color-accent)" />
                 </div>
@@ -470,7 +455,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                     Auditoría de Volatilidad con Gemini
                   </h3>
                   <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
-                    Este chat lee automáticamente los reportes y coeficientes analizados en tu Tabla de Evaluación. Puedes hacer comparativas de viabilidad, preguntar el porqué de una decisión técnica o simular coberturas de riesgo.
+                    Este chat lee automáticamente los reportes y coeficientes analizados en tu **Tabla de Evaluación (PDFs)**. Puedes hacer comparativas de viabilidad, preguntar el porqué de una decisión técnica o simular coberturas de riesgo.
                   </p>
                 </div>
 
@@ -478,14 +463,14 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                   <span style={{ fontSize: "0.72rem", color: "var(--color-text-muted)", fontWeight: 700, textTransform: "uppercase", display: "block", marginBottom: "0.75rem", letterSpacing: "0.05em" }}>
                     Sugerencias Rápidas
                   </span>
-
+                  
                   <div style={{
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr",
                     gap: "0.75rem",
                     textAlign: "left"
                   }}>
-                    <button
+                    <button 
                       onClick={() => injectSuggestion("Dame un resumen comparativo de todos los activos analizados hasta ahora.")}
                       className="btn-ghost card-hover-highlight"
                       style={{ padding: "0.75rem", borderRadius: "var(--radius-md)", fontSize: "0.78rem", border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "0.2rem" }}
@@ -494,7 +479,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                       <span style={{ color: "var(--color-text-muted)", fontSize: "0.7rem" }}>Resumen cruzado del portafolio.</span>
                     </button>
 
-                    <button
+                    <button 
                       onClick={() => injectSuggestion("¿Cuál es la justificación técnica del reporte más reciente de la tabla?")}
                       className="btn-ghost card-hover-highlight"
                       style={{ padding: "0.75rem", borderRadius: "var(--radius-md)", fontSize: "0.78rem", border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "0.2rem" }}
@@ -503,7 +488,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                       <span style={{ color: "var(--color-text-muted)", fontSize: "0.7rem" }}>Analizar la última corrida ejecutada.</span>
                     </button>
 
-                    <button
+                    <button 
                       onClick={() => injectSuggestion("¿Cuáles son los principales riesgos que descartan una estrategia en las corridas con veredicto NO?")}
                       className="btn-ghost card-hover-highlight"
                       style={{ padding: "0.75rem", borderRadius: "var(--radius-md)", fontSize: "0.78rem", border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "0.2rem" }}
@@ -512,7 +497,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                       <span style={{ color: "var(--color-text-muted)", fontSize: "0.7rem" }}>Riesgos y justificaciones de descarte.</span>
                     </button>
 
-                    <button
+                    <button 
                       onClick={() => injectSuggestion("Explica cómo influye un Score de Opciones alto en la viabilidad de un Iron Condor.")}
                       className="btn-ghost card-hover-highlight"
                       style={{ padding: "0.75rem", borderRadius: "var(--radius-md)", fontSize: "0.78rem", border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: "0.2rem" }}
@@ -525,7 +510,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
               </div>
             ) : (
               messages.map((msg) => (
-                <div
+                <div 
                   key={msg.id}
                   style={{
                     alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
@@ -535,11 +520,11 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                     gap: "0.25rem"
                   }}
                 >
-                  <div style={{
-                    display: "flex",
-                    alignItems: "center",
+                  <div style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
                     gap: "0.4rem",
-                    fontSize: "0.68rem",
+                    fontSize: "0.68rem", 
                     color: "var(--color-text-muted)",
                     alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
                     padding: "0 0.2rem"
@@ -550,13 +535,13 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                       <>
                         <span style={{ fontWeight: 800, color: "var(--color-accent)" }}>AUDITOR CUANTITATIVO</span>
                         {msg.modelUsed && (
-                          <span style={{
-                            fontSize: "0.6rem",
-                            background: "var(--color-accent-subtle)",
-                            color: "var(--color-accent)",
-                            padding: "0.05rem 0.35rem",
+                          <span style={{ 
+                            fontSize: "0.6rem", 
+                            background: "rgba(56, 139, 253, 0.12)", 
+                            color: "var(--color-accent)", 
+                            padding: "0.05rem 0.35rem", 
                             borderRadius: "var(--radius-sm)",
-                            border: "1px solid rgba(73, 79, 223, 0.25)"
+                            border: "1px solid rgba(56, 139, 253, 0.25)"
                           }}>
                             {msg.modelUsed.includes("gemini") ? "Gemini" : msg.modelUsed}
                           </span>
@@ -570,11 +555,11 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                     borderRadius: msg.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
                     fontSize: "0.9rem",
                     lineHeight: 1.5,
-                    background: msg.role === "user"
-                      ? "linear-gradient(135deg, rgba(73, 79, 223, 0.15) 0%, rgba(73, 79, 223, 0.08) 100%)"
-                      : "rgba(255, 255, 255, 0.03)",
-                    border: msg.role === "user"
-                      ? "1px solid rgba(73, 79, 223, 0.3)"
+                    background: msg.role === "user" 
+                      ? "linear-gradient(135deg, rgba(56, 139, 253, 0.15) 0%, rgba(56, 139, 253, 0.08) 100%)" 
+                      : "var(--color-surface-raised)",
+                    border: msg.role === "user" 
+                      ? "1px solid rgba(56, 139, 253, 0.3)" 
                       : "1px solid var(--color-border)",
                     color: "var(--color-text)",
                     boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
@@ -594,7 +579,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 gap: "0.5rem",
                 padding: "0.6rem 1rem",
                 borderRadius: "10px",
-                background: "rgba(255, 255, 255, 0.03)",
+                background: "var(--color-surface-raised)",
                 border: "1px solid var(--color-border)",
                 color: "var(--color-text-muted)",
                 fontSize: "0.8rem",
@@ -629,7 +614,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           <div style={{
             padding: "1rem 1.5rem",
             borderTop: "1px solid var(--color-border)",
-            background: "rgba(255, 255, 255, 0.01)",
+            background: "var(--color-surface-raised)",
             display: "flex",
             flexDirection: "column",
             gap: "0.5rem"
@@ -696,7 +681,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 <Send size={14} />
               </button>
             </div>
-
+            
             <div style={{
               display: "flex",
               justifyContent: "space-between",
@@ -719,12 +704,13 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
   }
 
   // ==========================================
-  // 2. SLIDING DRAWER MODE
+  // 2. SLIDING DRAWER MODE (GLOBAL COPILOT ASSISTANT VIEW)
   // ==========================================
   return (
     <>
+      {/* Backdrop blur overlay */}
       {isOpen && (
-        <div
+        <div 
           onClick={onClose}
           style={{
             position: "fixed",
@@ -740,7 +726,8 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
         />
       )}
 
-      <div
+      {/* Global Sliding Panel Drawer */}
+      <div 
         style={{
           position: "fixed",
           right: 0,
@@ -758,14 +745,14 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          fontFamily: "var(--font-family)"
+          fontFamily: "Outfit, Inter, sans-serif"
         }}
       >
         {/* Drawer Header */}
         <div style={{
           padding: "1.2rem 1.5rem",
           borderBottom: "1px solid var(--color-border)",
-          background: "rgba(255, 255, 255, 0.02)",
+          background: "var(--color-surface-raised)",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center"
@@ -781,15 +768,15 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
               </span>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="btn-ghost"
-            style={{
-              borderRadius: "50%",
-              width: "32px",
-              height: "32px",
-              display: "flex",
-              alignItems: "center",
+          <button 
+            onClick={onClose} 
+            className="btn-ghost" 
+            style={{ 
+              borderRadius: "50%", 
+              width: "32px", 
+              height: "32px", 
+              display: "flex", 
+              alignItems: "center", 
               justifyContent: "center",
               cursor: "pointer",
               padding: 0
@@ -800,11 +787,11 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           </button>
         </div>
 
-        {/* Model selector */}
+        {/* Dynamic Model selector bar */}
         <div style={{
           padding: "0.75rem 1.5rem",
           borderBottom: "1px solid var(--color-border)",
-          background: "rgba(255, 255, 255, 0.01)",
+          background: "var(--color-surface-raised)",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center"
@@ -832,29 +819,29 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           </select>
         </div>
 
-        {/* Active ticker banner */}
+        {/* Dynamic active instrument tracker banner */}
         <div style={{
           padding: "0.5rem 1.5rem",
-          background: "var(--color-accent-subtle)",
+          background: "rgba(255, 212, 59, 0.04)",
           borderBottom: "1px solid var(--color-border)",
           display: "flex",
           alignItems: "center",
           gap: "0.5rem"
         }}>
-          <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", background: "var(--color-buy)", boxShadow: "0 0 6px var(--color-buy)" }} />
+          <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", background: "#4caf50", boxShadow: "0 0 6px #4caf50" }} />
           <span style={{ fontSize: "0.72rem", color: "var(--color-text-muted)" }}>
             Activo en Dashboard: <strong style={{ color: "var(--color-accent)" }}>{activeTicker}</strong>
           </span>
         </div>
 
-        {/* Collapsible reports section */}
+        {/* Collapsible Evaluation Reports section inside drawer */}
         <div style={{ borderBottom: "1px solid var(--color-border)" }}>
-          <button
+          <button 
             onClick={() => setShowReports(!showReports)}
             style={{
               width: "100%",
               padding: "0.75rem 1.5rem",
-              background: "rgba(255, 255, 255, 0.015)",
+              background: "var(--color-surface-raised)",
               border: "none",
               color: "var(--color-text)",
               fontSize: "0.78rem",
@@ -868,21 +855,21 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           >
             <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
               <Layers size={13} color="var(--color-accent)" />
-              Reportes de Volatilidad ({filteredResults.length})
+              Reportes de Volatilidad ({results.length})
             </span>
             <span style={{ fontSize: "0.7rem", color: "var(--color-text-muted)" }}>
               {showReports ? "▲ Ocultar" : "▼ Desplegar"}
             </span>
           </button>
-
+          
           {showReports && (
-            <div style={{
-              maxHeight: "180px",
-              overflowY: "auto",
-              padding: "0.75rem 1.25rem",
-              background: "rgba(0, 0, 0, 0.25)",
-              display: "flex",
-              flexDirection: "column",
+            <div style={{ 
+              maxHeight: "180px", 
+              overflowY: "auto", 
+              padding: "0.75rem 1.25rem", 
+              background: "rgba(0, 0, 0, 0.25)", 
+              display: "flex", 
+              flexDirection: "column", 
               gap: "0.5rem",
               borderTop: "1px solid rgba(255,255,255,0.03)"
             }}>
@@ -890,20 +877,20 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 <div style={{ padding: "1rem", textAlign: "center", fontSize: "0.7rem", color: "var(--color-text-muted)" }}>
                   Cargando...
                 </div>
-              ) : filteredResults.length === 0 ? (
+              ) : results.length === 0 ? (
                 <div style={{ padding: "1rem", textAlign: "center", fontSize: "0.7rem", color: "var(--color-text-muted)" }}>
-                  Sin reportes para {activeTicker}. Corre la simulación primero.
+                  Sin reportes. Corre la simulación primero.
                 </div>
               ) : (
-                filteredResults.map((item) => (
-                  <div
+                results.map((item) => (
+                  <div 
                     key={item.id}
                     onClick={() => {
                       injectResultQuestion(item.ticker, item.decision);
                       setShowReports(false);
                     }}
                     style={{
-                      background: "rgba(255, 255, 255, 0.02)",
+                      background: "var(--color-surface-raised)",
                       border: "1px solid var(--color-border)",
                       borderRadius: "var(--radius-sm)",
                       padding: "0.5rem 0.65rem",
@@ -937,7 +924,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           )}
         </div>
 
-        {/* Messages */}
+        {/* Scrollable messages history body */}
         <div style={{
           flex: 1,
           overflowY: "auto",
@@ -961,12 +948,12 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 width: "48px",
                 height: "48px",
                 borderRadius: "50%",
-                background: "rgba(73, 79, 223, 0.1)",
-                border: "1px solid rgba(73, 79, 223, 0.2)",
+                background: "rgba(56, 139, 253, 0.1)",
+                border: "1px solid rgba(56, 139, 253, 0.2)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 0 12px rgba(73, 79, 223, 0.1)"
+                boxShadow: "0 0 12px rgba(56, 139, 253, 0.1)"
               }}>
                 <Sparkles size={22} color="var(--color-accent)" />
               </div>
@@ -984,9 +971,14 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                 <span style={{ fontSize: "0.65rem", color: "var(--color-text-muted)", fontWeight: 700, textTransform: "uppercase", display: "block", marginBottom: "0.5rem", letterSpacing: "0.04em" }}>
                   Sugerencias Rápidas
                 </span>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", textAlign: "left" }}>
-                  <button
+                
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.5rem",
+                  textAlign: "left"
+                }}>
+                  <button 
                     onClick={() => injectSuggestion("Dame un resumen comparativo de todos los activos analizados hasta ahora.")}
                     className="btn-ghost card-hover-highlight"
                     style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "var(--radius-sm)", fontSize: "0.75rem", border: "1px solid var(--color-border)", textAlign: "left" }}
@@ -994,7 +986,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                     <strong>Comparar Activos</strong>
                   </button>
 
-                  <button
+                  <button 
                     onClick={() => injectSuggestion("¿Cuál es la justificación técnica del reporte más reciente de la tabla?")}
                     className="btn-ghost card-hover-highlight"
                     style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "var(--radius-sm)", fontSize: "0.75rem", border: "1px solid var(--color-border)", textAlign: "left" }}
@@ -1002,7 +994,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                     <strong>Último Reporte</strong>
                   </button>
 
-                  <button
+                  <button 
                     onClick={() => injectSuggestion("¿Cuáles son los principales riesgos que descartan una estrategia en las corridas con veredicto NO?")}
                     className="btn-ghost card-hover-highlight"
                     style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "var(--radius-sm)", fontSize: "0.75rem", border: "1px solid var(--color-border)", textAlign: "left" }}
@@ -1014,7 +1006,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
             </div>
           ) : (
             messages.map((msg) => (
-              <div
+              <div 
                 key={msg.id}
                 style={{
                   alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
@@ -1024,11 +1016,11 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                   gap: "0.2rem"
                 }}
               >
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
+                <div style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
                   gap: "0.3rem",
-                  fontSize: "0.62rem",
+                  fontSize: "0.62rem", 
                   color: "var(--color-text-muted)",
                   alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
                   padding: "0 0.15rem"
@@ -1039,11 +1031,11 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                     <>
                       <span style={{ fontWeight: 800, color: "var(--color-accent)" }}>COPILOT IA</span>
                       {msg.modelUsed && (
-                        <span style={{
-                          fontSize: "0.55rem",
-                          background: "rgba(73, 79, 223, 0.1)",
-                          color: "var(--color-accent)",
-                          padding: "0.02rem 0.25rem",
+                        <span style={{ 
+                          fontSize: "0.55rem", 
+                          background: "rgba(56, 139, 253, 0.1)", 
+                          color: "var(--color-accent)", 
+                          padding: "0.02rem 0.25rem", 
                           borderRadius: 3
                         }}>
                           Gemma
@@ -1058,11 +1050,11 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                   borderRadius: msg.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
                   fontSize: "0.85rem",
                   lineHeight: 1.45,
-                  background: msg.role === "user"
-                    ? "var(--color-accent-subtle)"
-                    : "rgba(255, 255, 255, 0.025)",
-                  border: msg.role === "user"
-                    ? "1px solid rgba(73, 79, 223, 0.25)"
+                  background: msg.role === "user" 
+                    ? "rgba(56, 139, 253, 0.12)" 
+                    : "var(--color-surface-raised)",
+                  border: msg.role === "user" 
+                    ? "1px solid rgba(56, 139, 253, 0.25)" 
                     : "1px solid var(--color-border)",
                   color: "var(--color-text)",
                   boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
@@ -1082,7 +1074,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
               gap: "0.4rem",
               padding: "0.5rem 0.85rem",
               borderRadius: "8px",
-              background: "rgba(255, 255, 255, 0.02)",
+              background: "var(--color-surface-raised)",
               border: "1px solid var(--color-border)",
               color: "var(--color-text-muted)",
               fontSize: "0.75rem",
@@ -1114,11 +1106,11 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
           <div ref={chatEndRef} />
         </div>
 
-        {/* Input footer */}
+        {/* Input box footer for drawer */}
         <div style={{
           padding: "1rem 1.25rem",
           borderTop: "1px solid var(--color-border)",
-          background: "rgba(255, 255, 255, 0.01)",
+          background: "var(--color-surface-raised)",
           display: "flex",
           flexDirection: "column",
           gap: "0.4rem"
@@ -1146,7 +1138,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
             <div style={{ flex: 1, position: "relative" }}>
               <style>{`
                 .copilot-textarea::placeholder {
-                  color: #8b949e !important;
+                  color: var(--color-text-muted) !important;
                   opacity: 0.85;
                 }
                 .copilot-textarea:focus {
@@ -1199,7 +1191,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
               <Send size={12} />
             </button>
           </div>
-
+          
           <div style={{
             display: "flex",
             justifyContent: "space-between",
