@@ -128,6 +128,52 @@ export function MarkdownContent({ content }: Props) {
     } else if (/^---+$/.test(line.trim())) {
       flushList();
       nodes.push(<hr key={i} style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.08)", margin: "1rem 0" }} />);
+    } else if (line.trim().startsWith("|")) {
+      flushList();
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        tableLines.push(lines[i].trim());
+        i++;
+      }
+      i--; // loop increments i at the end
+
+      if (tableLines.length >= 2 && tableLines[1].includes("---")) {
+        const headers = tableLines[0].split("|").slice(1, -1).map((h) => h.trim());
+        const rows = tableLines.slice(2).map((row) => row.split("|").slice(1, -1).map((c) => c.trim()));
+
+        nodes.push(
+          <div key={`table-${i}`} style={{ overflowX: "auto", margin: "1rem 0" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--font-size-sm)", color: "var(--color-text)" }}>
+              <thead>
+                <tr>
+                  {headers.map((header, idx) => (
+                    <th key={idx} style={{ padding: "0.6rem 0.5rem", borderBottom: "1px solid var(--color-border)", textAlign: "left", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontSize: "0.75rem", backgroundColor: "var(--color-surface-raised)" }}>
+                      {parseInline(header, idx)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, rIdx) => (
+                  <tr key={rIdx}>
+                    {row.map((cell, cIdx) => (
+                      <td key={cIdx} style={{ padding: "0.6rem 0.5rem", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                        {parseInline(cell, cIdx)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      } else {
+        nodes.push(
+          <p key={i} style={{ margin: "0.35rem 0", color: "var(--color-text)", fontSize: "var(--font-size-sm)", lineHeight: 1.65 }}>
+            {tableLines.join("\n")}
+          </p>
+        );
+      }
     } else if (line.trim() === "") {
       flushList();
     } else {

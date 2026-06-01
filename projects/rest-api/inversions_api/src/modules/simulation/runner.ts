@@ -21,10 +21,10 @@ import {
   type TipoSenal
 } from "../indicators/types";
 import { buildInstitutionalRows } from "../institutional/institutionalRowBuilder";
-// FIC: A_TECNICO real implementation — replaces stub when core is enabled. (EN)
 import { buildTechnicalTable } from "../indicators/technicalTable";
 import type { InstitutionalRouteContext } from "../../routes/institutional/bootstrap";
 import type { InstitutionalAnalysisContract } from "../institutional/institutionalContract";
+import { runAiCore } from "./aiCoreRunner";
 
 export interface SimulationRunResult {
   verdict: ConfluenceVerdict;
@@ -62,7 +62,10 @@ export const KNOWN_ESTRATEGIAS = new Set<string>([
   "STRADDLE",
   "STRANGLE",
   "BUTTERFLY",
-  "COVERED_CALL",
+  "PROTECTIVE_PUT",
+  "MARRIED_PUT",
+  "COLLAR_PUT",
+  "COVERED_STRADDLE",
   "CALENDAR_SPREAD",
   "DIAGONAL_SPREAD",
   "WHEEL",
@@ -280,11 +283,13 @@ export async function runSimulation(
     const { zonesEngine, trendEngine, expirationEngine, buildContract } = deps.institutionalContext;
     try {
       const contract = buildContract(request.ticket);
-      // FIC: Pass undefined preResolvedResult — all 3 engines have deterministic synthetic fallbacks. (EN)
+      const lastClose = candles[candles.length - 1]?.close ?? candles[candles.length - 1]?.open ?? 0;
+      const candlesSimple = candles.map((c) => ({ close: c.close, volume: c.volume }));
+      const candlesOhlcv = candles.map((c) => ({ open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume }));
       const [zonesSettled, trendSettled, expirationSettled] = await Promise.allSettled([
-        zonesEngine.analyze(contract, undefined),
-        trendEngine.analyze(contract, undefined),
-        expirationEngine.analyze(contract, undefined),
+        zonesEngine.analyze(contract, undefined, candlesOhlcv),
+        trendEngine.analyze(contract, undefined, candlesSimple),
+        expirationEngine.analyze(contract, undefined, candlesSimple, lastClose),
       ]);
       institutionalRows = buildInstitutionalRows({
         ticket: request.ticket,
@@ -294,6 +299,8 @@ export async function runSimulation(
         zones:      zonesSettled.status      === "fulfilled" ? zonesSettled.value      : null,
         trend:      trendSettled.status      === "fulfilled" ? trendSettled.value      : null,
         expiration: expirationSettled.status === "fulfilled" ? expirationSettled.value : null,
+        estrategia: request.estrategia,
+        precioActual: lastClose,
       });
     } catch (err) {
       console.error("[A_INSTITUCIONAL] engine error — falling back to stub:", err);
@@ -327,13 +334,26 @@ export async function runSimulation(
       })
     : [];
 
-  // FIC: Stub remaining cores — skip A_INSTITUCIONAL/A_TECNICO if real rows were built. (EN)
-  // FIC: Stub de cores restantes — omite A_INSTITUCIONAL/A_TECNICO si hay filas reales. (ES)
+  // FIC: Execute AI Core if enabled
+  let aiRow: ConfluenceSignalRow | null = null;
+  if (enabledCores.has("A_IA")) {
+    aiRow = await runAiCore({
+      ticket: request.ticket,
+      timeframe: request.temporalidad,
+      sourceInputHash: verdict.source_input_hash,
+      computedAt: computedAt,
+      previousRows: deps.previousRows,
+      precalculatedRows: [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows],
+    });
+  }
+
+  // FIC: Stub remaining cores — skip A_INSTITUCIONAL/A_TECNICO/A_NOTICIAS/A_IA if real rows were built. (EN)
   const stubCores = (ALL_CORE_IDS as readonly CoreId[])
     .filter((c) => {
       if (c === "A_INDICADORES") return false;
       if (c === "A_INSTITUCIONAL" && institutionalRows.length > 0) return false;
       if (c === "A_TECNICO" && tecnicoRows.length > 0) return false;
+      if (c === "A_IA" && aiRow !== null) return false;
       if (c === "A_NOTICIAS" && noticiasRows.length > 0) return false;
       return enabledCores.has(c);
     });
@@ -347,7 +367,7 @@ export async function runSimulation(
       previousRows: deps.previousRows,
       now: computedAt
     });
-    table = [...table, ...institutionalRows, ...tecnicoRows, ...stubs];
+    table = [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...stubs];
   } else {
     table = [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows];
   }
@@ -360,6 +380,10 @@ export async function runSimulation(
   if (endTimeMs && candles.length > 0) {
     const dataDate = new Date(candles[candles.length - 1].time * 1000).toISOString().slice(0, 10);
     table = table.map((r) => ({ ...r, fecha: dataDate }));
+  }
+
+  if (aiRow) {
+    table.push(aiRow);
   }
 
   const disabled = (ALL_CORE_IDS as readonly CoreId[]).filter((c) => !enabledCores.has(c));

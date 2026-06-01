@@ -21,6 +21,7 @@ interface MarketQuote {
   change: number;
   changePercent: number;
   timestamp: string;
+  source?: string;
 }
 
 interface TradierQuote {
@@ -83,6 +84,7 @@ async function fetchSingleYahooQuote(symbol: string): Promise<MarketQuote | null
         change: Number(change.toFixed(2)),
         changePercent: Number(changePercent.toFixed(3)),
         timestamp: new Date().toISOString(),
+        source: "yahoo",
       };
     } catch {
       // try next base URL
@@ -117,6 +119,7 @@ function demoPriceForSymbol(symbol: string): MarketQuote {
     change: Number(change.toFixed(2)),
     changePercent: Number(changePercent.toFixed(3)),
     timestamp: new Date().toISOString(),
+    source: "mock",
   };
 }
 
@@ -127,6 +130,7 @@ function mapTradierQuote(q: TradierQuote): MarketQuote {
     change: Number((q.change ?? 0).toFixed(2)),
     changePercent: Number((q.change_percentage ?? 0).toFixed(3)),
     timestamp: new Date().toISOString(),
+    source: "tradier",
   };
 }
 
@@ -182,6 +186,7 @@ async function fetchFromAlpaca(
         change: Number(change.toFixed(2)),
         changePercent: bar.o > 0 ? Number(((change / bar.o) * 100).toFixed(3)) : 0,
         timestamp: new Date().toISOString(),
+        source: "alpaca",
       };
     });
 

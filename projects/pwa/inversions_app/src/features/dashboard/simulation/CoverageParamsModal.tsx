@@ -13,7 +13,20 @@ const STRATEGY_LABELS: Record<string, string> = {
   married_put:      "Married Put",
   collar_put:       "Collar Put",
   covered_straddle: "Covered Straddle",
+  PROTECTIVE_PUT:   "Protective Put",
+  MARRIED_PUT:      "Married Put",
+  COLLAR_PUT:       "Collar Put",
+  COVERED_STRADDLE: "Covered Straddle",
 };
+
+// Qué campos mostrar según estrategia
+const SHOW_PUT_STRIKE  = new Set(["PROTECTIVE_PUT", "MARRIED_PUT", "COLLAR_PUT", "protective_put", "married_put", "collar_put"]);
+const SHOW_CALL_STRIKE = new Set(["COLLAR_PUT", "COVERED_STRADDLE", "collar_put", "covered_straddle"]);
+
+function callStrikeLabel(e: string): string {
+  if (e === "COVERED_STRADDLE" || e === "covered_straddle") return "Strike (opc.)";
+  return "Strike Call (opc.)";
+}
 
 interface Props {
   open: boolean;
@@ -55,7 +68,9 @@ export function CoverageParamsModal({ open, estrategia, ticker, params, onChange
   const set = <K extends keyof CoverageModalParams>(field: K, value: CoverageModalParams[K]) =>
     onChange({ ...params, [field]: value });
 
-  const label = STRATEGY_LABELS[estrategia] ?? estrategia.replace(/_/g, " ");
+  const label      = STRATEGY_LABELS[estrategia] ?? estrategia.replace(/_/g, " ");
+  const showPut    = SHOW_PUT_STRIKE.has(estrategia);
+  const showCall   = SHOW_CALL_STRIKE.has(estrategia);
 
   return (
     <div
@@ -119,30 +134,34 @@ export function CoverageParamsModal({ open, estrategia, ticker, params, onChange
               onChange={(e) => set("shares", Number(e.target.value))}
             />
           </div>
-          <div>
-            <label style={labelStyle}>Strike Put (opc.)</label>
-            <input
-              style={inputStyle}
-              type="number"
-              step={0.5}
-              min={0}
-              value={params.putStrikePrice ?? ""}
-              placeholder="auto"
-              onChange={(e) => set("putStrikePrice", e.target.value ? Number(e.target.value) : undefined)}
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>Strike Call (opc.)</label>
-            <input
-              style={inputStyle}
-              type="number"
-              step={0.5}
-              min={0}
-              value={params.callStrikePrice ?? ""}
-              placeholder="auto"
-              onChange={(e) => set("callStrikePrice", e.target.value ? Number(e.target.value) : undefined)}
-            />
-          </div>
+          {showPut && (
+            <div>
+              <label style={labelStyle}>Strike Put (opc.)</label>
+              <input
+                style={inputStyle}
+                type="number"
+                step={0.5}
+                min={0}
+                value={params.putStrikePrice ?? ""}
+                placeholder="auto"
+                onChange={(e) => set("putStrikePrice", e.target.value ? Number(e.target.value) : undefined)}
+              />
+            </div>
+          )}
+          {showCall && (
+            <div>
+              <label style={labelStyle}>{callStrikeLabel(estrategia)}</label>
+              <input
+                style={inputStyle}
+                type="number"
+                step={0.5}
+                min={0}
+                value={params.callStrikePrice ?? ""}
+                placeholder="auto"
+                onChange={(e) => set("callStrikePrice", e.target.value ? Number(e.target.value) : undefined)}
+              />
+            </div>
+          )}
           <div>
             <label style={labelStyle}>Riesgo (%)</label>
             <input

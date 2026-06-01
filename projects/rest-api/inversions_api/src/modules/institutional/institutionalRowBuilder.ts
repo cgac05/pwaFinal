@@ -1,5 +1,5 @@
-// FIC: Converts institutional engine results into a single ConfluenceSignalRow for A_INSTITUCIONAL. (EN)
-// FIC: Convierte resultados de engines institucionales en una sola fila ConfluenceSignalRow para A_INSTITUCIONAL. (ES)
+// FIC: Converts institutional engine results into ConfluenceSignalRows for A_INSTITUCIONAL. (EN)
+// FIC: Convierte resultados de engines institucionales en filas ConfluenceSignalRow para A_INSTITUCIONAL. (ES)
 
 import type { InstitutionalZonesResult } from "./institutionalZonesEngine";
 import type { InstitutionalTrendResult } from "./institutionalTrendEngine";
@@ -18,10 +18,12 @@ interface BuildInstitutionalRowInput {
   zones: InstitutionalZonesResult | null;
   trend: InstitutionalTrendResult | null;
   expiration: ExpirationAnalysisResult | null;
+  estrategia?: string;
+  precioActual?: number;
 }
 
 export function buildInstitutionalRows(input: BuildInstitutionalRowInput): ConfluenceSignalRow[] {
-  const { ticket, timeframe, sourceInputHash, now, zones, trend, expiration } = input;
+  const { ticket, timeframe, sourceInputHash, now, zones, trend, expiration, estrategia, precioActual } = input;
 
   if (!zones && !trend && !expiration) return [];
 
@@ -116,11 +118,16 @@ export function buildInstitutionalRows(input: BuildInstitutionalRowInput): Confl
     metricas.CALL_PUT_SKEW = expiration.callPutSkew;
   }
 
+  const precioFinal = (() => {
+    const sma = trend?.sma50 ?? 0;
+    return sma > 0 ? sma : (precioActual ?? 0);
+  })();
+
   const row: ConfluenceSignalRow = {
     ticket,
     core: "A_INSTITUCIONAL",
     subCore: "ANÁLISIS",
-    precio: trend?.sma50 ?? NaN,
+    precio: precioFinal,
     tipoSenal,
     fecha,
     timeframe,
@@ -145,5 +152,5 @@ export function buildInstitutionalRows(input: BuildInstitutionalRowInput): Confl
     source_input_hash: sourceInputHash,
   };
 
-  return [row];
+  return [{ ...row, ...(estrategia ? { estrategia } : {}) }];
 }

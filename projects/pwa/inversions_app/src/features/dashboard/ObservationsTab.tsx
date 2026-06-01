@@ -3,6 +3,7 @@
 
 import React, { useState } from "react";
 import type { ConfluenceSignalRow } from "../../services/signals/confluenceTableApi";
+import { MarkdownContent } from "../../components/ui/MarkdownContent";
 import {
   buildCanonicalOutputString,
   buildSignalContextMD,
@@ -16,6 +17,7 @@ interface Props {
 export function ObservationsTab({ row, activeStrategy }: Props) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const contentRef = React.useRef<HTMLDivElement>(null);
 
   const canonicalStr = buildCanonicalOutputString(row);
   const mdStr = buildSignalContextMD(row, activeStrategy);
@@ -39,6 +41,46 @@ export function ObservationsTab({ row, activeStrategy }: Props) {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+    setDropdownOpen(false);
+  };
+
+  const handleDownloadPdf = () => {
+    if (!contentRef.current) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Exportación - ${row.ticket || "Confluencia"}</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1f2328; padding: 40px; line-height: 1.6; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
+            th, td { border-bottom: 1px solid #d0d7de; padding: 10px 12px; text-align: left; }
+            th { background-color: #f6f8fa; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; color: #656d76; }
+            h1 { font-size: 24px; border-bottom: 1px solid #d0d7de; padding-bottom: 8px; margin-bottom: 16px; }
+            h2 { font-size: 20px; margin-top: 24px; }
+            h3 { font-size: 16px; margin-top: 20px; color: #656d76; text-transform: uppercase; letter-spacing: 0.05em; }
+            ul { padding-left: 20px; }
+            li { margin-bottom: 4px; }
+            strong { font-weight: 600; }
+          </style>
+        </head>
+        <body>
+          ${contentRef.current.innerHTML}
+        </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+    
     setDropdownOpen(false);
   };
 
@@ -116,30 +158,42 @@ export function ObservationsTab({ row, activeStrategy }: Props) {
               >
                 Descargar .md
               </button>
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "0.5rem 0.9rem",
+                  fontSize: "0.78rem",
+                  background: "none",
+                  border: "none",
+                  color: "var(--color-text)",
+                  cursor: "pointer",
+                }}
+              >
+                Descargar .pdf
+              </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* FIC: Bloque preformateado con la cadena canónica / Preformatted canonical string block */}
-      <pre
+      {/* FIC: Renderizado del Markdown en lugar de texto plano / Markdown rendering instead of plain text */}
+      <div
+        ref={contentRef}
         style={{
           background: "var(--color-bg)",
           border: "1px solid var(--color-border)",
           borderRadius: "var(--radius-sm)",
           padding: "1rem",
-          fontSize: "0.72rem",
-          lineHeight: 1.6,
-          overflowX: "auto",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-          margin: 0,
           maxHeight: 420,
           overflowY: "auto",
         }}
       >
-        {canonicalStr}
-      </pre>
+        <MarkdownContent content={mdStr} />
+      </div>
     </div>
   );
 }

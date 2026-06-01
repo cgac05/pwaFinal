@@ -42,6 +42,7 @@ export interface MockResult {
   analysisSource?: 'gemini' | 'fallback';
 }
 
+// Base de datos en memoria (Singleton)
 export const mockDb = {
   instruments: [
     { id: '1', ticker: 'SPY', classification: 'Alta Liquidez', mediaPlan: 'Cobertura Semanal', updates: 'Aprobado' },
@@ -53,7 +54,7 @@ export const mockDb = {
   prompts: [
     {
       id: 'default_1',
-      basePrompt: `Eres un analista financiero institucional y desarrollador experto (Senior Quant) con 24 años de experiencia en mercados bursátiles, estrategias de opciones complejas y análisis de sentimiento.
+      basePrompt: `Eres un analista financiero institucional y desarrollador experto (Senior Quant) con 24 años de experiencia en mercados bursátiles, estrategias de opciones complejas y análisis de sentimiento. Conoces a la perfección todas las fuentes de información financiera.
 
 Recibirás un bloque de datos concatenados con múltiples 'scores' sobre un activo.
 
@@ -70,7 +71,7 @@ REGLAS DE RESPUESTA:
       ticker: 'SPY',
       decision: 'SÍ',
       justification: 'Los scores de opciones (85/100) y de financiamiento (65/100) confirman un canal de volatilidad comprimido. La baja volatilidad implícita relativa a la volatilidad histórica apoya la estructura de Iron Condor permitiendo recolectar prima con bajo riesgo de ruptura de strikes externos.',
-      date: new Date(Date.now() - 3600000 * 2).toISOString(),
+      date: new Date(Date.now() - 3600000 * 2).toISOString(), // 2 hours ago
       scores: 'Score Financiero: 65/100\nScore Técnico: 42/100\nScore Noticias: 30/100\nScore Opciones: 85/100',
       chatHistory: [
         { role: 'user', content: '¿Qué pasaría si la volatilidad implícita sube bruscamente?', timestamp: new Date(Date.now() - 3600000 * 1.9).toISOString() },
@@ -82,7 +83,7 @@ REGLAS DE RESPUESTA:
       ticker: 'AAPL',
       decision: 'NO',
       justification: 'El Score Técnico (82/100) muestra un impulso direccional de sobrecompra muy elevado y el Score de Noticias (75/100) advierte sobre un inminente anuncio de producto con alto impacto. Esto viola la premisa de estabilidad requerida para un Butterfly spread en el strike central actual, elevando drásticamente el riesgo de pérdidas por cola.',
-      date: new Date(Date.now() - 3600000 * 5).toISOString(),
+      date: new Date(Date.now() - 3600000 * 5).toISOString(), // 5 hours ago
       scores: 'Score Financiero: 55/100\nScore Técnico: 82/100\nScore Noticias: 75/100\nScore Opciones: 40/100',
       chatHistory: []
     }

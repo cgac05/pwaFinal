@@ -59,7 +59,9 @@ export class ExpirationAnalysisEngine {
   // FIC: Análisis principal — genera eventos de calendario y calcula el régimen de decaimiento temporal. (ES)
   async analyze(
     request: InstitutionalAnalysisContract,
-    preResolvedResult?: InstitutionalResolveResult
+    preResolvedResult?: InstitutionalResolveResult,
+    candles?: Array<{ close: number; volume: number }>,
+    precioActual?: number
   ): Promise<ExpirationAnalysisResult> {
     const now = new Date();
     const events: ExpirationEvent[] = [];
@@ -92,7 +94,10 @@ export class ExpirationAnalysisEngine {
     const daysToNextOpex = nextOpex?.daysToExpiry ?? DEFAULT_WINDOW_DAYS;
 
     const regime = this.computeRegime(daysToNextOpex);
-    const { theta, gamma } = this.regimeDecay(regime);
+    const closes = candles?.map((c) => c.close) ?? [];
+    const sigma = historicalVolatility(closes);
+    const price = precioActual ?? closes[closes.length - 1] ?? 100;
+    const { theta, gamma } = this.computeGreeks(price, daysToNextOpex, sigma);
     const expiryBias = this.computeExpiryBias(now.getMonth() + 1);
     const callPutSkew = this.computeCallPutSkew(preResolvedResult, request);
     const quarterlyReportImpact = this.computeQuarterlyReportImpact(now);
@@ -221,14 +226,22 @@ export class ExpirationAnalysisEngine {
     return "far";
   }
 
-  // FIC: Time decay params per regime — theta and gamma ranges per spec. (EN)
-  // FIC: Parámetros de decaimiento temporal por régimen — rangos de theta y gamma según spec. (ES)
-  private regimeDecay(regime: TimeDecayRegime): { theta: number; gamma: number } {
-    switch (regime) {
-      case "at_expiration": return { theta: 1.4, gamma: 1.6 };  // midpoint of (0.8-2.0) and (1.2+)
-      case "near":          return { theta: 0.55, gamma: 0.65 }; // midpoint of (0.3-0.8) and (0.3-1.0)
-      case "far":           return { theta: 0.125, gamma: 0.05 };
-    }
+  // FIC: Black-Scholes ATM Greeks — theta (daily $/share decay) and gamma (delta sensitivity). (EN)
+  // FIC: Greeks ATM Black-Scholes — theta (decaimiento diario $/acción) y gamma (sensibilidad del delta). (ES)
+  private computeGreeks(
+    price: number,
+    daysToOpex: number,
+    sigma: number
+  ): { theta: number; gamma: number } {
+    const T = Math.max(daysToOpex, 1) / 365;
+    const sqrtT = Math.sqrt(T);
+    const SQRT_2PI = Math.sqrt(2 * Math.PI);
+    const gamma = 1 / (price * sigma * SQRT_2PI * sqrtT);
+    const theta = -(price * sigma) / (2 * SQRT_2PI * sqrtT) / 365;
+    return {
+      gamma: Number(gamma.toFixed(6)),
+      theta: Number(theta.toFixed(6)),
+    };
   }
 
   // FIC: Seasonal bias by calendar month — T1105 bugfix values. (EN)
@@ -271,6 +284,19 @@ export class ExpirationAnalysisEngine {
     const overlapRatio = Math.max(0, 1 - diffDays / windowDays);
     return overlapRatio * 0.035; // 3.5% max impact
   }
+}
+
+// ─── Volatility helper ────────────────────────────────────────────────────────
+
+// FIC: Annualized historical volatility from log-returns (252 trading days). (EN)
+// FIC: Volatilidad histórica anualizada a partir de log-retornos (252 días de trading). (ES)
+function historicalVolatility(closes: number[], lookback = 30): number {
+  const slice = closes.slice(-lookback - 1);
+  if (slice.length < 2) return 0.20;
+  const returns = slice.slice(1).map((p, i) => Math.log(p / slice[i]));
+  const mean = returns.reduce((s, r) => s + r, 0) / returns.length;
+  const variance = returns.reduce((s, r) => s + (r - mean) ** 2, 0) / (returns.length - 1);
+  return Math.sqrt(variance * 252);
 }
 
 // ─── Calendar helpers ──────────────────────────────────────────────────────────

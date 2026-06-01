@@ -138,6 +138,8 @@ export type MetricKey =
   | "RESISTENCIAS"
   | "ATR"
   | "CANDLES_ANALYZED"
+  | "PREPROMPT"
+  | "VALOR_ENTRADA"
   // FIC: A_NOTICIAS engine metrics (TEAM-06).
   | "CONFIANZA"
   | "CREDIBILIDAD"
@@ -186,6 +188,7 @@ export interface ConfluenceSignalRow {
   disclaimer_id?: string;
   delta_vs_anterior: DeltaPrev;
   observacion: SignalObservation;
+  estrategia?: string;
   optionLeg?: OptionGreeks;
   algorithm_version: string;
   computed_at: string;

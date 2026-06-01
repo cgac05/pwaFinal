@@ -58,9 +58,10 @@ export class InstitutionalTrendEngine {
   // FIC: Análisis principal — calcula SMAs, cruce, correlación de Pearson con volumen, fuerza de tendencia. (ES)
   async analyze(
     request: InstitutionalAnalysisContract,
-    preResolvedResult?: InstitutionalResolveResult
+    preResolvedResult?: InstitutionalResolveResult,
+    directCandles?: Array<{ close: number; volume: number }>
   ): Promise<InstitutionalTrendResult> {
-    const realCandles = this.extractRealCandles(preResolvedResult);
+    const realCandles = this.extractRealCandles(preResolvedResult) ?? directCandles ?? null;
 
     if (!realCandles || realCandles.length < 20) {
       // FIC: No real candles available — return neutral result instead of synthetic data. (EN)

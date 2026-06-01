@@ -1,0 +1,53 @@
+name: Deploy to AWS Elastic Beanstalk
+
+on:
+  push:
+    branches:
+      - produccion
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build PWA
+        run: npm run build -w @inversions/pwa
+
+      - name: Build API
+        run: npm run build -w @inversions/rest-api
+
+      - name: Prepare Deployment Package
+        run: |
+          mkdir deploy
+          cp -r projects/rest-api/inversions_api/dist deploy/api-dist
+          cp -r projects/pwa/inversions_app/dist deploy/pwa-dist
+          cp projects/rest-api/inversions_api/package.json deploy/package.json
+          
+          # Modificamos el package.json para que el script start apunte al nuevo index
+          cd deploy
+          # Usamos node para actualizar el script start y eliminar devDependencies
+          node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json')); pkg.scripts = { start: 'node api-dist/index.js' }; delete pkg.devDependencies; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
+          
+          # Comprimir todo el contenido
+          zip -r ../deploy.zip *
+          cd ..
+
+      - name: Deploy to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v21
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: app-inversiones
+          environment_name: app-inversiones-env
+          version_label: v-${{ github.sha }}
+          region: us-east-1
+          deployment_package: deploy.zip

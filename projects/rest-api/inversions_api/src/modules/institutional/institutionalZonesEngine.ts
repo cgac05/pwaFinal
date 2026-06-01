@@ -64,9 +64,10 @@ export class InstitutionalZonesEngine {
   // FIC: Punto de entrada principal — acepta preResolvedResult para evitar fetch duplicado de datos. (ES)
   async analyze(
     request: InstitutionalAnalysisContract,
-    preResolvedResult?: InstitutionalResolveResult
+    preResolvedResult?: InstitutionalResolveResult,
+    directCandles?: Array<{ open: number; high: number; low: number; close: number; volume: number }>
   ): Promise<InstitutionalZonesResult> {
-    const candles = this.extractRealCandles(preResolvedResult) ?? this.buildFallbackCandles(request.ticker);
+    const candles = this.extractRealCandles(preResolvedResult) ?? directCandles ?? this.buildFallbackCandles(request.ticker);
     const avgVol = candles.reduce((s, c) => s + c.volume, 0) / candles.length;
     const atr = this.computeAtr(candles);
     const referencePrice = candles[candles.length - 1].close;

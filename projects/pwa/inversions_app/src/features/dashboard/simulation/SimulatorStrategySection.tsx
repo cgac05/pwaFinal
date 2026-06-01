@@ -16,6 +16,7 @@ import type { FromChainResponse } from "../../../services/strategies/strategyApi
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
 const CORE_OPTION_STRATEGIES = new Set(["LONG_CALL", "LONG_PUT", "SHORT_CALL", "SHORT_PUT"]);
 const COMPLEX_STRATEGIES = new Set(["IRON_CONDOR", "IRON_BUTTERFLY", "BUTTERFLY_SPREAD", "CONDOR"]);
+const COVERAGE_STRATEGIES = new Set(["PROTECTIVE_PUT", "MARRIED_PUT", "COLLAR_PUT", "COVERED_STRADDLE"]);
 
 const KIND_LABELS: Record<string, string> = {
   protective_put:   "Protective Put",
@@ -52,7 +53,7 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (!coverageRequest || activeStrategy !== "COVERED_CALL") return;
+    if (!coverageRequest || !COVERAGE_STRATEGIES.has(activeStrategy)) return;
 
     abortRef.current?.abort();
     abortRef.current = new AbortController();
@@ -74,7 +75,9 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
     )
       .then((data) => {
         setResults(data);
-        setSelectedKind(data.results[0]?.kind ?? null);
+        const requestedKind = coverageRequest.kind.toLowerCase();
+        const match = data.results.find((r) => r.kind === requestedKind);
+        setSelectedKind(match?.kind ?? data.results[0]?.kind ?? null);
       })
       .catch((err) => {
         if ((err as Error).name !== "AbortError") {
@@ -87,12 +90,17 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
   }, [coverageRequest, ticker, activeStrategy]);
 
   const sectionTitle = activeStrategy.replace(/_/g, " ");
-  const selectedResult = results?.results.find((r) => r.kind === selectedKind) ?? null;
+
+  const displayedResults = results
+    ? results.results.filter((r) => r.kind === activeStrategy.toLowerCase())
+    : [];
+
+  const selectedResult = displayedResults.find((r) => r.kind === selectedKind) ?? displayedResults[0] ?? null;
   const payoffPoints = selectedResult?.payoffPoints ?? [];
   const breakEven = selectedResult?.summary.breakEvenPrice ?? 0;
 
   const isTermStrategy = TERM_STRATEGIES.has(activeStrategy);
-  const isCoverageStrategy = activeStrategy === "COVERED_CALL";
+  const isCoverageStrategy = COVERAGE_STRATEGIES.has(activeStrategy);
   const isCoreOptionStrategy = CORE_OPTION_STRATEGIES.has(activeStrategy);
   const hasCoreOptionAnalysis = isCoreOptionStrategy && optionStrategyAnalysis?.strategy === activeStrategy;
   const isWheelStrategy = activeStrategy === "WHEEL";
@@ -624,7 +632,7 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
                   </tr>
                 </thead>
                 <tbody>
-                  {results.results.map((r: CoverageStrategyResult) => (
+                  {displayedResults.map((r: CoverageStrategyResult) => (
                     <tr
                       key={r.kind}
                       onClick={() => setSelectedKind(r.kind)}

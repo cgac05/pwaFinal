@@ -26,6 +26,7 @@ import { WheelParamsModal, type WheelModalParams } from "./WheelParamsModal";
 import { ComplexStrategyParamsModal, type ComplexFormState } from "./ComplexStrategyParamsModal";
 import { executeStrategy } from "../../../services/strategies/strategyApi";
 import type { FromChainResponse } from "../../../services/strategies/strategyApi";
+import { useSignalStore } from "../../../store/signals";
 
 // ─── Panel CSS ─────────────────────────────────────────────────────────────────
 // Uses only real Revolut design-system tokens from tokens.css.
@@ -461,8 +462,9 @@ function ChipButton({
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
 const CORE_OPTION_STRATEGIES = new Set<string>(["LONG_CALL", "LONG_PUT", "SHORT_CALL", "SHORT_PUT"]);
 const COMPLEX_STRATEGIES = new Set(["IRON_CONDOR", "IRON_BUTTERFLY", "BUTTERFLY_SPREAD", "CONDOR"]);
+const COVERAGE_STRATEGIES = new Set(["PROTECTIVE_PUT", "MARRIED_PUT", "COLLAR_PUT", "COVERED_STRADDLE"]);
 function isTermStrategy(e: string)     { return TERM_STRATEGIES.has(e); }
-function isCoverageStrategy(e: string) { return e === "COVERED_CALL"; }
+function isCoverageStrategy(e: string) { return COVERAGE_STRATEGIES.has(e); }
 function isCoreOptionStrategy(e: string): e is CoreOptionStrategy { return CORE_OPTION_STRATEGIES.has(e); }
 function isWheelStrategy(e: string)    { return e === "WHEEL"; }
 function isComplexStrategy(e: string)  { return COMPLEX_STRATEGIES.has(e); }
@@ -574,6 +576,7 @@ export function SimulationControlPanel({
   onTermResult,
   onComplexResult,
 }: Props) {
+  const incrementSimulationRunCount = useSignalStore().incrementSimulationRunCount;
   const [preset, setPreset]               = useState<Preset>("3M");
   const [estrategiaFrom, setEstrategiaFrom] = useState(isoToday());
   const [estrategiaTo, setEstrategiaTo]   = useState(isoPlusDays(30));
@@ -775,6 +778,7 @@ export function SimulationControlPanel({
         const termData = await termRes.json();
         onTermResult?.(termData);
         onResult(simResult);
+        incrementSimulationRunCount();
         return;
       }
 
@@ -801,10 +805,12 @@ export function SimulationControlPanel({
         ]);
         onComplexResult?.(complexRes, estrategia, temporalidad);
         onResult(simResult);
+        incrementSimulationRunCount();
         return;
       }
 
       onResult(await runSimulation(simPayload));
+      incrementSimulationRunCount();
     } catch (err) {
       setError(err instanceof Error ? err.message : "simulation_failed");
     } finally {

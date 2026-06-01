@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import path from "path";
 import { initializeEnvironment } from "./config/environment";
 import { printValidationResult, validateEnvironment } from "./config/envValidator";
 import { createAuditHistoryRouter } from "./routes/audit/history";
@@ -143,6 +144,16 @@ app.get("/health", (_req, res) => {
 app.get("/api/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
+
+if (process.env.NODE_ENV === "production") {
+  // En producción, servimos el frontend pre-construido
+  const clientDistPath = path.join(__dirname, "../pwa-dist");
+  app.use(express.static(clientDistPath));
+
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(clientDistPath, "index.html"));
+  });
+}
 
 // Debug: list all registered routes (temporary helper)
 app.get("/_debug/routes", (_req, res) => {

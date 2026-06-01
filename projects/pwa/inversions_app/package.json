@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@inversions/utils": "*",
+    "html2pdf.js": "^0.14.0",
+    "jspdf": "^4.2.1",
     "lightweight-charts": "^5.2.0",
     "lucide-react": "^1.16.0",
     "react": "^18.3.1",

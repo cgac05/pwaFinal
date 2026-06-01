@@ -50,6 +50,7 @@ export interface AIChatResponse {
 
 // ── API functions ─────────────────────────────────────────
 
+// Centralize the AI chat base path so the frontend always talks to the local backend proxy.
 const API_BASE = "/api/ai";
 
 export async function submitChatQuestion(
@@ -65,6 +66,7 @@ export async function submitChatQuestion(
   });
 
   if (response.status === 503 || response.status === 500) {
+    // Surface transient backend failures as a pending response so the UI can keep polling gracefully.
     const body = await response.json().catch(() => ({}));
     return {
       status: "pending",
@@ -93,6 +95,7 @@ export async function pollChatResponse(
   );
 
   if (response.status === 503 || response.status === 500) {
+    // Preserve the polling contract even when the backend reports AI unavailability.
     const body = await response.json().catch(() => ({}));
     return {
       status: "pending",
@@ -125,6 +128,7 @@ export async function pollUntilComplete(
   responseId: string,
   onProgress?: (attempt: number) => void
 ): Promise<AIChatResponse> {
+  // Keep polling until the backend returns the final narrative or explicitly marks the AI unavailable.
   for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt++) {
     onProgress?.(attempt);
 
