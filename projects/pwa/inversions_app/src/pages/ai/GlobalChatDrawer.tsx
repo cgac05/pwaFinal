@@ -253,7 +253,7 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                   </p>
                 </div>
                 <a 
-                  href="/ai/evaluacion-tabla" 
+                  href="#/ai/evaluacion-tabla" 
                   className="btn-primary"
                   style={{ 
                     display: "inline-flex", 
