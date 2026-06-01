@@ -15,6 +15,7 @@ import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailMo
 import { AiDetailModal } from "../ai/AiDetailModal";
 import type { ModalRowData } from "../institutional/types";
 import { MarkdownContent } from "../../components/ui/MarkdownContent";
+import { ObservationsTab } from "./ObservationsTab";
 
 // FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
 const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia"; label: string; width: number }> = [
