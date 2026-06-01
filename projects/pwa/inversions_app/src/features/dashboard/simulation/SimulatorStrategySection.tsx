@@ -11,9 +11,12 @@ import {
 import type { CoverageModalParams } from "./CoverageParamsModal";
 import type { OptionStrategyAnalysis } from "./OptionStrategyParamsModal";
 import type { WheelModalParams } from "./WheelParamsModal";
+import type { SpreadModalParams } from "./SpreadParamsModal";
 
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
 const CORE_OPTION_STRATEGIES = new Set(["LONG_CALL", "LONG_PUT", "SHORT_CALL", "SHORT_PUT"]);
+const SPREAD_STRATEGIES = new Set(["BULL_CALL_SPREAD", "BEAR_PUT_SPREAD", "BULL_PUT_SPREAD", "BEAR_CALL_SPREAD"]);
+const DEBIT_SPREADS = new Set(["BULL_CALL_SPREAD", "BEAR_PUT_SPREAD"]);
 
 const KIND_LABELS: Record<string, string> = {
   protective_put:   "Protective Put",
@@ -32,6 +35,7 @@ interface Props {
   ticker: string;
   activeStrategy: string;
   coverageRequest?: { params: CoverageModalParams; kind: string } | null;
+  spreadRequest?: { params: SpreadModalParams; kind: string } | null;
   optionStrategyAnalysis?: OptionStrategyAnalysis | null;
   wheelSummary?: WheelModalParams | null;
   termResult?: any | null;
@@ -41,7 +45,7 @@ function money(value: number | "Ilimitado"): string {
   return value === "Ilimitado" ? "Ilimitado" : `$${value.toFixed(2)}`;
 }
 
-export function SimulatorStrategySection({ ticker, activeStrategy, coverageRequest, optionStrategyAnalysis, wheelSummary, termResult }: Props) {
+export function SimulatorStrategySection({ ticker, activeStrategy, coverageRequest, spreadRequest, optionStrategyAnalysis, wheelSummary, termResult }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<CoverageAnalyzeResponse | null>(null);
@@ -92,11 +96,12 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
   const isCoverageStrategy = activeStrategy === "COVERED_CALL";
   const isCoreOptionStrategy = CORE_OPTION_STRATEGIES.has(activeStrategy);
   const hasCoreOptionAnalysis = isCoreOptionStrategy && optionStrategyAnalysis?.strategy === activeStrategy;
+  const isSpreadStrategy = SPREAD_STRATEGIES.has(activeStrategy);
   const isWheelStrategy = activeStrategy === "WHEEL";
 
   const cardStyle: React.CSSProperties = {
     padding: "var(--space-lg)",
-    opacity: (!isCoverageStrategy && !isTermStrategy && !isCoreOptionStrategy && !isWheelStrategy) ? 0.5 : 1,
+    opacity: (!isCoverageStrategy && !isTermStrategy && !isCoreOptionStrategy && !isWheelStrategy && !isSpreadStrategy) ? 0.5 : 1,
   };
 
   const mutedText: React.CSSProperties = {
@@ -300,7 +305,7 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
       })()}
 
       {/* Unknown strategies */}
-      {!isCoverageStrategy && !isTermStrategy && !isCoreOptionStrategy && !isWheelStrategy && (
+      {!isCoverageStrategy && !isTermStrategy && !isCoreOptionStrategy && !isWheelStrategy && !isSpreadStrategy && (
         <p style={mutedText}>
           El análisis de {sectionTitle} está en construcción y estará disponible próximamente.
         </p>
@@ -358,6 +363,64 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
               <PayoffChart points={optionStrategyAnalysis.payoffPoints} breakEvenPrice={optionStrategyAnalysis.result.breakeven} height={220} />
             </div>
           )}
+        </>
+      )}
+
+
+      {/* Debit/Credit spreads */}
+      {isSpreadStrategy && (
+        <>
+          {(!spreadRequest || spreadRequest.kind !== activeStrategy) && (
+            <p style={mutedText}>
+              Configura los strikes y primas para analizar {sectionTitle}. Debit Spread incluye Bull Call/Bear Put; Credit Spread incluye Bull Put/Bear Call.
+            </p>
+          )}
+          {spreadRequest && spreadRequest.kind === activeStrategy && (() => {
+            const p = spreadRequest.params;
+            const isDebit = DEBIT_SPREADS.has(activeStrategy);
+            const width = Math.abs(p.shortStrike - p.longStrike);
+            const net = isDebit ? p.longPremium - p.shortPremium : p.shortPremium - p.longPremium;
+            const multiplier = Math.max(1, p.contracts || 1) * 100;
+            const maxProfit = isDebit ? (width - net) * multiplier : net * multiplier;
+            const maxLoss = isDebit ? net * multiplier : (width - net) * multiplier;
+            const breakEven =
+              activeStrategy === "BULL_CALL_SPREAD" ? p.longStrike + net :
+              activeStrategy === "BEAR_PUT_SPREAD" ? p.longStrike - net :
+              activeStrategy === "BULL_PUT_SPREAD" ? p.shortStrike - net :
+              p.shortStrike + net;
+            const direction = activeStrategy === "BULL_CALL_SPREAD" || activeStrategy === "BULL_PUT_SPREAD" ? "Alcista" : "Bajista";
+            const family = isDebit ? "Debit Spread" : "Credit Spread";
+            const rows: Array<{ label: string; value: string; color?: string }> = [
+              { label: "Familia", value: family, color: "var(--color-accent)" },
+              { label: "Sesgo", value: direction, color: direction === "Alcista" ? "var(--color-buy)" : "var(--color-sell)" },
+              { label: isDebit ? "Débito neto" : "Crédito neto", value: net > 0 ? `$${net.toFixed(2)}` : "Revisar primas" },
+              { label: "Ancho spread", value: width > 0 ? `$${width.toFixed(2)}` : "—" },
+              { label: "Max profit", value: maxProfit > 0 ? `$${maxProfit.toFixed(2)}` : "—", color: "var(--color-buy)" },
+              { label: "Max loss", value: maxLoss > 0 ? `$${maxLoss.toFixed(2)}` : "—", color: "var(--color-sell)" },
+              { label: "Break-even", value: breakEven > 0 ? `$${breakEven.toFixed(2)}` : "—" },
+              { label: "Contratos", value: String(Math.max(1, p.contracts || 1)) },
+            ];
+
+            return (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "var(--space-md)" }}>
+                {rows.map((r) => (
+                  <div key={r.label} style={{
+                    background: "var(--color-surface)",
+                    borderRadius: "var(--radius-sm)",
+                    padding: "var(--space-sm) var(--space-md)",
+                    border: "1px solid var(--color-border-subtle)",
+                  }}>
+                    <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "2px" }}>
+                      {r.label}
+                    </div>
+                    <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 700, color: r.color ?? "var(--color-text)" }}>
+                      {r.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </>
       )}
 

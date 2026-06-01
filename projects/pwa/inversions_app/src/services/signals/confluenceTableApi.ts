@@ -77,6 +77,18 @@ export interface SimulationRequestPayload {
   indicadoresHabilitados: SubCoreIndicador[];
   estrategia: string;
   toleranciaRiesgo: "BAJO" | "MEDIO" | "ALTO";
+  // FIC: Optional historical as-of date (ISO yyyy-mm-dd) — backtest a past day (US8).
+  fechaHistorica?: string;
+  // FIC: When true and >=2 indicators are enabled, only coinciding indicator rows return (US7).
+  soloCoincidencias?: boolean;
+}
+
+// FIC: Aggregated buy/sell/hold counters returned by the simulation (US5).
+export interface SignalMetrics {
+  buy: number;
+  sell: number;
+  hold: number;
+  total: number;
 }
 
 export interface SimulationResponse {
@@ -85,6 +97,7 @@ export interface SimulationResponse {
   inputs_echo: SimulationRequestPayload;
   computed_at: string;
   algorithm_version: string;
+  signalMetrics?: SignalMetrics;
 }
 
 function authHeaders(): HeadersInit {
@@ -129,6 +142,8 @@ export const CANONICAL_ESTRATEGIAS = [
   "IRON_CONDOR",
   "BULL_CALL_SPREAD",
   "BEAR_PUT_SPREAD",
+  "BULL_PUT_SPREAD",
+  "BEAR_CALL_SPREAD",
   "LONG_CALL",
   "LONG_PUT",
   "SHORT_CALL",

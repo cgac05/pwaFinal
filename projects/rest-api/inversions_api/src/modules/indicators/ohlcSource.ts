@@ -59,28 +59,36 @@ function getMockCandles({ symbol, timeframe, count = 300, endTimeMs }: GetCandle
 // FIC: Fetch real OHLC candles from Yahoo Finance — async, returns mock on failure with warning. (EN)
 // FIC: Obtiene velas OHLC reales de Yahoo Finance — async, retorna mock con advertencia si falla. (ES)
 export async function getCandles(opts: GetCandlesOptions): Promise<OhlcBar[]> {
-  const { symbol, timeframe, count = 300 } = opts;
+  const { symbol, timeframe, count = 300, endTimeMs } = opts;
 
-  const cacheKey = `${symbol}:${timeframe}:${count}`;
+  const cacheKey = `${symbol}:${timeframe}:${count}:${endTimeMs ?? "latest"}`;
   const cached = candleCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.data;
   }
 
   try {
-    const yahooCandles = await fetchYahooOhlc(symbol, timeframe);
-    if (yahooCandles && yahooCandles.length >= Math.min(count, 20)) {
-      const sliced = yahooCandles.slice(-count);
-      const result = sliced.map((c) => ({
-        time: c.time,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-        volume: c.volume,
-      }));
-      candleCache.set(cacheKey, { data: result, expiresAt: Date.now() + 300_000 });
-      return result;
+    // FIC: US8 — si se pide una fecha historica, ampliar el rango de Yahoo y cortar velas hasta ese dia.
+    const startDateIso = endTimeMs
+      ? new Date(endTimeMs - count * intervalMs(timeframe) * 1.6).toISOString()
+      : undefined;
+    const yahooCandles = await fetchYahooOhlc(symbol, timeframe, globalThis.fetch, startDateIso);
+    if (yahooCandles && yahooCandles.length > 0) {
+      const cutoffSec = endTimeMs ? Math.floor(endTimeMs / 1000) : undefined;
+      const upToDate = cutoffSec ? yahooCandles.filter((c) => c.time <= cutoffSec) : yahooCandles;
+      if (upToDate.length >= Math.min(count, 20)) {
+        const sliced = upToDate.slice(-count);
+        const result = sliced.map((c) => ({
+          time: c.time,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+          volume: c.volume,
+        }));
+        candleCache.set(cacheKey, { data: result, expiresAt: Date.now() + 300_000 });
+        return result;
+      }
     }
   } catch {
     // fall through to mock

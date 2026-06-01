@@ -5,6 +5,7 @@ import { computeConfluence } from "../indicators/confluence";
 import { buildIndicatorsTable } from "../indicators/confluenceTable";
 import { buildCoreStubs } from "../indicators/coreStubs";
 import { getCandles, intervalMs, isSupportedTimeframe } from "../indicators/ohlcSource";
+import { buildNewsConfluenceRows } from "../news/newsConfluenceRows";
 import {
   ALGORITHM_VERSION,
   ALL_CORE_IDS,
@@ -13,9 +14,11 @@ import {
   type ConfluenceVerdict,
   type CoreId,
   type OhlcBar,
+  type SignalMetrics,
   type SimulationRequest,
   type SubCoreIndicador,
-  type Timeframe
+  type Timeframe,
+  type TipoSenal
 } from "../indicators/types";
 import { buildInstitutionalRows } from "../institutional/institutionalRowBuilder";
 // FIC: A_TECNICO real implementation — replaces stub when core is enabled. (EN)
@@ -29,6 +32,9 @@ export interface SimulationRunResult {
   inputs_echo: SimulationRequest;
   computed_at: string;
   algorithm_version: string;
+  // FIC: Aggregated buy/sell/hold counters over the returned table (US5). (EN)
+  // FIC: Conteo agregado compra/venta/hold sobre la tabla devuelta (US5). (ES)
+  signalMetrics: SignalMetrics;
 }
 
 export interface SimulationValidationError {
@@ -42,6 +48,8 @@ export const KNOWN_ESTRATEGIAS = new Set<string>([
   "IRON_CONDOR",
   "BULL_CALL_SPREAD",
   "BEAR_PUT_SPREAD",
+  "BULL_PUT_SPREAD",
+  "BEAR_CALL_SPREAD",
   "LONG_CALL",
   "LONG_PUT",
   "SHORT_CALL",
@@ -138,7 +146,55 @@ export function validateSimulationRequest(body: any): SimulationValidationError 
   if (body.toleranciaRiesgo !== "BAJO" && body.toleranciaRiesgo !== "MEDIO" && body.toleranciaRiesgo !== "ALTO") {
     return { error_code: "INVALID_SIMULATION_REQUEST", message: "'toleranciaRiesgo' debe ser BAJO|MEDIO|ALTO.", field: "toleranciaRiesgo" };
   }
+  // FIC: fechaHistorica is optional; when present it must be a parseable date not in the future. (EN)
+  // FIC: fechaHistorica es opcional; si viene debe ser fecha valida y no futura. (ES)
+  if (body.fechaHistorica !== undefined && body.fechaHistorica !== "" && body.fechaHistorica !== null) {
+    const asOf = Date.parse(body.fechaHistorica);
+    if (!Number.isFinite(asOf)) {
+      return { error_code: "INVALID_SIMULATION_REQUEST", message: "'fechaHistorica' no es una fecha valida.", field: "fechaHistorica" };
+    }
+    if (asOf > Date.now()) {
+      return { error_code: "INVALID_RANGE", message: "'fechaHistorica' no puede ser futura.", field: "fechaHistorica" };
+    }
+  }
   return null;
+}
+
+// FIC: End-of-day epoch (ms, UTC) for an as-of date, so the snapshot includes that whole day. (EN)
+// FIC: Fin de dia (ms, UTC) de la fecha as-of, para que el snapshot incluya el dia completo. (ES)
+function endOfDayMs(isoDate: string): number {
+  return Date.parse(isoDate.length <= 10 ? `${isoDate}T23:59:59.999Z` : isoDate);
+}
+
+// FIC: US7 — keep only A_INDICADORES subCore rows whose tipoSenal coincides with at least one
+// FIC: other indicator. The aggregate A_INDICADORES row (no subCore) and all other cores are kept.
+// FIC: With <2 indicator rows there is nothing to compare, so all rows pass through unchanged.
+// FIC: US7 — conserva solo las filas subCore de A_INDICADORES cuya tipoSenal coincide con al menos
+// FIC: otro indicador. La fila agregada (sin subCore) y los demas cores se conservan. Con <2 filas
+// FIC: de indicador no hay con que comparar, asi que todas pasan sin cambios.
+function applyCoincidenceFilter(rows: ConfluenceSignalRow[]): ConfluenceSignalRow[] {
+  const indicatorRows = rows.filter((r) => r.core === "A_INDICADORES" && !!r.subCore);
+  if (indicatorRows.length < 2) return rows;
+
+  const counts = new Map<TipoSenal, number>();
+  for (const r of indicatorRows) counts.set(r.tipoSenal, (counts.get(r.tipoSenal) ?? 0) + 1);
+
+  return rows.filter((r) => {
+    if (r.core !== "A_INDICADORES" || !r.subCore) return true; // aggregate + other cores
+    return (counts.get(r.tipoSenal) ?? 0) >= 2; // indicator row: must coincide with >=1 peer
+  });
+}
+
+// FIC: US5 — count buy (CALL) / sell (PUT) / hold rows over the final table. (EN)
+// FIC: US5 — cuenta filas compra (CALL) / venta (PUT) / hold sobre la tabla final. (ES)
+function computeSignalMetrics(rows: ConfluenceSignalRow[]): SignalMetrics {
+  let buy = 0, sell = 0, hold = 0;
+  for (const r of rows) {
+    if (r.tipoSenal === "CALL") buy++;
+    else if (r.tipoSenal === "PUT") sell++;
+    else hold++;
+  }
+  return { buy, sell, hold, total: rows.length };
 }
 
 function candleCountFor(request: SimulationRequest): number {
@@ -158,7 +214,7 @@ export interface RunSimulationDeps {
   /**
    * FIC: Inyectable para test/runtime (default usa getCandles async con Yahoo Finance). (EN)
    */
-  fetchCandles?: (input: { symbol: string; timeframe: Timeframe; count: number }) => OhlcBar[] | Promise<OhlcBar[]>;
+  fetchCandles?: (input: { symbol: string; timeframe: Timeframe; count: number; endTimeMs?: number }) => OhlcBar[] | Promise<OhlcBar[]>;
   now?: Date;
   previousRows?: ConfluenceSignalRow[];
   /** FIC: Institutional engines context — injected by the route handler when A_INSTITUCIONAL is enabled. */
@@ -178,14 +234,26 @@ export async function runSimulation(
 ): Promise<SimulationRunResult> {
   const fetcher = deps.fetchCandles ?? getCandles;
   const count = candleCountFor(request);
-  const candles = await Promise.resolve(fetcher({ symbol: request.ticket, timeframe: request.temporalidad, count }));
+  // FIC: US8 — when fechaHistorica is set, fetch/truncate candles up to that day's end so every
+  // FIC: downstream core computes the signal AS IF it were that past date. (EN)
+  const endTimeMs = request.fechaHistorica ? endOfDayMs(request.fechaHistorica) : undefined;
+  const fetched = await Promise.resolve(
+    fetcher({ symbol: request.ticket, timeframe: request.temporalidad, count, endTimeMs })
+  );
+  // FIC: Defensive truncation in case the injected fetcher ignores endTimeMs. (EN)
+  const candles = endTimeMs
+    ? fetched.filter((c) => c.time * 1000 <= endTimeMs)
+    : fetched;
   const computedAt = deps.now ?? new Date();
 
   const enabledCores = new Set<CoreId>(request.coresHabilitados);
-  const enabledSubs: SubCoreIndicador[] =
-    request.indicadoresHabilitados.length > 0
-      ? request.indicadoresHabilitados
-      : (ALL_SUBCORES_INDICADOR as readonly SubCoreIndicador[]).slice();
+  // FIC: No "all indicators" fallback. If A_INDICADORES is enabled but the user selected NO
+  // FIC: individual indicator, the core emits ZERO rows — the confluence table shows nothing for
+  // FIC: indicators. Other enabled cores still emit their own rows (multicore rule). (EN)
+  // FIC: Sin fallback a "todos los indicadores". Si A_INDICADORES esta activo pero el usuario no
+  // FIC: selecciono ningun indicador individual, el core no emite filas — la tabla no muestra nada
+  // FIC: de indicadores. Los demas cores activos siguen emitiendo sus filas (regla multicore). (ES)
+  const enabledSubs: SubCoreIndicador[] = request.indicadoresHabilitados ?? [];
 
   const verdict = computeConfluence(candles, {
     symbol: request.ticket,
@@ -193,7 +261,7 @@ export async function runSimulation(
   });
 
   let table: ConfluenceSignalRow[] = [];
-  if (enabledCores.has("A_INDICADORES")) {
+  if (enabledCores.has("A_INDICADORES") && enabledSubs.length > 0) {
     table = buildIndicatorsTable({
       ticket: request.ticket,
       timeframe: request.temporalidad,
@@ -244,6 +312,20 @@ export async function runSimulation(
       })
     : [];
 
+  const noticiasRows = enabledCores.has("A_NOTICIAS")
+    ? await buildNewsConfluenceRows({
+        ticket: request.ticket,
+        timeframe: request.temporalidad,
+        precio: candles[candles.length - 1]?.close ?? candles[candles.length - 1]?.open ?? 0,
+        sourceInputHash: verdict.source_input_hash,
+        previousRows: deps.previousRows,
+        now: computedAt,
+        limit: 100,
+        from: request.rangoEstrategia.from,
+        to: request.rangoEstrategia.to,
+      })
+    : [];
+
   // FIC: Stub remaining cores — skip A_INSTITUCIONAL/A_TECNICO if real rows were built. (EN)
   // FIC: Stub de cores restantes — omite A_INSTITUCIONAL/A_TECNICO si hay filas reales. (ES)
   const stubCores = (ALL_CORE_IDS as readonly CoreId[])
@@ -251,6 +333,7 @@ export async function runSimulation(
       if (c === "A_INDICADORES") return false;
       if (c === "A_INSTITUCIONAL" && institutionalRows.length > 0) return false;
       if (c === "A_TECNICO" && tecnicoRows.length > 0) return false;
+      if (c === "A_NOTICIAS" && noticiasRows.length > 0) return false;
       return enabledCores.has(c);
     });
 
@@ -263,9 +346,19 @@ export async function runSimulation(
       previousRows: deps.previousRows,
       now: computedAt
     });
-    table = [...table, ...institutionalRows, ...tecnicoRows, ...stubs];
+    table = [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...stubs];
   } else {
-    table = [...table, ...institutionalRows, ...tecnicoRows];
+    table = [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows];
+  }
+
+  // FIC: US8 bugfix — when running on historical (as-of) data, the rows MUST display the REAL date
+  // FIC: of the data point, not today's date. Stamp every row's `fecha` with the last candle's day.
+  // FIC: `computed_at` keeps the real computation timestamp; only `fecha` (the data date) changes.
+  // FIC: US8 fix — al correr sobre datos historicos, las filas DEBEN mostrar la fecha real del dato,
+  // FIC: no la de hoy. Sella el `fecha` de cada fila con el dia de la ultima vela usada. (ES)
+  if (endTimeMs && candles.length > 0) {
+    const dataDate = new Date(candles[candles.length - 1].time * 1000).toISOString().slice(0, 10);
+    table = table.map((r) => ({ ...r, fecha: dataDate }));
   }
 
   const disabled = (ALL_CORE_IDS as readonly CoreId[]).filter((c) => !enabledCores.has(c));
@@ -275,11 +368,16 @@ export async function runSimulation(
     missing: Array.from(new Set([...verdict.missing, ...disabled.map((c) => `core:${c}`)]))
   };
 
+  // FIC: US7 — apply the multi-indicator coincidence filter unless explicitly disabled. (EN)
+  // FIC: US7 — aplica el filtro de coincidencias multi-indicador salvo que se desactive. (ES)
+  const finalTable = request.soloCoincidencias === false ? table : applyCoincidenceFilter(table);
+
   return {
     verdict: degradedVerdict,
-    table,
+    table: finalTable,
     inputs_echo: request,
     computed_at: computedAt.toISOString(),
     algorithm_version: ALGORITHM_VERSION,
+    signalMetrics: computeSignalMetrics(finalTable),
   };
 }

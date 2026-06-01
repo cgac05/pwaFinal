@@ -13,13 +13,15 @@ import type { InstitutionalAnalysisResponse } from "../../services/institutional
 import type { FundamentalAnalysisResponse } from "../../services/fundamental/fundamentalApi";
 import { OptionGreeksRow } from "./OptionGreeksRow";
 import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailModal";
+import { NewsDetailModal } from "../news/NewsDetailModal";
 import { MarkdownContent } from "../../components/ui/MarkdownContent";
+import type { AnalyzedNewsSource } from "../../services/news/newsApi";
 
 // FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
 const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia"; label: string; width: number }> = [
   { key: "ticket",    label: "TICKET",     width: 76  },
-  { key: "core",      label: "CORE",       width: 150 },
-  { key: "subCore",   label: "SUBCORE",    width: 110 },
+  { key: "core",      label: "CORE",       width: 132 },
+  { key: "subCore",   label: "SUBCORE",    width: 320 },
   { key: "precio",    label: "PRECIO",     width: 96  },
   { key: "tipoSenal", label: "TIPO SEÑAL", width: 108 },
   { key: "fecha",     label: "FECHA",      width: 110 },
@@ -147,6 +149,22 @@ function colorForEstado(estado: string): string {
   return "var(--color-buy, #2ec27e)";
 }
 
+function providerAccent(provider?: string): string {
+  const clean = (provider ?? "").toLowerCase();
+  if (clean.includes("yahoo")) return "#8b5cf6";
+  if (clean.includes("finnhub")) return "#00c2a8";
+  if (clean.includes("newsapi")) return "#3b82f6";
+  if (clean.includes("polygon")) return "#f59e0b";
+  if (clean.includes("alpha")) return "#f43f5e";
+  return "var(--color-accent)";
+}
+
+function compactNewsTitle(row: ConfluenceSignalRow): string {
+  const title = row.observacion?.objetivo ?? "Noticia sin titulo";
+  return title.length > 92 ? `${title.slice(0, 89)}...` : title;
+}
+
+
 function clampScore(value: number): number {
   return Math.max(-1, Math.min(1, value));
 }
@@ -196,6 +214,8 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy,
   const [modalTicker, setModalTicker] = useState<string | null>(null);
   const [modalResumen, setModalResumen] = useState<string>("");
   const [modalRow, setModalRow] = useState<ConfluenceSignalRow | null>(null);
+  const [newsArticle, setNewsArticle] = useState<AnalyzedNewsSource | null>(null);
+  const [showNewsModal, setShowNewsModal] = useState(false);
   const [observationRow, setObservationRow] = useState<(ConfluenceSignalRow & { resumen_analisis?: string }) | null>(null);
   const [detailTab, setDetailTab] = useState<"analysis" | "context">("analysis");
 
@@ -276,7 +296,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy,
       </div>
 
       <div style={{ maxHeight: 500, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
-        <table style={{ width: "100%", minWidth: 1400, borderCollapse: "collapse", tableLayout: "fixed" }}>
+        <table style={{ width: "100%", minWidth: 1660, borderCollapse: "collapse", tableLayout: "fixed" }}>
           <thead>
             <tr>
               {TABLE_COLUMNS.map((col) => (
@@ -318,6 +338,28 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy,
                     } as SelectedSignal);
                     return;
                   }
+                  if (row.core === "A_NOTICIAS") {
+                    const article: AnalyzedNewsSource = {
+                      id: row.evidencia_refs?.[0] ?? `${row.ticket}-${row.subCore ?? "news"}`,
+                      title: row.observacion?.objetivo ?? (row.subCore ? `${row.ticket} · ${row.subCore}` : `Noticias ${row.ticket}`),
+                      url: row.evidencia_refs?.[0],
+                      provider: row.fuente,
+                      publishedAt: `${row.fecha}T12:00:00.000Z`,
+                      summary: row.observacion?.senal ?? "Noticia de confluencia",
+                      rawText: row.observacion?.explicacion ?? row.resumen_analisis ?? "",
+                      sentiment: row.tipoSenal === "CALL" ? "positive" : row.tipoSenal === "PUT" ? "negative" : "neutral",
+                      sentimentScore: row.score,
+                      confidence: Math.max(0, Math.min(1, row.peso)),
+                      credibilityScore: Math.max(0, Math.min(1, row.peso)),
+                      affectedSymbols: [row.ticket],
+                      keywords: [],
+                      verdict: row.tipoSenal === "CALL" ? "BUY" : row.tipoSenal === "PUT" ? "SELL" : "HOLD",
+                      rationale: row.observacion?.explicacion ?? row.observacion?.senal ?? ""
+                    };
+                    setNewsArticle(article);
+                    setShowNewsModal(true);
+                    return;
+                  }
                   if (row.core === "A_FUNDAMENTAL") {
                     setDetailTab("analysis");
                     setObservationRow(row);
@@ -328,7 +370,17 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy,
                 };
 
                 const cells = (
-                  <tr key={rowKey} onClick={onClick} data-resumen={row.resumen_analisis ?? ""} style={{ cursor: "pointer", opacity: row.estado === "DEGRADADA" ? 0.62 : 1 }}>
+                  <tr
+                    key={rowKey}
+                    onClick={onClick}
+                    data-resumen={row.resumen_analisis ?? ""}
+                    style={{
+                      cursor: "pointer",
+                      opacity: row.estado === "DEGRADADA" ? 0.62 : 1,
+                      background: row.core === "A_NOTICIAS" ? "linear-gradient(90deg, rgba(56,139,253,0.10), transparent 70%)" : undefined,
+                      boxShadow: row.core === "A_NOTICIAS" ? `inset 3px 0 0 ${providerAccent(row.fuente)}` : undefined,
+                    }}
+                  >
                     {TABLE_COLUMNS.map((col) => {
                       let content: React.ReactNode;
                       if (col.key === "estrategia") {
@@ -337,6 +389,20 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy,
                         content = <span style={{ color: colorForTipo(row.tipoSenal), fontWeight: 700 }}>{row.tipoSenal}</span>;
                       } else if (col.key === "estado") {
                         content = <span style={{ color: colorForEstado(row.estado), fontWeight: 600 }}>{row.estado}</span>;
+                      } else if (col.key === "subCore" && row.core === "A_NOTICIAS") {
+                        content = (
+                          <div style={{ display: "grid", gap: 3, minWidth: 0 }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 800, color: providerAccent(row.fuente) }}>
+                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: providerAccent(row.fuente), display: "inline-block" }} />
+                              {row.subCore ?? row.fuente}
+                            </span>
+                            <span title={row.observacion?.objetivo} style={{ color: "var(--color-text)", fontWeight: 650, lineHeight: 1.25 }}>
+                              {compactNewsTitle(row)}
+                            </span>
+                          </div>
+                        );
+                      } else if (col.key === "core" && row.core === "A_NOTICIAS") {
+                        content = <span style={{ color: "var(--color-accent)", fontWeight: 800 }}>A_NOTICIAS</span>;
                       } else if (col.key === "invertir") {
                         content = row.invertir ? "SI" : "NO";
                       } else if (col.key === "score" || col.key === "peso" || col.key === "precio") {
@@ -354,7 +420,18 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy,
                         content = v == null ? "-" : String(v);
                       }
                       return (
-                        <td key={col.key} style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <td
+                          key={col.key}
+                          style={{
+                            padding: row.core === "A_NOTICIAS" ? "0.82rem 0.8rem" : "0.72rem 0.8rem",
+                            borderBottom: "1px solid var(--color-border)",
+                            fontSize: "0.78rem",
+                            verticalAlign: "middle",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: col.key === "subCore" && row.core === "A_NOTICIAS" ? "normal" : "nowrap",
+                          }}
+                        >
                           {content}
                         </td>
                       );
@@ -532,6 +609,15 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy,
         data={modalTicker ? (institutionalResults[modalTicker.toUpperCase()] ?? null) : null}
         resumen={modalResumen}
         signalRow={modalRow ?? undefined}
+      />
+
+      <NewsDetailModal
+        isOpen={showNewsModal}
+        onClose={() => {
+          setShowNewsModal(false);
+          setNewsArticle(null);
+        }}
+        article={newsArticle}
       />
     </section>
   );

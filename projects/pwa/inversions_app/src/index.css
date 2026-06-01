@@ -152,3 +152,103 @@ tbody tr:hover td { background: var(--color-surface-raised); }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--color-bg); }
 ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: var(--radius-xs); }
+
+
+/* AppShell dashboard responsiveness */
+.dashboard-main-content {
+  width: 100%;
+  min-width: 0;
+  --dashboard-panel-max-width: calc(100vw - var(--activity-bar-width) - var(--left-panel-width) - (var(--space-lg) * 2));
+}
+
+.dashboard-main-content > * {
+  justify-self: center;
+  min-width: 0;
+  width: min(100%, var(--dashboard-panel-max-width));
+}
+
+.dashboard-panel-stack {
+  justify-items: stretch;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+.dashboard-main-content > .dashboard-panel-stack {
+  justify-self: center;
+  width: min(100%, var(--dashboard-panel-max-width));
+}
+
+.dashboard-panel-stack > * {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+.dashboard-panel-stack > section.card,
+.dashboard-panel-stack > .card,
+.dashboard-panel-stack section.card {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+.dashboard-main-content .card {
+  max-width: 100%;
+}
+
+.dashboard-topbar,
+.dashboard-controls-card {
+  min-width: 0;
+  row-gap: var(--space-sm);
+}
+
+.dashboard-filter-grid {
+  min-width: 0;
+}
+
+.dashboard-chart-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-main-content {
+    padding: var(--space-md) !important;
+    gap: var(--space-md) !important;
+    --dashboard-panel-max-width: calc(100vw - var(--activity-bar-width) - (var(--space-md) * 2));
+  }
+
+  .dashboard-topbar {
+    align-items: flex-start !important;
+    flex-direction: column;
+  }
+
+  .dashboard-filter-grid {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+
+  .dashboard-core-count {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-main-content {
+    padding: var(--space-sm) !important;
+    --dashboard-panel-max-width: calc(100vw - var(--activity-bar-width) - (var(--space-sm) * 2));
+  }
+
+  .dashboard-filter-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dashboard-filter-grid .btn-primary,
+  .dashboard-controls-card > * {
+    width: 100%;
+  }
+
+  .dashboard-chart-card {
+    min-height: 320px !important;
+  }
+}

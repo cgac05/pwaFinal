@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   BarChart2, BookOpen, TrendingUp, Building2, Newspaper,
-  Cpu, Play, ChevronDown, Calendar,
+  Cpu, Play, ChevronDown, Calendar, RotateCcw,
 } from "lucide-react";
 import { getMarketQuotes } from "../../../services/signals/marketApi";
 import {
@@ -23,6 +23,7 @@ import {
   type OptionStrategyAnalysis,
 } from "./OptionStrategyParamsModal";
 import { WheelParamsModal, type WheelModalParams } from "./WheelParamsModal";
+import { SpreadParamsModal, type SpreadModalParams } from "./SpreadParamsModal";
 
 // ─── Panel CSS ─────────────────────────────────────────────────────────────────
 // Uses only real Revolut design-system tokens from tokens.css.
@@ -450,9 +451,11 @@ function ChipButton({
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
 const CORE_OPTION_STRATEGIES = new Set<string>(["LONG_CALL", "LONG_PUT", "SHORT_CALL", "SHORT_PUT"]);
+const SPREAD_STRATEGIES = new Set(["BULL_CALL_SPREAD", "BEAR_PUT_SPREAD", "BULL_PUT_SPREAD", "BEAR_CALL_SPREAD"]);
 function isTermStrategy(e: string)     { return TERM_STRATEGIES.has(e); }
 function isCoverageStrategy(e: string) { return e === "COVERED_CALL"; }
 function isCoreOptionStrategy(e: string): e is CoreOptionStrategy { return CORE_OPTION_STRATEGIES.has(e); }
+function isSpreadStrategy(e: string)   { return SPREAD_STRATEGIES.has(e); }
 function isWheelStrategy(e: string)    { return e === "WHEEL"; }
 
 const DEFAULT_TERM_PARAMS: TermStrategyParams = {
@@ -473,6 +476,15 @@ const DEFAULT_COVERAGE_PARAMS: CoverageModalParams = {
   currentPrice: 0,
   shares: 100,
   riskTolerancePct: 0.05,
+};
+
+const DEFAULT_SPREAD_PARAMS: SpreadModalParams = {
+  currentPrice: 0,
+  longStrike: 0,
+  shortStrike: 0,
+  longPremium: 0,
+  shortPremium: 0,
+  contracts: 1,
 };
 
 const DEFAULT_WHEEL_PARAMS: WheelModalParams = {
@@ -500,13 +512,37 @@ const TIMEFRAMES: Array<"1m" | "5m" | "15m" | "1h" | "4h" | "1d"> = ["1m", "5m",
 const PRESET_OPTIONS: SelectOption[]    = PRESETS.map((p) => ({ value: p, label: p }));
 const TIMEFRAME_OPTIONS: SelectOption[] = TIMEFRAMES.map((t) => ({ value: t, label: t }));
 const OPTION_STRATEGY_LABELS = new Map(OPTION_STRATEGY_OPTIONS.map((strategy) => [strategy.value, strategy.label]));
-const STRATEGY_OPTIONS: SelectOption[] = CANONICAL_ESTRATEGIAS.map((strategy) => ({
-  value: strategy,
-  label: OPTION_STRATEGY_LABELS.get(strategy as CoreOptionStrategy) ?? strategy.replace(/_/g, " "),
-}));
+const SPREAD_STRATEGY_OPTIONS: SelectOption[] = [
+  { value: "BULL_CALL_SPREAD", label: "Debit Spread · Bull Call" },
+  { value: "BEAR_PUT_SPREAD", label: "Debit Spread · Bear Put" },
+  { value: "BULL_PUT_SPREAD", label: "Credit Spread · Bull Put" },
+  { value: "BEAR_CALL_SPREAD", label: "Credit Spread · Bear Call" },
+];
+const STRATEGY_OPTIONS: SelectOption[] = [
+  ...SPREAD_STRATEGY_OPTIONS,
+  ...CANONICAL_ESTRATEGIAS
+    .filter((strategy) => !SPREAD_STRATEGIES.has(strategy))
+    .map((strategy) => ({
+      value: strategy,
+      label: OPTION_STRATEGY_LABELS.get(strategy as CoreOptionStrategy) ?? strategy.replace(/_/g, " "),
+    })),
+];
 
 function isoToday(): string       { return new Date().toISOString().slice(0, 10); }
 function isoPlusDays(n: number)   { return new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10); }
+
+// FIC: Initial core state — A_INDICADORES starts DISABLED by default at system start; the user
+// FIC: enables it manually. Other cores start enabled. This is purely the initial state: it is
+// FIC: never toggled off when the simulation runs (avoids turning it off by mistake). (EN)
+// FIC: Estado inicial de cores — A_INDICADORES arranca DESHABILITADO al iniciar el sistema; el
+// FIC: usuario lo activa a mano. Los demas cores arrancan activos. Es solo el estado inicial:
+// FIC: nunca se apaga al ejecutar la simulacion (evita apagarlo por error). (ES)
+const defaultCoresOn = (): Record<CoreId, boolean> =>
+  ALL_CORES.reduce((acc, c) => ({ ...acc, [c]: c !== "A_INDICADORES" }), {} as Record<CoreId, boolean>);
+
+// FIC: Individual technical indicators start DISABLED; the user opts in (US-2). (EN)
+const defaultIndicadoresOn = (): Record<SubCoreIndicador, boolean> =>
+  ALL_SUBCORES.reduce((acc, s) => ({ ...acc, [s]: false }), {} as Record<SubCoreIndicador, boolean>);
 
 // ─── Section label style (shared) ─────────────────────────────────────────────
 const sectionLabelStyle: React.CSSProperties = {
@@ -526,10 +562,14 @@ interface Props {
   onResult: (result: SimulationResponse) => void;
   onExecute?: (activeCoreIds: CoreId[]) => void;
   onStrategyChange?: (estrategia: string) => void;
+  onSimulationRangeChange?: (range: { from: string; to: string }) => void;
   onCoverageParamsConfirmed?: (params: CoverageModalParams, kind: string) => void;
   onOptionStrategyCalculated?: (analysis: OptionStrategyAnalysis) => void;
   onWheelParamsConfirmed?: (params: WheelModalParams) => void;
+  onSpreadParamsConfirmed?: (params: SpreadModalParams, kind: string) => void;
   onTermResult?: (data: any) => void;
+  /** FIC: US-3 — invoked when the user resets the panel, so the parent can clear results too. */
+  onClear?: () => void;
 }
 
 // ─── Main component ────────────────────────────────────────────────────────────
@@ -538,10 +578,13 @@ export function SimulationControlPanel({
   onResult,
   onExecute,
   onStrategyChange,
+  onSimulationRangeChange,
   onCoverageParamsConfirmed,
   onOptionStrategyCalculated,
   onWheelParamsConfirmed,
+  onSpreadParamsConfirmed,
   onTermResult,
+  onClear,
 }: Props) {
   const [preset, setPreset]               = useState<Preset>("3M");
   const [estrategiaFrom, setEstrategiaFrom] = useState(isoToday());
@@ -549,18 +592,21 @@ export function SimulationControlPanel({
   const [temporalidad, setTemporalidad]   = useState<"1m" | "5m" | "15m" | "1h" | "4h" | "1d">("1h");
   const [estrategia, setEstrategia]       = useState("IRON_CONDOR");
   const [tolerancia, setTolerancia]       = useState<"BAJO" | "MEDIO" | "ALTO">("MEDIO");
-  const [coresOn, setCoresOn]             = useState<Record<CoreId, boolean>>(
-    ALL_CORES.reduce((acc, c) => ({ ...acc, [c]: true }), {} as Record<CoreId, boolean>)
-  );
-  const [indicadoresOn, setIndicadoresOn] = useState<Record<SubCoreIndicador, boolean>>(
-    ALL_SUBCORES.reduce((acc, s) => ({ ...acc, [s]: true }), {} as Record<SubCoreIndicador, boolean>)
-  );
+  // FIC: A_INDICADORES core starts DISABLED at system start (initial state only). (EN)
+  const [coresOn, setCoresOn]             = useState<Record<CoreId, boolean>>(defaultCoresOn);
+  // FIC: US-2 — technical indicators start DISABLED; the user opts in explicitly. (EN)
+  const [indicadoresOn, setIndicadoresOn] = useState<Record<SubCoreIndicador, boolean>>(defaultIndicadoresOn);
+  // FIC: US-8 — optional historical as-of date; empty means "use latest data". (EN)
+  // FIC: US-8 — fecha historica opcional; vacio significa "usar datos mas recientes". (ES)
+  const [fechaHistorica, setFechaHistorica] = useState<string>("");
   const [loading, setLoading]             = useState(false);
   const [error, setError]                 = useState<string | null>(null);
   const [termModalOpen, setTermModalOpen] = useState(false);
   const [termParams, setTermParams]       = useState<TermStrategyParams>(DEFAULT_TERM_PARAMS);
   const [coverageModalOpen, setCoverageModalOpen] = useState(false);
   const [coverageParams, setCoverageParams]       = useState<CoverageModalParams>(DEFAULT_COVERAGE_PARAMS);
+  const [spreadModalOpen, setSpreadModalOpen]     = useState(false);
+  const [spreadParams, setSpreadParams]           = useState<SpreadModalParams>(DEFAULT_SPREAD_PARAMS);
   const [optionParamsModalOpen, setOptionParamsModalOpen] = useState(false);
   const [optionParamsStrategy, setOptionParamsStrategy] = useState<CoreOptionStrategy>("LONG_CALL");
   const [wheelModalOpen, setWheelModalOpen] = useState(false);
@@ -574,6 +620,10 @@ export function SimulationControlPanel({
   }, [ticket]);
 
   useEffect(() => {
+    onSimulationRangeChange?.({ from: estrategiaFrom, to: estrategiaTo });
+  }, [estrategiaFrom, estrategiaTo, onSimulationRangeChange]);
+
+  useEffect(() => {
     if (!coverageModalOpen || coverageParams.currentPrice > 0) return;
     getMarketQuotes([ticket])
       .then((data) => {
@@ -582,6 +632,16 @@ export function SimulationControlPanel({
       })
       .catch(() => { /* user can enter manually */ });
   }, [coverageModalOpen, ticket, coverageParams.currentPrice]);
+
+  useEffect(() => {
+    if (!spreadModalOpen || spreadParams.currentPrice > 0) return;
+    getMarketQuotes([ticket])
+      .then((data) => {
+        const q = data.quotes.find((qt) => qt.symbol === ticket.toUpperCase());
+        if (q && q.price > 0) setSpreadParams((prev) => ({ ...prev, currentPrice: q.price }));
+      })
+      .catch(() => { /* user can enter manually */ });
+  }, [spreadModalOpen, ticket, spreadParams.currentPrice]);
 
   useEffect(() => {
     if (!wheelModalOpen || wheelParams.csp.currentPrice > 0) return;
@@ -632,6 +692,8 @@ export function SimulationControlPanel({
       setTermModalOpen(true);
     } else if (isCoverageStrategy(e)) {
       setCoverageModalOpen(true);
+    } else if (isSpreadStrategy(e)) {
+      setSpreadModalOpen(true);
     } else if (isWheelStrategy(e)) {
       setWheelModalOpen(true);
     }
@@ -639,6 +701,24 @@ export function SimulationControlPanel({
 
   const toggleCore = (c: CoreId)          => setCoresOn((p) => ({ ...p, [c]: !p[c] }));
   const toggleSub  = (s: SubCoreIndicador) => setIndicadoresOn((p) => ({ ...p, [s]: !p[s] }));
+
+  // FIC: US-3 — full control-panel reset to defaults (also clears any prior results). (EN)
+  // FIC: US-3 — reset completo del panel de control a defaults (limpia tambien resultados previos). (ES)
+  const resetPanel = () => {
+    setPreset("3M");
+    setEstrategiaFrom(isoToday());
+    setEstrategiaTo(isoPlusDays(30));
+    setTemporalidad("1h");
+    setEstrategia("IRON_CONDOR");
+    onStrategyChange?.("IRON_CONDOR");
+    setTolerancia("MEDIO");
+    setCoresOn(defaultCoresOn());
+    setIndicadoresOn(defaultIndicadoresOn());
+    setFechaHistorica("");
+    setSpreadParams(DEFAULT_SPREAD_PARAMS);
+    setError(null);
+    onClear?.();
+  };
 
   const run = async () => {
     setLoading(true);
@@ -656,6 +736,10 @@ export function SimulationControlPanel({
         indicadoresHabilitados: ALL_SUBCORES.filter((s) => indicadoresOn[s]),
         estrategia,
         toleranciaRiesgo: tolerancia,
+        // FIC: US-7 — only show signals where >=2 indicators coincide. (EN)
+        soloCoincidencias: true,
+        // FIC: US-8 — send the as-of date only when the user picked one. (EN)
+        ...(fechaHistorica ? { fechaHistorica } : {}),
       };
 
       if (isTermStrategy(estrategia)) {
@@ -822,6 +906,18 @@ export function SimulationControlPanel({
             </FieldLabel>
           </div>
 
+          {/* Row 3: Fecha histórica (opcional) — backtest a un día del pasado (US-8) */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px", alignItems: "end" }}>
+            <FieldLabel label="Fecha Histórica (opcional)">
+              <DateInput value={fechaHistorica} onChange={setFechaHistorica} />
+            </FieldLabel>
+            <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", paddingBottom: "8px", lineHeight: 1.4 }}>
+              {fechaHistorica
+                ? `Las señales se calcularán como si hoy fuera ${fechaHistorica} (vista del pasado).`
+                : "Vacío = usar los datos más recientes. Elige una fecha para ver qué buy/hold/sell hubo ese día."}
+            </span>
+          </div>
+
           {/* Divider */}
           <hr style={{ border: "none", borderTop: "1px solid var(--color-border-subtle)", margin: "2px 0" }} />
 
@@ -902,26 +998,55 @@ export function SimulationControlPanel({
             </strong>
           </span>
 
-          <button
-            type="button"
-            className="sim-exec"
-            onClick={run}
-            disabled={loading}
-          >
-            <span style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 22,
-              height: 22,
-              borderRadius: "6px",
-              background: "rgba(255,255,255,0.18)",
-              flexShrink: 0,
-            }}>
-              <Play size={11} fill="currentColor" strokeWidth={0} />
-            </span>
-            {loading ? "Ejecutando…" : "Ejecutar Simulación"}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+            {/* US-3 — full control-panel reset */}
+            <button
+              type="button"
+              onClick={resetPanel}
+              disabled={loading}
+              title="Restablecer el panel a sus valores por defecto y limpiar resultados"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "9px 16px",
+                background: "transparent",
+                color: "var(--color-text-muted)",
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-sm)",
+                cursor: loading ? "not-allowed" : "pointer",
+                fontFamily: "var(--font-family)",
+                fontWeight: "var(--font-weight-emphasis)" as any,
+                fontSize: "var(--font-size-xs)",
+                whiteSpace: "nowrap",
+                opacity: loading ? 0.6 : 1,
+              }}
+            >
+              <RotateCcw size={13} />
+              Limpiar panel
+            </button>
+
+            <button
+              type="button"
+              className="sim-exec"
+              onClick={run}
+              disabled={loading}
+            >
+              <span style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 22,
+                height: 22,
+                borderRadius: "6px",
+                background: "rgba(255,255,255,0.18)",
+                flexShrink: 0,
+              }}>
+                <Play size={11} fill="currentColor" strokeWidth={0} />
+              </span>
+              {loading ? "Ejecutando…" : "Ejecutar Simulación"}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -950,6 +1075,15 @@ export function SimulationControlPanel({
         ticker={ticket}
         onClose={() => setOptionParamsModalOpen(false)}
         onCalculated={onOptionStrategyCalculated}
+      />
+      <SpreadParamsModal
+        open={spreadModalOpen}
+        estrategia={estrategia}
+        ticker={ticket}
+        params={spreadParams}
+        onChange={setSpreadParams}
+        onClose={() => setSpreadModalOpen(false)}
+        onConfirm={(params) => onSpreadParamsConfirmed?.(params, estrategia)}
       />
       <WheelParamsModal
         open={wheelModalOpen}

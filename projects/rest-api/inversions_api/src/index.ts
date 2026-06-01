@@ -43,6 +43,8 @@ import { coverageSimulateRouter } from "./routes/coverage/simulate";
 import { optionChainRouter } from "./routes/options/chain";
 import { optionExpirationsRouter } from "./routes/options/expirations";
 import { supabaseClient } from "./database/supabase/client";
+import { createRelevantNewsRouter } from "./routes/news/relevant";
+import { newsRouter } from "./routes/news";
 import { calendarSpreadRouter } from "./routes/strategies/term/calendarSpread";
 import { diagonalSpreadRouter } from "./routes/strategies/term/diagonalSpread";
 import { createFundamentalAnalyzeRouter } from "./routes/fundamental/analyze";
@@ -105,6 +107,8 @@ app.use("/api/coverage", coverageCompareRouter);
 app.use("/api/coverage", coverageSimulateRouter);
 app.use("/api/options", indicatorsRateLimit, optionChainRouter);
 app.use("/api/options", indicatorsRateLimit, optionExpirationsRouter);
+app.use("/api/news", newsRouter);
+app.use("/api/news", createRelevantNewsRouter(supabaseClient));
 
 // ── Team-03 routes ──────────────────────────────────────────────────
 app.use("/api/team-03/fundamental", createFundamentalAnalyzeRouter(supabaseClient));

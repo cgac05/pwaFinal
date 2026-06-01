@@ -99,7 +99,9 @@ marketDataOhlcRouter.get("/ohlc", async (req, res) => {
     const candles = await fetchYahooOhlc(symbol, timeframe);
 
     if (candles && candles.length > 0) {
-      return res.status(200).json({ symbol, timeframe, candles, source: "yahoo_finance" });
+      // FIC: source label MUST match the frontend badge map ("yahoo" | "tradier" | "mock"). (EN)
+      // FIC: la etiqueta source DEBE coincidir con el mapa de badges del front. (ES)
+      return res.status(200).json({ symbol, timeframe, candles, source: "yahoo" });
     }
   } catch (err) {
     console.warn(`[ohlc] Yahoo fetch failed for ${symbol}:`, err);
