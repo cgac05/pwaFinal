@@ -17,6 +17,7 @@ import type { ModalRowData } from "../institutional/types";
 import { MarkdownContent } from "../../components/ui/MarkdownContent";
 import { ObservationsTab } from "./ObservationsTab";
 import { TecnicoDetailModal } from "./TecnicoDetailModal";
+import { NoticiasDetailModal } from "./NoticiasDetailModal";
 
 // FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
 const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia"; label: string; width: number }> = [
@@ -258,7 +259,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
         </table>
       </div>
 
-      {stubCore && stubCore !== "A_TECNICO" && (
+      {stubCore && stubCore !== "A_TECNICO" && stubCore !== "A_NOTICIAS" && (
         <div
           role="dialog"
           aria-modal="true"
@@ -374,6 +375,14 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
 
       <TecnicoDetailModal
         isOpen={stubCore === "A_TECNICO"}
+        onClose={() => { setStubCore(null); setStubRow(null); }}
+        ticker={symbol}
+        signalRow={stubRow ?? undefined}
+        activeStrategy={activeStrategy}
+      />
+
+      <NoticiasDetailModal
+        isOpen={stubCore === "A_NOTICIAS"}
         onClose={() => { setStubCore(null); setStubRow(null); }}
         ticker={symbol}
         signalRow={stubRow ?? undefined}
