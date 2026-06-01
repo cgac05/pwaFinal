@@ -49,18 +49,47 @@ function buildDeterministicIaCoreFallback(params: {
   computedAt: Date;
   decision?: "CALL" | "PUT" | "HOLD";
   reasonCode?: string;
+  precalculatedRows?: ConfluenceSignalRow[];
 }): ConfluenceSignalRow {
   const ticker = params.ticket.toUpperCase();
-  const decision = params.decision ?? (ticker === "COIN" || ticker === "AAPL" || ticker === "TSLA" ? "CALL" : "HOLD");
-  const confidence = 0.88;
+  
+  let decision = params.decision;
+  let confidence = 0.50;
+  let explicacion = `[Modo de Respaldo] El modelo de IA no está disponible temporalmente. Se ha emitido un veredicto neutral ("HOLD") por precaución. Por favor, inténtalo de nuevo más tarde para obtener el análisis completo.`;
+
+  if (!decision) {
+    if (params.precalculatedRows && params.precalculatedRows.length > 0) {
+      let calls = 0;
+      let puts = 0;
+      let holds = 0;
+      let sumScore = 0;
+      
+      for (const row of params.precalculatedRows) {
+        if (row.tipoSenal === "CALL") calls++;
+        else if (row.tipoSenal === "PUT") puts++;
+        else holds++;
+        sumScore += Math.abs(row.score);
+      }
+      
+      if (calls > puts && calls >= holds) {
+        decision = "CALL";
+      } else if (puts > calls && puts >= holds) {
+        decision = "PUT";
+      } else {
+        decision = "HOLD";
+      }
+      
+      confidence = Number((sumScore / params.precalculatedRows.length).toFixed(3));
+      if (confidence > 1) confidence = 1;
+      
+      explicacion = `[Canal de Respaldo Cuantitativo] El modelo LLM principal no pudo responder (${params.reasonCode || "Timeout"}). Se aplicó una agregación determinista sobre ${params.precalculatedRows.length} cores pre-calculados:\n- Señales Alcistas (CALL): ${calls}\n- Señales Bajistas (PUT): ${puts}\n- Señales Neutrales (HOLD): ${holds}\n\nVeredicto inferido: ${decision}. Por favor, reintenta más tarde para obtener la síntesis profunda de la IA.`;
+    } else {
+      decision = "HOLD";
+    }
+  }
+
   const vigenciaSeconds = params.timeframe === "1d" ? 86400 * 5 : 3600 * 5;
   const vigenciaDate = new Date(params.computedAt.getTime() + vigenciaSeconds * 1000);
-
-  const explicacion = `[Auditoría Cuantitativa - Canal de Respaldo Local]
-Analizando el escenario de volatilidad y la confluencia de soporte técnico para el activo ${ticker}:
-1. La volatilidad implícita (IV) se ubica en el percentil 72, ideal para la recolección de primas mediante crédito neto.
-2. Los indicadores de momentum y la media móvil estructurada confirman un soporte sólido en temporalidad ${params.timeframe}.
-Veredicto: Se valida la viabilidad del escenario alcista de rango controlado. Se sugiere cobertura externa contra repuntes abruptos mediante stops basados en Delta del subyacente.`;
 
   return {
     ticket: params.ticket,
@@ -256,7 +285,8 @@ Por favor, entrega tu análisis incluyendo la decisión y justificación técnic
       timeframe: params.timeframe,
       sourceInputHash: params.sourceInputHash,
       computedAt: params.computedAt,
-      reasonCode: "LLM_RATE_LIMITED"
+      reasonCode: "LLM_RATE_LIMITED",
+      precalculatedRows: params.precalculatedRows
     });
   }
 }
