@@ -184,7 +184,7 @@ export async function runAiCore(params: {
   const rowsContext = simulatedPrecalculatedRows.map((r, i) => {
     const metricEntries = Object.entries(r.observacion.metricas || {}).filter(([, v]) => v != null);
     const metricsStr = metricEntries.length > 0 ? metricEntries.map(([k, v]) => `${k}=${v}`).join(", ") : "N/A";
-    return `Fila ${i + 1}: CORE=${r.core} | SEÑAL=${r.tipoSenal} | TENDENCIA=${r.tendencia} | SCORE=${r.score.toFixed(3)} | METRICAS=[${metricsStr}]`;
+    return `Fila ${i + 1}: CORE=${r.core} | SEÑAL=${r.tipoSenal} | TENDENCIA=${r.tendencia} | SCORE=${r.score.toFixed(3)} | EXPLICACION=${r.observacion.explicacion} | METRICAS=[${metricsStr}]`;
   }).join("\n");
 
   const fullPrompt = `${currentPrompt}
