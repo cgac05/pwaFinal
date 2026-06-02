@@ -7,6 +7,8 @@ import { runSimulation, validateSimulationRequest } from "../../modules/simulati
 import { persistSimulationRun } from "../../modules/simulation/persistence";
 import type { SimulationRequest } from "../../modules/indicators/types";
 import { getInstitutionalRouteContext, buildInstitutionalContractForSimulation } from "../institutional/bootstrap";
+import { FundamentalDataService } from "../../modules/fundamental/fundamentalDataService";
+import { supabaseClient } from "../../database/supabase/client";
 
 export const simulationRunRouter = Router();
 
@@ -22,7 +24,13 @@ simulationRunRouter.post("/run", async (req, res) => {
       ...getInstitutionalRouteContext(),
       buildContract: buildInstitutionalContractForSimulation,
     };
-    const result = await runSimulation(request, { institutionalContext });
+    
+    const fundamentalDataService = new FundamentalDataService(supabaseClient);
+    const fundamentalContext = {
+      fetchData: async (ticker: string) => await fundamentalDataService.fetch(ticker, 252)
+    };
+
+    const result = await runSimulation(request, { institutionalContext, fundamentalContext });
     // FIC: T088 — best-effort persistence; never blocks the response.
     void persistSimulationRun(result, req.authContext?.userId);
     return res.status(200).json(result);

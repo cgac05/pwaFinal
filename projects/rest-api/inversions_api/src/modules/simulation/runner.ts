@@ -25,6 +25,7 @@ import { buildTechnicalTable } from "../indicators/technicalTable";
 import type { InstitutionalRouteContext } from "../../routes/institutional/bootstrap";
 import type { InstitutionalAnalysisContract } from "../institutional/institutionalContract";
 import { runAiCore } from "./aiCoreRunner";
+import { analyzeFundamental } from "../fundamental/fundamentalAnalyzer";
 
 export interface SimulationRunResult {
   verdict: ConfluenceVerdict;
@@ -225,6 +226,10 @@ export interface RunSimulationDeps {
   institutionalContext?: Omit<InstitutionalRouteContext, "dataService"> & {
     buildContract: (ticker: string) => InstitutionalAnalysisContract;
   };
+  /** FIC: Fundamental context — injected to fetch real fundamental data */
+  fundamentalContext?: {
+    fetchData: (ticker: string) => Promise<any>;
+  };
 }
 
 /**
@@ -307,6 +312,28 @@ export async function runSimulation(
     }
   }
 
+  let fundamentalRows: ConfluenceSignalRow[] = [];
+  if (enabledCores.has("A_FUNDAMENTAL") && deps.fundamentalContext) {
+    try {
+      const dataResult = await deps.fundamentalContext.fetchData(request.ticket);
+      if (dataResult && dataResult.success && dataResult.data) {
+        const opts = {
+          ticker: request.ticket,
+          investmentProfile: "Value",
+          horizon: "Largo plazo",
+          selectedMetrics: ["Valoración", "Crecimiento", "Rentabilidad", "Salud Financiera", "Flujo de Caja", "Riesgo", "Ventaja Competitiva"],
+          strategy: request.estrategia,
+          comparisons: [],
+          projectionFrom: request.fechaHistorica
+        };
+        const analysis = await analyzeFundamental(dataResult.data, opts);
+        fundamentalRows = analysis.confluenceRows as unknown as ConfluenceSignalRow[];
+      }
+    } catch (err) {
+      console.error("[A_FUNDAMENTAL] engine error — falling back to stub:", err);
+    }
+  }
+
   // FIC: A_TECNICO real rows — uses candles already in scope, no extra fetch. (EN)
   // FIC: Filas reales A_TECNICO — usa candles ya en scope, sin fetch extra. (ES)
   const tecnicoRows = enabledCores.has("A_TECNICO")
@@ -343,7 +370,7 @@ export async function runSimulation(
       sourceInputHash: verdict.source_input_hash,
       computedAt: computedAt,
       previousRows: deps.previousRows,
-      precalculatedRows: [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows],
+      precalculatedRows: [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows],
     });
   }
 
@@ -352,6 +379,7 @@ export async function runSimulation(
     .filter((c) => {
       if (c === "A_INDICADORES") return false;
       if (c === "A_INSTITUCIONAL" && institutionalRows.length > 0) return false;
+      if (c === "A_FUNDAMENTAL" && fundamentalRows.length > 0) return false;
       if (c === "A_TECNICO" && tecnicoRows.length > 0) return false;
       if (c === "A_IA" && aiRow !== null) return false;
       if (c === "A_NOTICIAS" && noticiasRows.length > 0) return false;
@@ -367,9 +395,9 @@ export async function runSimulation(
       previousRows: deps.previousRows,
       now: computedAt
     });
-    table = [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...stubs];
+    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...stubs];
   } else {
-    table = [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows];
+    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows];
   }
 
   // FIC: US8 bugfix — when running on historical (as-of) data, the rows MUST display the REAL date

@@ -649,7 +649,30 @@ async function buildFundamentalProjection(
   const premium = roundMoney(rawPremium ?? 0);
 
   if (!marketContext || premium <= 0) {
-    throw new Error(`No real option premium available for ${ticker} ${parts.optionType} near strike ${strike}`);
+    console.warn(`[FundamentalAnalyzer] No real option premium available for ${ticker} ${parts.optionType} near strike ${strike}`);
+    return {
+      ticker,
+      strategy: parts.label,
+      verdict: projectionVerdict(verdict),
+      score: overallScore,
+      projectionFrom,
+      projectionTo,
+      days,
+      initialPrice,
+      expectedMove: 0,
+      expectedMovePercent: 0,
+      strike,
+      premium: 0,
+      breakeven: initialPrice,
+      maxLoss: 0,
+      maxProfit: 0,
+      scenarios: [],
+      path: [],
+      drivers: buildProjectionDrivers(sections),
+      changeTriggers: ["No options data available"],
+      calculationSteps: ["Could not fetch option context for " + ticker],
+      disclaimer: "Este analisis es informativo. Faltan datos de opciones reales para construir la proyección."
+    };
   }
 
   projectionTo = marketContext.expirationDate;

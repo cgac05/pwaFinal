@@ -52,7 +52,13 @@ function parseAiDecision(rawText: string): { decision: "CALL" | "PUT" | "HOLD"; 
     if (!justificacion) justificacion = rawText;
   }
 
-  return { decision, justificacion, confidence: 0.85 };
+  let confidence = 0.85;
+  const matchConfianza = rawText.match(/CONFIANZA:\s*(0\.\d+|1\.0)/i) || rawText.match(/CONFIDENCE:\s*(0\.\d+|1\.0)/i);
+  if (matchConfianza) {
+    confidence = parseFloat(matchConfianza[1]);
+  }
+
+  return { decision, justificacion, confidence };
 }
 
 /**
@@ -229,9 +235,9 @@ export async function runAiCore(params: {
   }
 
   // 3. Extraer el preprompt de la base de datos (usando mockDb por el momento)
-  const currentPrompt = mockDb.prompts && mockDb.prompts.length > 0
+  const basePromptText = mockDb.prompts && mockDb.prompts.length > 0
     ? mockDb.prompts[0].basePrompt
-    : "Eres un analista financiero. Analiza los siguientes datos y responde en formato DECISION: [CALL|PUT|HOLD] y JUSTIFICACION: [explicación].";
+    : "Eres un analista financiero. Analiza los siguientes datos.";
 
   // 4. Serializar la tabla pre-calculada
   const rowsContext = simulatedPrecalculatedRows.map((r, i) => {
@@ -240,22 +246,26 @@ export async function runAiCore(params: {
     return `Fila ${i + 1}: CORE=${r.core} | SEÑAL=${r.tipoSenal} | TENDENCIA=${r.tendencia} | SCORE=${r.score.toFixed(3)} | EXPLICACION=${r.observacion.explicacion} | METRICAS=[${metricsStr}]`;
   }).join("\n");
 
-  const fullPrompt = `${currentPrompt}
+  const fullPrompt = `${basePromptText}
+
+INSTRUCCIONES DE FORMATO ESTRICTO:
+Responde ÚNICAMENTE usando el siguiente formato de texto (NO uses JSON, ni markdown code blocks):
+DECISION: [CALL o PUT o HOLD]
+CONFIANZA: [Un número de 0.00 a 1.00 indicando tu nivel de certeza]
+JUSTIFICACION: 
+[Explica tu decisión con:
+1. Un resumen general de tu veredicto.
+2. Un desglose detallado CORE por CORE (Técnico, Fundamental, Institucional, Noticias, etc.) explicando cómo cada uno influyó en la decisión final.]
 
 Ticker: ${params.ticket}
 Timeframe: ${params.timeframe}
 
 DATOS DE ENTRADA (Cores pre-calculados):
-${rowsContext}
-
-Por favor, entrega tu análisis incluyendo la decisión y justificación técnica.`;
+${rowsContext}`;
 
   try {
-    // 5. Llamar a Gemini con el prompt combinado
-    const response = await geminiService.generateAgentResponse({
-      role: "analyzer",
-      userPrompt: fullPrompt,
-    });
+    // 5. Llamar a Gemini con el prompt combinado usando texto simple (sin wrappers JSON)
+    const response = await geminiService.generateSimpleResponse(fullPrompt);
 
     // 6. Parsear la respuesta
     const aiResult = parseAiDecision(response.text || "");
@@ -288,7 +298,7 @@ Por favor, entrega tu análisis incluyendo la decisión y justificación técnic
         explicacion: aiResult.justificacion,
         metricas: {
           MODEL_VERSION: "gemini-2.5-flash",
-          PREPROMPT: currentPrompt,
+          PREPROMPT: basePromptText,
           VALOR_ENTRADA: rowsContext
         }
       },
