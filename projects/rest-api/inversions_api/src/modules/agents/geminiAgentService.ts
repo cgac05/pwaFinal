@@ -89,7 +89,7 @@ export class GeminiAgentService {
 
     this.primaryModel = process.env.GEMINI_PRIMARY_MODEL ?? "gemini-2.5-flash";
     this.fallbackModel = process.env.GEMINI_FALLBACK_MODEL ?? "gemini-2.5-flash";
-    this.timeoutMs = parseInt(process.env.GEMINI_TIMEOUT_MS ?? "12000", 10);
+    this.timeoutMs = parseInt(process.env.GEMINI_TIMEOUT_MS ?? "30000", 10);
 
     if (enabled && apiKey && apiKey.length > 0) {
       this.ai = new GoogleGenAI({ apiKey });
