@@ -80,6 +80,9 @@ export function buildObservationFromVerdict(
 export const EXECUTION_INTENT_PATTERN =
   /\b(ejecut\w*|coloc\w*|lanz\w*|abr\w*\s+(una\s+)?(orden|posici[oó]n)|compr\w+|vend\w+|invier\w+|invert\w+|operar|execute|buy|sell|short\s+the|place\s+an?\s+order)\b/iu;
 
+export const STRATEGY_EVALUATION_PATTERN =
+  /\b(es\s+viable|conviene\s+entrar|es\s+buena\s+se[nñ]al|deber[ií]a\s+operar|funciona\s+(este|esta|ese|esa)\s+(estrategia|iron\s+condor|butterfly|spread|condor))\b/iu;
+
 // FIC: Narrower guard for model OUTPUT that recommends acting (avoids false positives).
 // FIC: Guarda mas estrecha para la SALIDA del modelo que recomienda actuar (evita falsos positivos).
 const OUTPUT_RECOMMENDATION_PATTERN =
@@ -132,6 +135,7 @@ export function buildExplanationPrompt(verdict: ConfluenceVerdict, request: Chat
     "Eres un analista tecnico. Explica en español, de forma clara y neutral, por que la",
     "señal tecnica actual tiene el veredicto indicado, citando los valores numericos reales.",
     "No recomiendes ni ejecutes operaciones; solo explica.",
+    "Si el usuario hace una pregunta que no está estrictamente relacionada con el análisis financiero o los reportes proveídos, DEBES responder textualmente: 'Soy un modelo de análisis financiero limitado a los análisis realizados aquí.', y no decir nada más.",
     `Pregunta del usuario: ${request.question}`,
     request.context ? `Contexto adicional: ${request.context}` : "",
     "[DATOS]",
@@ -229,10 +233,51 @@ export async function explainSignal(
 ): Promise<ChatExplanationResponse> {
   const computedAt = new Date().toISOString();
 
-  // FIC: A question implying order execution is refused with a 200 structured message.
+  // Normaliza el texto quitando acentos para una comparación más robusta
+  const promptMsg = (request.question || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  
+  // Extraer la pregunta limpia quitando el prefijo del activo "[activo: spy]" o similar si existiera
+  const cleanMsg = promptMsg.replace(/^\[activo:\s*[^\]]+\]\s*/i, "").trim();
+
   // FIC: Una pregunta que implica ejecutar una orden se rechaza con un mensaje estructurado 200.
-  if (hasExecutionIntent(request.question)) {
+  if (hasExecutionIntent(cleanMsg)) {
     return buildRefusal(computedAt);
+  }
+
+  // FINANCIAL_CONTEXT_GUARD (core): bloquea en el nucleo antes de cualquier llamada al LLM.
+  const financialKeywords = [
+      'analiz',     // Atrapa analiza, analizar, analizando
+      'analisis', 
+      'por que',    // Sin acento para evitar bloqueos por mala ortografía
+      'score',
+      'viabil',     // Atrapa viable, viabilidad
+      'ticker',
+      'opcion',     // Sin acento (opcion, opciones)
+      'comprar',
+      'vender',
+      'resumen',
+      'report',     // Atrapa reporte, reportes
+      'detalle',
+      'simulaci',   // Atrapa simulacion, simulaciones (sin acento)
+      'grafic',     // Atrapa grafica, grafico, graficar (sin acento)
+      'explica',    // Atrapa explica, explicar, explícame
+      'strike',
+      'trend',
+      'signal'
+    ];
+  const isStrategyEvaluation = STRATEGY_EVALUATION_PATTERN.test(cleanMsg);
+  const hasKeyword = financialKeywords.some((word) => cleanMsg.includes(word)) || isStrategyEvaluation;
+  if (cleanMsg.length < 10 || !hasKeyword) {
+    return {
+      explanation_text: "Soy un modelo de análisis financiero limitado a los análisis realizados aquí.",
+      indicators_cited: [],
+      disclaimer: CHAT_DISCLAIMER,
+      model_version: "context-guard",
+      computed_at: computedAt,
+      refused: true,
+      ia_revisada: true,
+      disclaimer_id: IA_DISCLAIMER_ID
+    };
   }
 
   const verdict = computeConfluence(candles, { symbol: request.symbol, timeframe: request.timeframe });

@@ -77,6 +77,7 @@ function observationFor(core: CoreId): SignalObservation {
     A_TECNICO: "Identificar soportes, resistencias y tendencias estructurales.",
     A_INSTITUCIONAL: "Detectar acumulacion institucional (13F, dark pools, UOA).",
     A_NOTICIAS: "Medir sentimiento de noticias en tiempo real.",
+    A_ESTRATEGIA: "Evaluar viabilidad de estrategias complejas segun condiciones de mercado.",
     A_IA: "Sintetizar la senal global con LLM y producir disclaimer no operativo."
   };
   return {
@@ -148,8 +149,7 @@ export function buildIaDegradedStub(
     observacion: {
       objetivo: row.observacion.objetivo,
       senal: `Core IA degradado (${errorCode}).`,
-      explicacion:
-        "El proveedor LLM no respondio tras los reintentos. Se preserva el disclaimer constitucional y se marca la fila como DEGRADADA en lugar de propagar 5xx.",
+      explicacion: "No pudimos conectarnos con el modelo, inténtalo de nuevo.",
       metricas: { MODEL_VERSION: errorCode }
     }
   };

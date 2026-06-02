@@ -1,0 +1,329 @@
+import React from "react";
+import type { ConfluenceSignalRow } from "../../services/signals/confluenceTableApi";
+
+interface Props {
+  ticker: string;
+  verdict: { verdict?: any; score?: number; degraded?: boolean } | null;
+  rows: ConfluenceSignalRow[];
+  activeStrategy?: string;
+  fundamentalAnalysis?: any;
+  optionStrategyAnalysis?: any;
+  wheelSummary?: any;
+  instData?: any;
+  chartImageBase64?: string;
+}
+
+export function ReportePDFTemplate({
+  ticker = "SPY",
+  verdict = null,
+  rows = [],
+  activeStrategy = "",
+  fundamentalAnalysis = null,
+  optionStrategyAnalysis = null,
+  wheelSummary = null,
+  instData = null,
+  chartImageBase64 = "",
+}: Props) {
+  const generatedAt = new Date().toLocaleString();
+
+  // Find the AI core row for main justification if available
+  const aiRow = rows.find((r) => r.core === "A_IA");
+  const aiDecision = aiRow ? aiRow.tipoSenal : (verdict?.verdict || "HOLD");
+  const aiJustification = aiRow?.observacion?.explicacion || aiRow?.resumen_analisis || "No se ha generado justificación de IA para esta corrida.";
+  const confidenceScore = aiRow ? aiRow.score : (verdict?.score || 0);
+
+  // Take top 10 signals
+  const topSignals = rows.slice(0, 10);
+
+  // Helper to extract core details
+  const getCoreData = (coreId: string) => {
+    const row = rows.find((r) => r.core === coreId);
+    if (row) {
+      return {
+        hasData: true,
+        score: row.score,
+        tipoSenal: row.tipoSenal,
+        resumen: row.observacion?.explicacion || row.resumen_analisis || "Señal activa sin explicación detallada.",
+        subCore: row.subCore || "General",
+      };
+    }
+    return {
+      hasData: false,
+      score: 0,
+      tipoSenal: "HOLD",
+      resumen: "Sin señal activa detectada en esta corrida.",
+      subCore: "-",
+    };
+  };
+
+  const getSignalBadgeClass = (signal: string) => {
+    const isCall = signal === "CALL" || signal === "SÍ" || signal === "buy";
+    const isPut = signal === "PUT" || signal === "NO" || signal === "sell";
+    return isCall
+      ? "bg-green-100 text-green-800"
+      : isPut
+      ? "bg-red-100 text-red-800"
+      : "bg-gray-100 text-gray-800";
+  };
+
+  const cores = [
+    { id: "A_FUNDAMENTAL", label: "Fundamental" },
+    { id: "A_INSTITUCIONAL", label: "Institucional" },
+    { id: "A_TECNICO", label: "Técnico" },
+    { id: "A_NOTICIAS", label: "Noticias" },
+    { id: "A_ESTRATEGIA", label: "Estrategia" },
+  ];
+
+  return (
+    <div
+      id="reporte-pdf-template"
+      className="font-sans text-gray-800 bg-white p-8 max-w-[210mm] mx-auto text-[11px] leading-relaxed"
+      style={{ boxSizing: "border-box" }}
+    >
+      {/* --- PÁGINA 1 --- */}
+      <div
+        style={{
+          minHeight: "255mm",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          pageBreakAfter: "always",
+        }}
+      >
+        <div>
+          {/* Cabecera (Header) */}
+          <div className="bg-slate-900 text-white p-5 rounded-t-lg flex justify-between items-center mb-6">
+            <div>
+              <h1 className="text-lg font-bold tracking-tight uppercase">
+                Reporte de Análisis de Volatilidad
+              </h1>
+              <p className="text-[9px] text-slate-400 mt-1">
+                Generado automáticamente el {generatedAt}
+              </p>
+            </div>
+            <div>
+              <span className="text-xl font-extrabold tracking-wider bg-slate-800 text-teal-400 px-3 py-1.5 rounded border border-slate-700">
+                {ticker}
+              </span>
+            </div>
+          </div>
+
+          {/* Banner de Estrategia Activa si está presente */}
+          {activeStrategy && (
+            <div className="bg-slate-100 border border-slate-200 rounded-lg p-3 mb-6">
+              <span className="text-[9px] uppercase text-slate-500 font-bold tracking-wider block mb-1">
+                Estrategia Sugerida
+              </span>
+              <span className="text-xs font-bold text-slate-900">
+                {activeStrategy.replace(/_/g, " ")}
+              </span>
+            </div>
+          )}
+
+          {/* Sección Gráfica */}
+          <div className="mb-6">
+            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 pb-1 border-b border-slate-200">
+              Gráfico de Análisis de Mercado
+            </h2>
+            {chartImageBase64 ? (
+              <div className="border border-slate-200 rounded-lg p-2 bg-white flex justify-center max-h-[360px] overflow-hidden">
+                <img
+                  src={chartImageBase64}
+                  alt="Gráfico de Mercado"
+                  className="w-full max-h-[340px] object-contain rounded"
+                />
+              </div>
+            ) : (
+              <div className="border border-dashed border-slate-300 rounded-lg p-10 text-center text-slate-400 bg-slate-50">
+                Gráfico de velas y volatilidad no disponible
+              </div>
+            )}
+          </div>
+
+          {/* Veredicto y Justificación (Destacado) */}
+          <div className="bg-slate-50 border-l-4 border-slate-900 rounded-r-lg p-5 mb-6 shadow-sm">
+            <div className="flex justify-between items-center mb-3">
+              <div>
+                <span className="text-[9px] uppercase text-slate-500 font-bold tracking-wider block mb-1">
+                  Veredicto de la IA
+                </span>
+                <span className={`px-2.5 py-1 rounded text-xs font-extrabold tracking-wider ${getSignalBadgeClass(String(aiDecision))}`}>
+                  {aiDecision}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[9px] uppercase text-slate-500 font-bold tracking-wider block mb-1">
+                  Score de Viabilidad
+                </span>
+                <span className="text-xs font-bold text-slate-900 font-mono">
+                  {Number(confidenceScore).toFixed(3)}
+                </span>
+              </div>
+            </div>
+            <div className="border-t border-slate-200 pt-3">
+              <span className="text-[9px] uppercase text-slate-500 font-bold tracking-wider block mb-1">
+                Justificación del Modelo
+              </span>
+              <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap break-words">
+                {aiJustification}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer P1 */}
+        <div className="border-t border-slate-200 pt-3 text-center text-[10px] text-slate-400">
+          Página 1 de 2
+        </div>
+      </div>
+
+      {/* --- PÁGINA 2 --- */}
+      <div
+        style={{
+          minHeight: "255mm",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+        }}
+      >
+        <div>
+          {/* Header bar P2 */}
+          <div className="flex justify-between items-center border-b border-slate-200 pb-2 mb-6">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              INVERSIONS | Reporte Técnico de Confluencia
+            </span>
+            <span className="text-[10px] text-slate-500 font-semibold">
+              Ticker: {ticker}
+            </span>
+          </div>
+
+          {/* 4. Las 10 Señales Ejecutivas (Top 10 Signals) */}
+          <div className="mb-6">
+            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">
+              Top {topSignals.length} Señales Ejecutivas
+            </h2>
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-100 text-slate-700 border-b border-slate-300">
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider">CORE</th>
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider">SUBCORE</th>
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider text-right">PRECIO</th>
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider text-center">SEÑAL</th>
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider">TENDENCIA</th>
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider text-right">SCORE</th>
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider text-right">PESO</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topSignals.map((row, idx) => (
+                  <tr key={idx} className="border-b border-slate-200">
+                    <td className="p-2 font-bold text-slate-900">{row.core.replace("A_", "")}</td>
+                    <td className="p-2 text-slate-600">{row.subCore || "-"}</td>
+                    <td className="p-2 text-right font-mono text-slate-700">${Number(row.precio).toFixed(2)}</td>
+                    <td className="p-2 text-center">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getSignalBadgeClass(row.tipoSenal)}`}>
+                        {row.tipoSenal}
+                      </span>
+                    </td>
+                    <td className="p-2 text-slate-600">{row.tendencia}</td>
+                    <td className="p-2 text-right font-mono font-bold text-slate-900">{Number(row.score).toFixed(3)}</td>
+                    <td className="p-2 text-right font-mono text-slate-600">{Number(row.peso).toFixed(2)}</td>
+                  </tr>
+                ))}
+                {topSignals.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-4 text-center text-slate-500 italic">
+                      No se han registrado señales para esta simulación.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 5. Desglose de Núcleos (Core Breakdown) */}
+          <div className="mb-6">
+            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">
+              Desglose Técnico de los 5 Núcleos
+            </h2>
+            <table className="w-full border-collapse" style={{ tableLayout: "fixed" }}>
+              <tbody>
+                <tr>
+                  <td className="w-1/2 pr-2 pb-3" style={{ verticalAlign: "top" }}>
+                    {renderCoreCard("A_FUNDAMENTAL", "Fundamental")}
+                  </td>
+                  <td className="w-1/2 pl-2 pb-3" style={{ verticalAlign: "top" }}>
+                    {renderCoreCard("A_INSTITUCIONAL", "Institucional")}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="w-1/2 pr-2 pb-3" style={{ verticalAlign: "top" }}>
+                    {renderCoreCard("A_TECNICO", "Técnico")}
+                  </td>
+                  <td className="w-1/2 pl-2 pb-3" style={{ verticalAlign: "top" }}>
+                    {renderCoreCard("A_NOTICIAS", "Noticias")}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="w-1/2 pr-2" style={{ verticalAlign: "top" }}>
+                    {renderCoreCard("A_ESTRATEGIA", "Estrategia")}
+                  </td>
+                  <td className="w-1/2 pl-2">
+                    {/* Celda vacía para mantener la estructura de tabla */}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 6. Pie de Página (Footer Legal) */}
+        <div>
+          <div className="border-t border-slate-200 pt-3 text-center text-[10px] text-slate-400">
+            Aviso: Esta explicación y análisis no constituye orden ni recomendación ejecutable.
+          </div>
+          <div className="text-center text-[9px] text-slate-400 mt-1">
+            Página 2 de 2
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render a clean card for a core
+  function renderCoreCard(coreId: string, label: string) {
+    const data = getCoreData(coreId);
+    return (
+      <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm h-full flex flex-col justify-between">
+        <div className="flex justify-between items-center mb-2 border-b border-slate-200 pb-1">
+          <span className="text-[10px] font-extrabold text-slate-900 uppercase tracking-wider">
+            {label}
+          </span>
+          <div className="flex gap-2 items-center">
+            {data.hasData && (
+              <>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${getSignalBadgeClass(data.tipoSenal)}`}>
+                  {data.tipoSenal}
+                </span>
+                <span className="text-[9px] font-bold text-slate-600">
+                  Score: {data.score.toFixed(3)}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        <p className="text-[10px] text-slate-600 leading-relaxed whitespace-pre-wrap break-words">
+          {coreId === "A_INSTITUCIONAL" && instData ? (
+            `Ownership: ${instData.metrics?.fundsOwnershipPct?.toFixed(1) ?? "0"}%. Flujo: $${(instData.metrics?.netFlow ?? 0).toLocaleString()}. Tendencia inst: ${instData.trends?.direction ?? "N/A"}.`
+          ) : coreId === "A_FUNDAMENTAL" && fundamentalAnalysis?.fundamentalData ? (
+            `PE: ${fundamentalAnalysis.fundamentalData.pe ?? "N/A"} | PB: ${fundamentalAnalysis.fundamentalData.pb ?? "N/A"} | ROE: ${fundamentalAnalysis.fundamentalData.roe ? (fundamentalAnalysis.fundamentalData.roe * 100).toFixed(1) + "%" : "N/A"}. Verdict: ${fundamentalAnalysis.verdict || "N/A"}.`
+          ) : (
+            data.resumen
+          )}
+        </p>
+      </div>
+    );
+  }
+}
+
+export default ReportePDFTemplate;

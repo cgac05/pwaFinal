@@ -117,7 +117,7 @@ export async function sendFollowUpChat(resultId: string, message: string): Promi
   return body.data;
 }
 
-export async function sendGlobalChat(message: string, model: 'primary' | 'fallback'): Promise<{ text: string; model: string }> {
+export async function sendGlobalChat(message: string, model: 'primary' | 'fallback'): Promise<{ text: string; model: string; refused?: boolean }> {
   const res = await fetch(`${BASE_URL}/global-chat`, {
     method: 'POST',
     headers: {
@@ -130,3 +130,4 @@ export async function sendGlobalChat(message: string, model: 'primary' | 'fallba
   const body = await res.json();
   return body.data;
 }
+

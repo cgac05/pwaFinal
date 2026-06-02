@@ -408,6 +408,14 @@ export function ConfluenceSignalsTable({
         onClose={() => { setAiModalOpen(false); setStubRow(null); }}
         ticker={symbol}
         signalRow={stubRow ?? undefined}
+        precalculatedRows={rows}
+        onAiRetry={(newAiRow) => {
+          // Replace only the A_IA row for this ticket
+          setRows((prev) => {
+            const others = prev.filter((r) => !(r.core === "A_IA" && r.ticket === newAiRow.ticket));
+            return [...others, newAiRow];
+          });
+        }}
         activeStrategy={activeStrategy}
       />
     </section>

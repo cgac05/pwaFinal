@@ -32,6 +32,7 @@ import { getInstitutionalAnalysis } from "../../services/institutional/instituti
 import type { FundamentalAnalysisResponse } from "../../services/fundamental/fundamentalApi";
 import { formatCurrency } from "../../utils/format";
 import { Tooltip } from "../../components/ui/Tooltip";
+import { ReportePDFTemplate } from "./ReportePDFTemplate";
 
 // FIC: US-5 — compact buy/sell/hold counter chip shown above the confluence table. (EN)
 // FIC: US-5 — chip compacto de conteo compra/venta/hold mostrado sobre la tabla. (ES)
@@ -76,6 +77,8 @@ export function MainDashboard() {
     expiration?: string; underlyingPrice?: number; estimatedRiskFreeRate?: number;
   } | null>(null);
   const [activeChartTab, setActiveChartTab] = useState<"chart" | "chain">("chart");
+  const [pdfChartImg, setPdfChartImg] = useState<string | undefined>(undefined);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const { selectedInstrument, selectedStrike, runtimeMode, operationalMode, setSelectedStrike } = useSignalStore();
   const { setAnalysisCategory } = useAppShellStore();
@@ -219,16 +222,124 @@ export function MainDashboard() {
     return () => controller.abort();
   }, [selectedSymbol, setAnalysisCategory]);
 
+  const handleExportPDF = async () => {
+    const chartEl = document.getElementById("visible-chart-container");
+    if (!chartEl) return;
+
+    setIsGeneratingPdf(true);
+
+    const originalStyle = chartEl.style.cssText;
+    const isHidden = activeChartTab !== "chart";
+
+    if (isHidden) {
+      chartEl.style.cssText = "position: absolute; left: -9999px; display: block; min-height: 380px; width: 800px; z-index: -1000;";
+    }
+
+    let imgData = "";
+    try {
+      await new Promise((r) => setTimeout(r, 120));
+      const canvasEl = chartEl.querySelector("canvas") as HTMLCanvasElement | null;
+      if (canvasEl) {
+        try {
+          imgData = canvasEl.toDataURL("image/png");
+        } catch (err) {
+          const html2canvasLib = (await import("html2canvas")).default;
+          const canvas = await html2canvasLib(chartEl, { useCORS: true, backgroundColor: "#0d1117", scale: 2 });
+          imgData = canvas.toDataURL("image/png");
+        }
+      } else {
+        const html2canvasLib = (await import("html2canvas")).default;
+        const canvas = await html2canvasLib(chartEl, { useCORS: true, backgroundColor: "#0d1117", scale: 2 });
+        imgData = canvas.toDataURL("image/png");
+      }
+    } catch (err) {
+      console.error("Error capturing chart canvas:", err);
+    }
+
+    if (isHidden) {
+      chartEl.style.cssText = originalStyle;
+    }
+
+    setPdfChartImg(imgData);
+
+    const waitForReportElAndImage = async (timeoutMs = 7000) => {
+      const start = Date.now();
+      let reportEl: HTMLElement | null = null;
+      while (Date.now() - start < timeoutMs) {
+        reportEl = document.getElementById("reporte-pdf-template-wrapper");
+        if (reportEl) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      if (!reportEl) return null;
+
+      const imgEl = reportEl.querySelector("img") as HTMLImageElement | null;
+      if (!imgEl) return reportEl;
+
+      if (imgEl.complete && imgEl.naturalWidth > 0) return reportEl;
+
+      await new Promise((resolve) => {
+        const onDone = () => {
+          imgEl.removeEventListener("load", onDone);
+          imgEl.removeEventListener("error", onDone);
+          resolve(null);
+        };
+        imgEl.addEventListener("load", onDone);
+        imgEl.addEventListener("error", onDone);
+        setTimeout(onDone, 5000);
+      });
+
+      return reportEl;
+    };
+
+    const reportEl = await waitForReportElAndImage(7000);
+    if (!reportEl) {
+      setIsGeneratingPdf(false);
+      setPdfChartImg(undefined);
+      return;
+    }
+
+    // Retraso de seguridad restaurado a 800ms
+    await new Promise((r) => setTimeout(r, 800));
+
+    try {
+      const html2pdfLib = (await import("html2pdf.js")).default;
+      const opt = {
+        margin: 0,
+        filename: `Reporte_${selectedSymbol}_${new Date().toISOString().split("T")[0]}.pdf`,
+        image: { type: "jpeg" as const, quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          scrollY: 0,
+          windowWidth: document.documentElement.offsetWidth,
+          ignoreElements: (element: any) => {
+            if (element.tagName === 'LINK' && element.href && element.href.includes('chrome-extension://')) return true;
+            if (element.tagName === 'STYLE' && element.textContent && element.textContent.includes('chrome-extension://')) return true;
+            return false;
+          }
+        },
+        jsPDF: { unit: "mm" as const, format: "a4" as const, orientation: "portrait" as const },
+        pagebreak: { mode: ['css', 'legacy'] as any }
+      };
+      await html2pdfLib().set(opt).from(reportEl).save();
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+    } finally {
+      setIsGeneratingPdf(false);
+      setPdfChartImg(undefined);
+    }
+  };
+
   // FIC: Badge color for runtime mode — cobalt for demo, warning for real, muted for offline. (EN)
   const modeBadgeColor =
     runtimeMode === "offline" ? "var(--color-text-muted)" :
-    operationalMode === "real" ? "var(--color-warning)" :
-    "var(--color-accent)";
+      operationalMode === "real" ? "var(--color-warning)" :
+        "var(--color-accent)";
 
   const modeBadgeLabel =
     runtimeMode === "offline" ? "Offline" :
-    operationalMode === "real" ? "Real" :
-    "Demo";
+      operationalMode === "real" ? "Real" :
+        "Demo";
 
   // FIC: Placeholder section shown for analyses not yet implemented in this sprint. (EN)
   // FIC: Sección placeholder para análisis no implementados aún en este sprint. (ES)
@@ -264,11 +375,30 @@ export function MainDashboard() {
             </span>
           )}
         </div>
-        <Badge
-          label={modeBadgeLabel}
-          color={modeBadgeColor}
-          pulse={operationalMode === "real" && runtimeMode !== "offline"}
-        />
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+          {simulationRows !== undefined && (
+            <button
+              onClick={handleExportPDF}
+              disabled={isGeneratingPdf}
+              className="btn-primary"
+              style={{
+                padding: "0.25rem 0.75rem",
+                fontSize: "var(--font-size-xs)",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {isGeneratingPdf ? "Generando PDF..." : "Exportar PDF"}
+            </button>
+          )}
+          <Badge
+            label={modeBadgeLabel}
+            color={modeBadgeColor}
+            pulse={operationalMode === "real" && runtimeMode !== "offline"}
+          />
+        </div>
       </div>
 
       {/* ── Chart + Cadena de Opciones (tabs dentro de la misma card) ──── */}
@@ -334,7 +464,7 @@ export function MainDashboard() {
             </div>
 
             {/* Chart tab */}
-            <div style={{ display: activeChartTab === "chart" ? "block" : "none", minHeight: 380 }}>
+            <div id="visible-chart-container" style={{ display: activeChartTab === "chart" ? "block" : "none", minHeight: 380 }}>
               <SuperChart symbol={selectedSymbol} timeframe={timeframe} startDate={periodRange?.startDate} endDate={periodRange?.endDate} />
             </div>
 
@@ -443,8 +573,8 @@ export function MainDashboard() {
             const trendDir = instData.trends?.direction;
             const trendColor =
               trendDir === "bullish" ? "var(--color-buy)" :
-              trendDir === "bearish" ? "var(--color-sell)" :
-              "var(--color-text-muted)";
+                trendDir === "bearish" ? "var(--color-sell)" :
+                  "var(--color-text-muted)";
 
             return (
               <>
@@ -502,23 +632,23 @@ export function MainDashboard() {
                     {visibleSources.map((s) => {
                       const label =
                         s.sourceId === "yahoo_chart" ? "Chart" :
-                        s.sourceId === "sec_edgar_13f" ? "SEC 13F" :
-                        s.sourceId === "finra_short_interest" ? "FINRA" :
-                        s.sourceId === "yahoo_options_flow" ? "Options" :
-                        s.sourceId === "yahoo_institutional" ? "Inst." :
-                        s.sourceId.split("_")[0];
+                          s.sourceId === "sec_edgar_13f" ? "SEC 13F" :
+                            s.sourceId === "finra_short_interest" ? "FINRA" :
+                              s.sourceId === "yahoo_options_flow" ? "Options" :
+                                s.sourceId === "yahoo_institutional" ? "Inst." :
+                                  s.sourceId.split("_")[0];
                       const borderColor =
                         s.status === "ok" ? "var(--color-buy)" :
-                        s.status === "partial" ? "var(--color-warning)" :
-                        "var(--color-border)";
+                          s.status === "partial" ? "var(--color-warning)" :
+                            "var(--color-border)";
                       const bg =
                         s.status === "ok" ? "rgba(0,168,126,0.10)" :
-                        s.status === "partial" ? "rgba(236,126,0,0.10)" :
-                        "rgba(255,255,255,0.04)";
+                          s.status === "partial" ? "rgba(236,126,0,0.10)" :
+                            "rgba(255,255,255,0.04)";
                       const color =
                         s.status === "ok" ? "var(--color-buy)" :
-                        s.status === "partial" ? "var(--color-warning)" :
-                        "var(--color-text-muted)";
+                          s.status === "partial" ? "var(--color-warning)" :
+                            "var(--color-text-muted)";
                       return (
                         <span
                           key={s.sourceId}
@@ -532,11 +662,11 @@ export function MainDashboard() {
                       <Tooltip
                         content={hiddenSources.map((s) =>
                           s.sourceId === "yahoo_chart" ? "Chart" :
-                          s.sourceId === "sec_edgar_13f" ? "SEC 13F" :
-                          s.sourceId === "finra_short_interest" ? "FINRA" :
-                          s.sourceId === "yahoo_options_flow" ? "Options" :
-                          s.sourceId === "yahoo_institutional" ? "Inst." :
-                          s.sourceId.split("_")[0]
+                            s.sourceId === "sec_edgar_13f" ? "SEC 13F" :
+                              s.sourceId === "finra_short_interest" ? "FINRA" :
+                                s.sourceId === "yahoo_options_flow" ? "Options" :
+                                  s.sourceId === "yahoo_institutional" ? "Inst." :
+                                    s.sourceId.split("_")[0]
                         ).join("\n")}
                       >
                         <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", padding: "2px 6px", borderRadius: "var(--radius-xs)", border: "1px solid var(--color-border)", backgroundColor: "rgba(255,255,255,0.04)", color: "var(--color-text-muted)", fontWeight: 600, cursor: "default", lineHeight: "1.5" }}>
@@ -617,12 +747,67 @@ export function MainDashboard() {
         <MessageSquare size={24} />
       </button>
 
-      {/* FIC: GlobalChatDrawer restored — was missing from JSX after file repair. (EN) */}
       {/* FIC: GlobalChatDrawer restaurado — faltaba en el JSX tras la reparación del archivo. (ES) */}
       <GlobalChatDrawer
         isOpen={copilotOpen}
         onClose={() => setCopilotOpen(false)}
       />
+
+      {/* PDF Generation: Overlay Pattern (Estructura de DOM Segura) */}
+      {isGeneratingPdf && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: '#f3f4f6', // Fondo gris de seguridad
+            zIndex: 9998,
+            overflow: 'auto', // Permite scroll del padre, no del hijo
+            paddingTop: '20px'
+          }}
+        >
+          {/* TARGET DE CAPTURA: Posición estándar, sin fixed ni absolute */}
+          <div
+            id="reporte-pdf-template-wrapper"
+            style={{
+              width: '210mm',
+              minHeight: '297mm',
+              backgroundColor: 'white',
+              margin: '0 auto', // Centrado normal
+              position: 'relative', // CRÍTICO: Mantiene a html2canvas en el eje 0,0
+            }}
+          >
+            <ReportePDFTemplate
+              ticker={selectedSymbol}
+              verdict={simulationVerdict}
+              rows={simulationRows || []}
+              activeStrategy={activeSimulationStrategy}
+              fundamentalAnalysis={fundamentalAnalysis}
+              optionStrategyAnalysis={optionStrategyAnalysis}
+              wheelSummary={wheelSummary}
+              instData={instData}
+              chartImageBase64={pdfChartImg}
+            />
+          </div>
+
+          {/* Loading overlay activo para ocultar el proceso */}
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'white',
+              zIndex: 9999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.25rem',
+              fontWeight: 'bold',
+              color: '#333',
+            }}
+          >
+            Generando Reporte Institucional...
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -70,6 +70,14 @@ describe("runSimulation", () => {
     expect([...cores]).toEqual(["A_INDICADORES"]);
   });
 
+  it("includes real A_ESTRATEGIA row when A_ESTRATEGIA core is enabled", async () => {
+    const result = await runSimulation(buildRequest({ coresHabilitados: ["A_ESTRATEGIA"] }));
+    const estrategiaRow = result.table.find((r) => r.core === "A_ESTRATEGIA");
+    expect(estrategiaRow).toBeDefined();
+    expect(estrategiaRow?.estado).toBe("ACTIVA");
+    expect(estrategiaRow?.fuente).toBe("strategy-viability-engine");
+  });
+
   it("flags verdict.degraded when not all 6 cores are enabled", async () => {
     const result = await runSimulation(buildRequest({ coresHabilitados: ["A_INDICADORES"] }));
     expect(result.verdict.degraded).toBe(true);

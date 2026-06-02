@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import type { InstitutionalZone } from "../institutional/institutionalZonesEngine";
 import type { InstitutionalTrendResult } from "../institutional/institutionalTrendEngine";
 import type { ExpirationAnalysisResult } from "../institutional/expirationAnalysisEngine";
+import { GeminiAgentService } from "../agents/geminiAgentService";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -280,6 +281,7 @@ function buildResponse(
 // FIC: InstitutionalCopilotChat — read-only AI assistant for institutional analysis. (EN)
 // FIC: InstitutionalCopilotChat — asistente IA de solo lectura para análisis institucional. (ES)
 export class InstitutionalCopilotChat {
+  private readonly geminiService = new GeminiAgentService();
   // FIC: In-memory job store for async polling — keyed by responseId. (EN)
   // FIC: Almacén de jobs en memoria para polling asíncrono — indexado por responseId. (ES)
   private readonly jobs = new Map<string, PendingJob>();
@@ -367,51 +369,32 @@ export class InstitutionalCopilotChat {
     return { status: "completed", response: job.result };
   }
 
-  // FIC: Call Gemini 2.5 Flash with the built prompt; returns null if unavailable or timed out. (EN)
-  // FIC: Llama a Gemini 2.5 Flash con el prompt construido; retorna null si no está disponible o supera el timeout. (ES)
   private async callGemini(
     context: CopilotChatContext,
     contextId: string,
     responseId: string
   ): Promise<CopilotChatResponse | null> {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return null;
+    if (!this.geminiService.isEnabled()) return null;
 
     const aiRole = inferAIRole(context.userRole);
     const prompt = buildPrompt(context, aiRole);
 
-    const controller = new AbortController();
-    const timeoutHandle = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
     try {
-      const res = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.2,
-            topP: 0.9,
-            maxOutputTokens: 8192,
-            responseMimeType: "application/json",
-          },
-        }),
-        signal: controller.signal,
-      });
+      const response = await this.geminiService.generateSimpleResponse(
+        prompt,
+        "primary",
+        undefined,
+        {
+          temperature: 0.2,
+          topP: 0.9,
+          maxOutputTokens: 8192
+        }
+      );
 
-      clearTimeout(timeoutHandle);
-
-      if (!res.ok) return null;
-
-      const data = (await res.json()) as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-      };
-
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+      const rawText = response.text || "{}";
       const parsed = parseGeminiContent(rawText);
       return buildResponse(parsed, contextId, responseId, context);
     } catch {
-      clearTimeout(timeoutHandle);
       return null;
     }
   }
