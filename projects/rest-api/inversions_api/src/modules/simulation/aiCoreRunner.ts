@@ -105,8 +105,8 @@ function buildDeterministicIaCoreFallback(params: {
       confidence = Number((sumScore / params.precalculatedRows.length).toFixed(3));
       if (confidence > 1) confidence = 1;
       
-      const viableDecision = decision === "CALL" || decision === "PUT" ? "SÍ" : "NO";
-      explicacion = `[Canal de Respaldo Cuantitativo] El modelo LLM principal no pudo responder (${params.reasonCode || "Timeout"}). Se aplicó una agregación determinista sobre ${params.precalculatedRows.length} cores pre-calculados:\n- Señales Alcistas (CALL): ${calls}\n- Señales Bajistas (PUT): ${puts}\n- Señales Neutrales (HOLD): ${holds}\n\nVeredicto inferido: ${viableDecision} (${decision}). Por favor, reintenta más tarde para obtener la síntesis profunda de la IA.`;
+      // Mensaje simplificado para UI: evita textos técnicos largos y permite reintento aislado en frontend
+      explicacion = "No pudimos conectarnos con el modelo, inténtalo de nuevo.";
     } else {
       decision = "HOLD";
     }
@@ -248,20 +248,34 @@ export async function runAiCore(params: {
 
   const fullPrompt = `${basePromptText}
 
-INSTRUCCIONES DE FORMATO ESTRICTO:
-Responde ÚNICAMENTE usando el siguiente formato de texto (NO uses JSON, ni markdown code blocks):
+CONTEXTO DE ANÁLISIS:
+- Símbolo (Ticker): ${params.ticket}
+- Temporalidad: ${params.timeframe}
+- Número de cores evaluados: ${simulatedPrecalculatedRows.length}
+- Fecha del análisis: ${params.computedAt.toISOString()}
+
+DATOS DE ENTRADA (Señales pre-calculadas por core):
+${rowsContext}
+
+INSTRUCCIONES DE FORMATO REQUERIDO (MUY IMPORTANTE):
+Responde ÚNICAMENTE usando el siguiente formato de texto (SIN JSON, SIN markdown code blocks):
+
 DECISION: [CALL o PUT o HOLD]
-CONFIANZA: [Un número de 0.00 a 1.00 indicando tu nivel de certeza]
+CONFIANZA: [Un número decimal de 0.00 a 1.00 indicando tu nivel de certeza]
+TOP_SENALES:
+- #1: [Primera señal más importante]
+- #2: [Segunda señal]
+- #3: [Tercera señal]
+[... hasta 10 señales máximo si aplican]
 JUSTIFICACION: 
-[Explica tu decisión con:
-1. Un resumen general de tu veredicto.
-2. Un desglose detallado CORE por CORE (Técnico, Fundamental, Institucional, Noticias, etc.) explicando cómo cada uno influyó en la decisión final.]
+[Redacta tu análisis con:
+1. Un resumen general de tu veredicto (1-2 líneas).
+2. Un desglose DETALLADO CORE por CORE (explicar cómo Técnico, Institucional, Fundamental, Noticias, etc. influyeron en la decisión final).
+3. Cita valores numéricos específicos de las señales identificadas.
+4. Si elegiste HOLD, explica brevemente por qué esperar es la mejor opción en este momento.]
 
-Ticker: ${params.ticket}
-Timeframe: ${params.timeframe}
-
-DATOS DE ENTRADA (Cores pre-calculados):
-${rowsContext}`;
+RECORDATORIO CRÍTICO: HOLD es una opción completamente válida cuando las condiciones no justifican 
+riesgo de operar en largo (CALL) o corto (PUT). No te sientas presionado a elegir SÍ o NO.`;
 
   try {
     // 5. Llamar a Gemini con el prompt combinado usando texto simple (sin wrappers JSON)

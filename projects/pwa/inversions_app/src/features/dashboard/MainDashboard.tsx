@@ -32,6 +32,7 @@ import { getInstitutionalAnalysis } from "../../services/institutional/instituti
 import type { FundamentalAnalysisResponse } from "../../services/fundamental/fundamentalApi";
 import { formatCurrency } from "../../utils/format";
 import { Tooltip } from "../../components/ui/Tooltip";
+import { ReportePDFTemplate } from "./ReportePDFTemplate";
 
 // FIC: US-5 — compact buy/sell/hold counter chip shown above the confluence table. (EN)
 // FIC: US-5 — chip compacto de conteo compra/venta/hold mostrado sobre la tabla. (ES)
@@ -76,6 +77,8 @@ export function MainDashboard() {
     expiration?: string; underlyingPrice?: number; estimatedRiskFreeRate?: number;
   } | null>(null);
   const [activeChartTab, setActiveChartTab] = useState<"chart" | "chain">("chart");
+  const [pdfChartImg, setPdfChartImg] = useState<string | undefined>(undefined);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const { selectedInstrument, selectedStrike, runtimeMode, operationalMode, setSelectedStrike } = useSignalStore();
   const { setAnalysisCategory } = useAppShellStore();
@@ -230,6 +233,121 @@ export function MainDashboard() {
     return () => controller.abort();
   }, [selectedSymbol, setAnalysisCategory]);
 
+  const handleExportPDF = async () => {
+    const chartEl = document.getElementById("visible-chart-container");
+    if (!chartEl) return;
+
+    setIsGeneratingPdf(true);
+
+    const originalStyle = chartEl.style.cssText;
+    const isHidden = activeChartTab !== "chart";
+
+    if (isHidden) {
+      chartEl.style.cssText = "position: absolute; left: -9999px; display: block; min-height: 380px; width: 800px; z-index: -1000;";
+    }
+
+    // Prefer native canvas extraction to avoid html2canvas bugs with nested canvases.
+    let imgData = "";
+    try {
+      // small pause to allow any pending paint operations
+      await new Promise((r) => setTimeout(r, 120));
+      const canvasEl = chartEl.querySelector("canvas") as HTMLCanvasElement | null;
+      if (canvasEl) {
+        try {
+          imgData = canvasEl.toDataURL("image/png");
+        } catch (err) {
+          // toDataURL can fail if canvas is tainted; fallback to html2canvas
+          console.warn("canvas.toDataURL failed, falling back to html2canvas", err);
+          const html2canvasLib = (await import("html2canvas")).default;
+          const canvas = await html2canvasLib(chartEl, {
+            useCORS: true,
+            backgroundColor: "#0d1117",
+            scale: 2,
+          });
+          imgData = canvas.toDataURL("image/png");
+        }
+      } else {
+        const html2canvasLib = (await import("html2canvas")).default;
+        const canvas = await html2canvasLib(chartEl, {
+          useCORS: true,
+          backgroundColor: "#0d1117",
+          scale: 2,
+        });
+        imgData = canvas.toDataURL("image/png");
+      }
+    } catch (err) {
+      console.error("Error capturing chart canvas:", err);
+    }
+
+    if (isHidden) {
+      chartEl.style.cssText = originalStyle;
+    }
+
+    setPdfChartImg(imgData);
+
+    // Wait for the template element and its <img> to be present and loaded.
+    const waitForReportElAndImage = async (timeoutMs = 7000) => {
+      const start = Date.now();
+      let reportEl: HTMLElement | null = null;
+      while (Date.now() - start < timeoutMs) {
+        reportEl = document.getElementById("reporte-pdf-template-wrapper");
+        if (reportEl) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      if (!reportEl) return null;
+
+      // Ensure the image inside the template has loaded
+      const imgEl = reportEl.querySelector("img") as HTMLImageElement | null;
+      if (!imgEl) return reportEl;
+
+      if (imgEl.complete && imgEl.naturalWidth > 0) return reportEl;
+
+      await new Promise((resolve) => {
+        const onDone = () => {
+          imgEl.removeEventListener("load", onDone);
+          imgEl.removeEventListener("error", onDone);
+          resolve(null);
+        };
+        imgEl.addEventListener("load", onDone);
+        imgEl.addEventListener("error", onDone);
+        // Safety timeout
+        setTimeout(onDone, 5000);
+      });
+
+      return reportEl;
+    };
+
+    const reportEl = await waitForReportElAndImage(7000);
+    if (!reportEl) {
+      console.error("Reporte PDF: wrapper no montado antes del timeout");
+      setIsGeneratingPdf(false);
+      setPdfChartImg(undefined);
+      return;
+    }
+
+    // Critical delay to ensure React has committed the DOM to the layout tree
+    // and the browser has painted the element. html2canvas needs the element
+    // to be fully rendered before it can capture it.
+    await new Promise((r) => setTimeout(r, 800));
+
+    try {
+      const html2pdfLib = (await import("html2pdf.js")).default;
+      const opt = {
+        margin: 0,
+        filename: `Reporte_${selectedSymbol}_${new Date().toISOString().split("T")[0]}.pdf`,
+        image: { type: "jpeg" as const, quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, scrollY: 0, scrollX: 0 },
+        jsPDF: { unit: "mm" as const, format: "a4" as const, orientation: "portrait" as const },
+      };
+      await html2pdfLib().set(opt).from(reportEl).save();
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+    } finally {
+      setIsGeneratingPdf(false);
+      setPdfChartImg(undefined);
+    }
+  };
+
   // FIC: Badge color for runtime mode — cobalt for demo, warning for real, muted for offline. (EN)
   const modeBadgeColor =
     runtimeMode === "offline" ? "var(--color-text-muted)" :
@@ -275,11 +393,30 @@ export function MainDashboard() {
             </span>
           )}
         </div>
-        <Badge
-          label={modeBadgeLabel}
-          color={modeBadgeColor}
-          pulse={operationalMode === "real" && runtimeMode !== "offline"}
-        />
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+          {simulationRows !== undefined && (
+            <button
+              onClick={handleExportPDF}
+              disabled={isGeneratingPdf}
+              className="btn-primary"
+              style={{
+                padding: "0.25rem 0.75rem",
+                fontSize: "var(--font-size-xs)",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                cursor: "pointer",
+              }}
+            >
+              {isGeneratingPdf ? "Generando PDF..." : "Exportar PDF"}
+            </button>
+          )}
+          <Badge
+            label={modeBadgeLabel}
+            color={modeBadgeColor}
+            pulse={operationalMode === "real" && runtimeMode !== "offline"}
+          />
+        </div>
       </div>
 
       {/* ── Chart + Cadena de Opciones (tabs dentro de la misma card) ──── */}
@@ -345,7 +482,7 @@ export function MainDashboard() {
             </div>
 
             {/* Chart tab */}
-            <div style={{ display: activeChartTab === "chart" ? "block" : "none", minHeight: 380 }}>
+            <div id="visible-chart-container" style={{ display: activeChartTab === "chart" ? "block" : "none", minHeight: 380 }}>
               <SuperChart symbol={selectedSymbol} timeframe={timeframe} startDate={periodRange?.startDate} endDate={periodRange?.endDate} />
             </div>
 
@@ -628,12 +765,65 @@ export function MainDashboard() {
         <MessageSquare size={24} />
       </button>
 
-      {/* FIC: GlobalChatDrawer restored — was missing from JSX after file repair. (EN) */}
       {/* FIC: GlobalChatDrawer restaurado — faltaba en el JSX tras la reparación del archivo. (ES) */}
       <GlobalChatDrawer
         isOpen={copilotOpen}
         onClose={() => setCopilotOpen(false)}
       />
+
+      {/* PDF Generation: Overlay Pattern (On-screen temporal con enmascaramiento) */}
+      {isGeneratingPdf && (
+        <>
+          {/* Template rendered fully on-screen (visible to browser for painting) */}
+          <div
+            id="reporte-pdf-template-wrapper"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '210mm',
+              minHeight: '297mm',
+              opacity: 1,
+              backgroundColor: 'white',
+              zIndex: 9998,
+              visibility: 'visible',
+            }}
+          >
+            <ReportePDFTemplate
+              ticker={selectedSymbol}
+              verdict={simulationVerdict}
+              rows={simulationRows || []}
+              activeStrategy={activeSimulationStrategy}
+              fundamentalAnalysis={fundamentalAnalysis}
+              optionStrategyAnalysis={optionStrategyAnalysis}
+              wheelSummary={wheelSummary}
+              instData={instData}
+              chartImageBase64={pdfChartImg}
+            />
+          </div>
+
+          {/* Loading overlay (masks the template from user view) */}
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'white',
+              zIndex: 9999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.25rem',
+              fontWeight: 'bold',
+              color: '#333',
+            }}
+          >
+            Generando Reporte Institucional...
+          </div>
+        </>
+      )}
     </>
   );
 }

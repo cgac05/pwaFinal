@@ -44,44 +44,61 @@ export function ObservationsTab({ row, activeStrategy }: Props) {
     setDropdownOpen(false);
   };
 
-  const handleDownloadPdf = () => {
-    if (!contentRef.current) return;
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-    
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Exportación - ${row.ticket || "Confluencia"}</title>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1f2328; padding: 40px; line-height: 1.6; }
-            table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
-            th, td { border-bottom: 1px solid #d0d7de; padding: 10px 12px; text-align: left; }
-            th { background-color: #f6f8fa; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; color: #656d76; }
-            h1 { font-size: 24px; border-bottom: 1px solid #d0d7de; padding-bottom: 8px; margin-bottom: 16px; }
-            h2 { font-size: 20px; margin-top: 24px; }
-            h3 { font-size: 16px; margin-top: 20px; color: #656d76; text-transform: uppercase; letter-spacing: 0.05em; }
-            ul { padding-left: 20px; }
-            li { margin-bottom: 4px; }
-            strong { font-weight: 600; }
-          </style>
-        </head>
-        <body>
-          ${contentRef.current.innerHTML}
-        </body>
-      </html>
-    `;
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 250);
-    
+  const handleDownloadPdf = async () => {
     setDropdownOpen(false);
+    if (!contentRef.current) return;
+
+    // Create a temporary container for printing with stylized content
+    const printContainer = document.createElement("div");
+    printContainer.style.position = "absolute";
+    printContainer.style.left = "-9999px";
+    printContainer.style.top = "0";
+    printContainer.style.width = "180mm"; // standard printable width
+    printContainer.style.fontFamily = "Arial, sans-serif";
+    printContainer.style.color = "#1e293b";
+    printContainer.style.backgroundColor = "#ffffff";
+    printContainer.style.padding = "20px";
+
+    // Build the inner HTML of the print container
+    printContainer.innerHTML = `
+      <div style="border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 20px;">
+        <h1 style="margin: 0; font-size: 18px; color: #0f172a; text-transform: uppercase;">
+          Reporte de Observaciones Canónicas
+        </h1>
+        <p style="margin: 4px 0 0 0; font-size: 11px; color: #64748b;">
+          Generado automáticamente el ${new Date().toLocaleString()}
+        </p>
+      </div>
+
+      <div style="margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 11px;">
+        <div><strong>Ticker:</strong> ${row.ticket || "N/A"}</div>
+        <div><strong>Core:</strong> ${row.core.replace("A_", "")}</div>
+        <div><strong>Tipo Señal:</strong> ${row.tipoSenal}</div>
+        <div><strong>Score:</strong> ${row.score.toFixed(3)}</div>
+      </div>
+
+      <div style="font-size: 11.5px; line-height: 1.6; color: #334155;">
+        ${contentRef.current.innerHTML}
+      </div>
+    `;
+
+    document.body.appendChild(printContainer);
+
+    try {
+      const html2pdfLib = (await import("html2pdf.js")).default;
+      const opt = {
+        margin: 10,
+        filename: `Observaciones_${row.core}_${row.ticket ?? "ticker"}_${row.fecha}.pdf`,
+        image: { type: "jpeg" as const, quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: "mm" as const, format: "a4" as const, orientation: "portrait" as const }
+      };
+      await html2pdfLib().set(opt).from(printContainer).save();
+    } catch (err) {
+      console.error("Failed to generate PDF for observations:", err);
+    } finally {
+      document.body.removeChild(printContainer);
+    }
   };
 
   return (

@@ -10,6 +10,8 @@ interface Props {
   ticker: string;
   signalRow?: ConfluenceSignalRow;
   activeStrategy?: string;
+  precalculatedRows?: ConfluenceSignalRow[];
+  onAiRetry?: (row: ConfluenceSignalRow) => void;
 }
 
 type Tab = "resumen" | "preprompt" | "entradas" | "canonica";
@@ -51,7 +53,7 @@ const strengthBar = (value: number, colorType: "buy" | "sell" | "neutral" = "buy
   );
 };
 
-export function AiDetailModal({ isOpen, onClose, ticker, signalRow, activeStrategy }: Props) {
+export function AiDetailModal({ isOpen, onClose, ticker, signalRow, activeStrategy, precalculatedRows, onAiRetry }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("resumen");
 
   if (!signalRow) return null;
@@ -136,6 +138,32 @@ export function AiDetailModal({ isOpen, onClose, ticker, signalRow, activeStrate
             <div style={{ background: "var(--color-surface-raised)", padding: "var(--space-md)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border-subtle)" }}>
               <MarkdownContent content={signalRow.observacion?.explicacion || ""} />
             </div>
+            {/* Reintento aislado para IA degradada */}
+            {signalRow.observacion?.explicacion === "No pudimos conectarnos con el modelo, inténtalo de nuevo." && (
+              <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <button
+                  className="btn-primary"
+                  onClick={async () => {
+                    if (!precalculatedRows) return;
+                    try {
+                      const res = await fetch("/api/simulation/retry-ai", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ ticket: signalRow.ticket, timeframe: signalRow.timeframe, sourceInputHash: signalRow.source_input_hash, precalculatedRows })
+                      });
+                      if (!res.ok) throw new Error("retry failed");
+                      const newRow = await res.json();
+                      if (onAiRetry) onAiRetry(newRow);
+                    } catch (err) {
+                      console.error("retry-ai failed", err);
+                      alert("Fallo al reintentar la IA. Revisa la consola.");
+                    }
+                  }}
+                >
+                  Reintentar IA
+                </button>
+              </div>
+            )}
           </div>
         )}
 

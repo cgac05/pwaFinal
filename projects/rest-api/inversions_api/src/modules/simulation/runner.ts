@@ -22,6 +22,7 @@ import {
 } from "../indicators/types";
 import { buildInstitutionalRows } from "../institutional/institutionalRowBuilder";
 import { buildTechnicalTable } from "../indicators/technicalTable";
+import { buildStrategyViabilityTable } from "../indicators/strategyConfluenceRows";
 import type { InstitutionalRouteContext } from "../../routes/institutional/bootstrap";
 import type { InstitutionalAnalysisContract } from "../institutional/institutionalContract";
 import { runAiCore } from "./aiCoreRunner";
@@ -361,6 +362,19 @@ export async function runSimulation(
       })
     : [];
 
+  // FIC: A_ESTRATEGIA core — evaluates which complex strategies are viable. (EN)
+  // FIC: Core A_ESTRATEGIA — evalúa qué estrategias complejas son viables. (ES)
+  const estrategiaRows = enabledCores.has("A_ESTRATEGIA")
+    ? buildStrategyViabilityTable({
+        ticket: request.ticket,
+        timeframe: request.temporalidad,
+        candles,
+        sourceInputHash: verdict.source_input_hash,
+        previousRows: deps.previousRows,
+        now: computedAt,
+      })
+    : [];
+
   // FIC: Execute AI Core if enabled
   let aiRow: ConfluenceSignalRow | null = null;
   if (enabledCores.has("A_IA")) {
@@ -370,11 +384,11 @@ export async function runSimulation(
       sourceInputHash: verdict.source_input_hash,
       computedAt: computedAt,
       previousRows: deps.previousRows,
-      precalculatedRows: [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows],
+      precalculatedRows: [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...estrategiaRows],
     });
   }
 
-  // FIC: Stub remaining cores — skip A_INSTITUCIONAL/A_TECNICO/A_NOTICIAS/A_IA if real rows were built. (EN)
+  // FIC: Stub remaining cores — skip A_INSTITUCIONAL/A_TECNICO/A_NOTICIAS/A_IA/A_ESTRATEGIA if real rows were built. (EN)
   const stubCores = (ALL_CORE_IDS as readonly CoreId[])
     .filter((c) => {
       if (c === "A_INDICADORES") return false;
@@ -383,6 +397,7 @@ export async function runSimulation(
       if (c === "A_TECNICO" && tecnicoRows.length > 0) return false;
       if (c === "A_IA" && aiRow !== null) return false;
       if (c === "A_NOTICIAS" && noticiasRows.length > 0) return false;
+      if (c === "A_ESTRATEGIA" && estrategiaRows.length > 0) return false;
       return enabledCores.has(c);
     });
 
@@ -395,9 +410,9 @@ export async function runSimulation(
       previousRows: deps.previousRows,
       now: computedAt
     });
-    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...stubs];
+    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...estrategiaRows, ...stubs];
   } else {
-    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows];
+    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...estrategiaRows];
   }
 
   // FIC: US8 bugfix — when running on historical (as-of) data, the rows MUST display the REAL date

@@ -25,6 +25,8 @@ export function createChatExplainRouter(explainer: LlmExplainer = defaultExplain
     const question = typeof body.question === "string" ? body.question.trim() : "";
     const context = typeof body.context === "string" ? body.context : undefined;
 
+    
+
     if (!symbol) {
       return respondError(res, 400, "missing_symbol", "El campo 'symbol' es obligatorio.", "Ejemplo: { \"symbol\": \"AAPL\" }");
     }
@@ -40,6 +42,8 @@ export function createChatExplainRouter(explainer: LlmExplainer = defaultExplain
     if (!question) {
       return respondError(res, 400, "missing_question", "El campo 'question' es obligatorio y no puede estar vacio.");
     }
+
+
 
     const timeframe = timeframeRaw as Timeframe;
     const candles = await getCandles({ symbol, timeframe, count: 300 });
