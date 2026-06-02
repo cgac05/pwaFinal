@@ -246,33 +246,21 @@ export function MainDashboard() {
       chartEl.style.cssText = "position: absolute; left: -9999px; display: block; min-height: 380px; width: 800px; z-index: -1000;";
     }
 
-    // Prefer native canvas extraction to avoid html2canvas bugs with nested canvases.
     let imgData = "";
     try {
-      // small pause to allow any pending paint operations
       await new Promise((r) => setTimeout(r, 120));
       const canvasEl = chartEl.querySelector("canvas") as HTMLCanvasElement | null;
       if (canvasEl) {
         try {
           imgData = canvasEl.toDataURL("image/png");
         } catch (err) {
-          // toDataURL can fail if canvas is tainted; fallback to html2canvas
-          console.warn("canvas.toDataURL failed, falling back to html2canvas", err);
           const html2canvasLib = (await import("html2canvas")).default;
-          const canvas = await html2canvasLib(chartEl, {
-            useCORS: true,
-            backgroundColor: "#0d1117",
-            scale: 2,
-          });
+          const canvas = await html2canvasLib(chartEl, { useCORS: true, backgroundColor: "#0d1117", scale: 2 });
           imgData = canvas.toDataURL("image/png");
         }
       } else {
         const html2canvasLib = (await import("html2canvas")).default;
-        const canvas = await html2canvasLib(chartEl, {
-          useCORS: true,
-          backgroundColor: "#0d1117",
-          scale: 2,
-        });
+        const canvas = await html2canvasLib(chartEl, { useCORS: true, backgroundColor: "#0d1117", scale: 2 });
         imgData = canvas.toDataURL("image/png");
       }
     } catch (err) {
@@ -285,7 +273,6 @@ export function MainDashboard() {
 
     setPdfChartImg(imgData);
 
-    // Wait for the template element and its <img> to be present and loaded.
     const waitForReportElAndImage = async (timeoutMs = 7000) => {
       const start = Date.now();
       let reportEl: HTMLElement | null = null;
@@ -296,7 +283,6 @@ export function MainDashboard() {
       }
       if (!reportEl) return null;
 
-      // Ensure the image inside the template has loaded
       const imgEl = reportEl.querySelector("img") as HTMLImageElement | null;
       if (!imgEl) return reportEl;
 
@@ -310,7 +296,6 @@ export function MainDashboard() {
         };
         imgEl.addEventListener("load", onDone);
         imgEl.addEventListener("error", onDone);
-        // Safety timeout
         setTimeout(onDone, 5000);
       });
 
@@ -319,15 +304,12 @@ export function MainDashboard() {
 
     const reportEl = await waitForReportElAndImage(7000);
     if (!reportEl) {
-      console.error("Reporte PDF: wrapper no montado antes del timeout");
       setIsGeneratingPdf(false);
       setPdfChartImg(undefined);
       return;
     }
 
-    // Critical delay to ensure React has committed the DOM to the layout tree
-    // and the browser has painted the element. html2canvas needs the element
-    // to be fully rendered before it can capture it.
+    // Retraso de seguridad restaurado a 800ms
     await new Promise((r) => setTimeout(r, 800));
 
     try {
@@ -336,8 +318,19 @@ export function MainDashboard() {
         margin: 0,
         filename: `Reporte_${selectedSymbol}_${new Date().toISOString().split("T")[0]}.pdf`,
         image: { type: "jpeg" as const, quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, scrollY: 0, scrollX: 0 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          scrollY: 0,
+          windowWidth: document.documentElement.offsetWidth,
+          ignoreElements: (element: any) => {
+            if (element.tagName === 'LINK' && element.href && element.href.includes('chrome-extension://')) return true;
+            if (element.tagName === 'STYLE' && element.textContent && element.textContent.includes('chrome-extension://')) return true;
+            return false;
+          }
+        },
         jsPDF: { unit: "mm" as const, format: "a4" as const, orientation: "portrait" as const },
+        pagebreak: { mode: ['css', 'legacy'] as any }
       };
       await html2pdfLib().set(opt).from(reportEl).save();
     } catch (err) {
@@ -351,13 +344,13 @@ export function MainDashboard() {
   // FIC: Badge color for runtime mode — cobalt for demo, warning for real, muted for offline. (EN)
   const modeBadgeColor =
     runtimeMode === "offline" ? "var(--color-text-muted)" :
-    operationalMode === "real" ? "var(--color-warning)" :
-    "var(--color-accent)";
+      operationalMode === "real" ? "var(--color-warning)" :
+        "var(--color-accent)";
 
   const modeBadgeLabel =
     runtimeMode === "offline" ? "Offline" :
-    operationalMode === "real" ? "Real" :
-    "Demo";
+      operationalMode === "real" ? "Real" :
+        "Demo";
 
   // FIC: Placeholder section shown for analyses not yet implemented in this sprint. (EN)
   // FIC: Sección placeholder para análisis no implementados aún en este sprint. (ES)
@@ -591,8 +584,8 @@ export function MainDashboard() {
             const trendDir = instData.trends?.direction;
             const trendColor =
               trendDir === "bullish" ? "var(--color-buy)" :
-              trendDir === "bearish" ? "var(--color-sell)" :
-              "var(--color-text-muted)";
+                trendDir === "bearish" ? "var(--color-sell)" :
+                  "var(--color-text-muted)";
 
             return (
               <>
@@ -650,23 +643,23 @@ export function MainDashboard() {
                     {visibleSources.map((s) => {
                       const label =
                         s.sourceId === "yahoo_chart" ? "Chart" :
-                        s.sourceId === "sec_edgar_13f" ? "SEC 13F" :
-                        s.sourceId === "finra_short_interest" ? "FINRA" :
-                        s.sourceId === "yahoo_options_flow" ? "Options" :
-                        s.sourceId === "yahoo_institutional" ? "Inst." :
-                        s.sourceId.split("_")[0];
+                          s.sourceId === "sec_edgar_13f" ? "SEC 13F" :
+                            s.sourceId === "finra_short_interest" ? "FINRA" :
+                              s.sourceId === "yahoo_options_flow" ? "Options" :
+                                s.sourceId === "yahoo_institutional" ? "Inst." :
+                                  s.sourceId.split("_")[0];
                       const borderColor =
                         s.status === "ok" ? "var(--color-buy)" :
-                        s.status === "partial" ? "var(--color-warning)" :
-                        "var(--color-border)";
+                          s.status === "partial" ? "var(--color-warning)" :
+                            "var(--color-border)";
                       const bg =
                         s.status === "ok" ? "rgba(0,168,126,0.10)" :
-                        s.status === "partial" ? "rgba(236,126,0,0.10)" :
-                        "rgba(255,255,255,0.04)";
+                          s.status === "partial" ? "rgba(236,126,0,0.10)" :
+                            "rgba(255,255,255,0.04)";
                       const color =
                         s.status === "ok" ? "var(--color-buy)" :
-                        s.status === "partial" ? "var(--color-warning)" :
-                        "var(--color-text-muted)";
+                          s.status === "partial" ? "var(--color-warning)" :
+                            "var(--color-text-muted)";
                       return (
                         <span
                           key={s.sourceId}
@@ -680,11 +673,11 @@ export function MainDashboard() {
                       <Tooltip
                         content={hiddenSources.map((s) =>
                           s.sourceId === "yahoo_chart" ? "Chart" :
-                          s.sourceId === "sec_edgar_13f" ? "SEC 13F" :
-                          s.sourceId === "finra_short_interest" ? "FINRA" :
-                          s.sourceId === "yahoo_options_flow" ? "Options" :
-                          s.sourceId === "yahoo_institutional" ? "Inst." :
-                          s.sourceId.split("_")[0]
+                            s.sourceId === "sec_edgar_13f" ? "SEC 13F" :
+                              s.sourceId === "finra_short_interest" ? "FINRA" :
+                                s.sourceId === "yahoo_options_flow" ? "Options" :
+                                  s.sourceId === "yahoo_institutional" ? "Inst." :
+                                    s.sourceId.split("_")[0]
                         ).join("\n")}
                       >
                         <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", padding: "2px 6px", borderRadius: "var(--radius-xs)", border: "1px solid var(--color-border)", backgroundColor: "rgba(255,255,255,0.04)", color: "var(--color-text-muted)", fontWeight: 600, cursor: "default", lineHeight: "1.5" }}>
@@ -771,22 +764,27 @@ export function MainDashboard() {
         onClose={() => setCopilotOpen(false)}
       />
 
-      {/* PDF Generation: Overlay Pattern (On-screen temporal con enmascaramiento) */}
+      {/* PDF Generation: Overlay Pattern (Estructura de DOM Segura) */}
       {isGeneratingPdf && (
-        <>
-          {/* Template rendered fully on-screen (visible to browser for painting) */}
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: '#f3f4f6', // Fondo gris de seguridad
+            zIndex: 9998,
+            overflow: 'auto', // Permite scroll del padre, no del hijo
+            paddingTop: '20px'
+          }}
+        >
+          {/* TARGET DE CAPTURA: Posición estándar, sin fixed ni absolute */}
           <div
             id="reporte-pdf-template-wrapper"
             style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
               width: '210mm',
               minHeight: '297mm',
-              opacity: 1,
               backgroundColor: 'white',
-              zIndex: 9998,
-              visibility: 'visible',
+              margin: '0 auto', // Centrado normal
+              position: 'relative', // CRÍTICO: Mantiene a html2canvas en el eje 0,0
             }}
           >
             <ReportePDFTemplate
@@ -802,14 +800,11 @@ export function MainDashboard() {
             />
           </div>
 
-          {/* Loading overlay (masks the template from user view) */}
+          {/* Loading overlay activo para ocultar el proceso */}
           <div
             style={{
               position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
+              inset: 0,
               backgroundColor: 'white',
               zIndex: 9999,
               display: 'flex',
@@ -822,7 +817,7 @@ export function MainDashboard() {
           >
             Generando Reporte Institucional...
           </div>
-        </>
+        </div>
       )}
     </>
   );

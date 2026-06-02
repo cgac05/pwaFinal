@@ -14,15 +14,15 @@ interface Props {
 }
 
 export function ReportePDFTemplate({
-  ticker,
-  verdict,
+  ticker = "SPY",
+  verdict = null,
   rows = [],
-  activeStrategy,
-  fundamentalAnalysis,
-  optionStrategyAnalysis,
-  wheelSummary,
-  instData,
-  chartImageBase64,
+  activeStrategy = "",
+  fundamentalAnalysis = null,
+  optionStrategyAnalysis = null,
+  wheelSummary = null,
+  instData = null,
+  chartImageBase64 = "",
 }: Props) {
   const generatedAt = new Date().toLocaleString();
 
@@ -71,100 +71,121 @@ export function ReportePDFTemplate({
     { id: "A_INSTITUCIONAL", label: "Institucional" },
     { id: "A_TECNICO", label: "Técnico" },
     { id: "A_NOTICIAS", label: "Noticias" },
+    { id: "A_ESTRATEGIA", label: "Estrategia" },
   ];
 
   return (
     <div
       id="reporte-pdf-template"
-      className="font-sans text-gray-800 bg-white p-8 max-w-[210mm] mx-auto text-xs leading-relaxed"
+      className="font-sans text-gray-800 bg-white p-8 max-w-[210mm] mx-auto text-[11px] leading-relaxed"
+      style={{ boxSizing: "border-box" }}
     >
-      {/* PAGE 1 */}
-      <div style={{ minHeight: "255mm", pageBreakAfter: "always" }} className="flex flex-col justify-between">
+      {/* --- PÁGINA 1 --- */}
+      <div
+        style={{
+          minHeight: "255mm",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          pageBreakAfter: "always",
+        }}
+      >
         <div>
-          {/* Cabecera Institucional */}
-          <div className="bg-slate-900 text-white p-6 rounded-t-lg flex justify-between items-center mb-6">
+          {/* Cabecera (Header) */}
+          <div className="bg-slate-900 text-white p-5 rounded-t-lg flex justify-between items-center mb-6">
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-white uppercase">
-                Reporte de Análisis Cuantitativo
+              <h1 className="text-lg font-bold tracking-tight uppercase">
+                Reporte de Análisis de Volatilidad
               </h1>
-              <p className="text-[10px] text-slate-400 mt-1">
+              <p className="text-[9px] text-slate-400 mt-1">
                 Generado automáticamente el {generatedAt}
               </p>
             </div>
-            <div className="text-right">
-              <span className="text-2xl font-extrabold tracking-wider bg-slate-800 text-teal-400 px-4 py-2 rounded border border-slate-700">
+            <div>
+              <span className="text-xl font-extrabold tracking-wider bg-slate-800 text-teal-400 px-3 py-1.5 rounded border border-slate-700">
                 {ticker}
               </span>
             </div>
           </div>
 
-          {/* Confidence & Strategy Banner */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 shadow-sm">
-              <div className="text-[10px] uppercase text-slate-500 font-bold mb-1 tracking-wider">
-                Veredicto General
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${getSignalBadgeClass(String(aiDecision))}`}>
-                  {aiDecision}
-                </span>
-                <span className="text-xs font-semibold text-slate-700">
-                  Confianza: <strong className="text-slate-950 font-bold">{Number(confidenceScore).toFixed(3)}</strong>
-                </span>
-              </div>
+          {/* Banner de Estrategia Activa si está presente */}
+          {activeStrategy && (
+            <div className="bg-slate-100 border border-slate-200 rounded-lg p-3 mb-6">
+              <span className="text-[9px] uppercase text-slate-500 font-bold tracking-wider block mb-1">
+                Estrategia Sugerida
+              </span>
+              <span className="text-xs font-bold text-slate-900">
+                {activeStrategy.replace(/_/g, " ")}
+              </span>
             </div>
+          )}
 
-            {activeStrategy && (
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 shadow-sm flex flex-col justify-center">
-                <div className="text-[10px] uppercase text-slate-500 font-bold mb-1 tracking-wider">
-                  Estrategia Sugerida
-                </div>
-                <div className="text-xs font-bold text-slate-900">
-                  {activeStrategy.replace(/_/g, " ")}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* AI Verdict & Justification */}
-          <div className="bg-slate-50 border-l-4 border-slate-900 rounded-r-lg p-4 mb-6 shadow-sm">
-            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2">
-              Justificación de IA (Decisión del Modelo)
-            </h2>
-            <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap">
-              {aiJustification}
-            </p>
-          </div>
-
-          {/* Chart Section */}
-          <div>
+          {/* Sección Gráfica */}
+          <div className="mb-6">
             <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 pb-1 border-b border-slate-200">
-              Sección Gráfica (Velas y Volatilidad)
+              Gráfico de Análisis de Mercado
             </h2>
             {chartImageBase64 ? (
-              <div className="border border-gray-300 rounded-lg shadow-sm mb-6 w-full p-2 bg-white flex justify-center">
+              <div className="border border-slate-200 rounded-lg p-2 bg-white flex justify-center max-h-[360px] overflow-hidden">
                 <img
                   src={chartImageBase64}
-                  alt="Gráfico de Volatilidad"
-                  className="w-full max-h-[350px] object-contain rounded"
+                  alt="Gráfico de Mercado"
+                  className="w-full max-h-[340px] object-contain rounded"
                 />
               </div>
             ) : (
-              <div className="border border-dashed border-gray-300 rounded-lg p-10 text-center text-slate-500 bg-slate-50 mb-6">
-                Gráfico no disponible o no capturado en la corrida
+              <div className="border border-dashed border-slate-300 rounded-lg p-10 text-center text-slate-400 bg-slate-50">
+                Gráfico de velas y volatilidad no disponible
               </div>
             )}
           </div>
+
+          {/* Veredicto y Justificación (Destacado) */}
+          <div className="bg-slate-50 border-l-4 border-slate-900 rounded-r-lg p-5 mb-6 shadow-sm">
+            <div className="flex justify-between items-center mb-3">
+              <div>
+                <span className="text-[9px] uppercase text-slate-500 font-bold tracking-wider block mb-1">
+                  Veredicto de la IA
+                </span>
+                <span className={`px-2.5 py-1 rounded text-xs font-extrabold tracking-wider ${getSignalBadgeClass(String(aiDecision))}`}>
+                  {aiDecision}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[9px] uppercase text-slate-500 font-bold tracking-wider block mb-1">
+                  Score de Viabilidad
+                </span>
+                <span className="text-xs font-bold text-slate-900 font-mono">
+                  {Number(confidenceScore).toFixed(3)}
+                </span>
+              </div>
+            </div>
+            <div className="border-t border-slate-200 pt-3">
+              <span className="text-[9px] uppercase text-slate-500 font-bold tracking-wider block mb-1">
+                Justificación del Modelo
+              </span>
+              <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap break-words">
+                {aiJustification}
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Page Footer */}
+        {/* Footer P1 */}
         <div className="border-t border-slate-200 pt-3 text-center text-[10px] text-slate-400">
           Página 1 de 2
         </div>
       </div>
 
-      {/* PAGE 2 */}
-      <div style={{ minHeight: "255mm" }} className="flex flex-col justify-between mt-8">
+      {/* --- PÁGINA 2 --- */}
+      <div
+        style={{
+          minHeight: "255mm",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+        }}
+      >
         <div>
           {/* Header bar P2 */}
           <div className="flex justify-between items-center border-b border-slate-200 pb-2 mb-6">
@@ -176,44 +197,42 @@ export function ReportePDFTemplate({
             </span>
           </div>
 
-          {/* Top 10 Signals Table */}
+          {/* 4. Las 10 Señales Ejecutivas (Top 10 Signals) */}
           <div className="mb-6">
             <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">
-              Top {topSignals.length} Señales Relevantes
+              Top {topSignals.length} Señales Ejecutivas
             </h2>
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-gray-100 text-slate-700 border-b border-gray-300">
-                  <th className="p-2.5 font-semibold text-slate-700">CORE</th>
-                  <th className="p-2.5 font-semibold text-slate-700">SUBCORE</th>
-                  <th className="p-2.5 font-semibold text-slate-700 text-right">PRECIO</th>
-                  <th className="p-2.5 font-semibold text-slate-700 text-center">SEÑAL</th>
-                  <th className="p-2.5 font-semibold text-slate-700">TENDENCIA</th>
-                  <th className="p-2.5 font-semibold text-slate-700 text-right">SCORE</th>
-                  <th className="p-2.5 font-semibold text-slate-700 text-right">PESO</th>
-                  <th className="p-2.5 font-semibold text-slate-700 text-center">ESTADO</th>
+                <tr className="bg-slate-100 text-slate-700 border-b border-slate-300">
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider">CORE</th>
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider">SUBCORE</th>
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider text-right">PRECIO</th>
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider text-center">SEÑAL</th>
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider">TENDENCIA</th>
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider text-right">SCORE</th>
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider text-right">PESO</th>
                 </tr>
               </thead>
               <tbody>
                 {topSignals.map((row, idx) => (
-                  <tr key={idx} className="border-b border-gray-200 hover:bg-slate-50 transition-colors">
-                    <td className="p-2.5 font-bold text-slate-900">{row.core.replace("A_", "")}</td>
-                    <td className="p-2.5 text-slate-600">{row.subCore || "-"}</td>
-                    <td className="p-2.5 text-right font-mono text-slate-700">${row.precio.toFixed(2)}</td>
-                    <td className="p-2.5 text-center">
+                  <tr key={idx} className="border-b border-slate-200">
+                    <td className="p-2 font-bold text-slate-900">{row.core.replace("A_", "")}</td>
+                    <td className="p-2 text-slate-600">{row.subCore || "-"}</td>
+                    <td className="p-2 text-right font-mono text-slate-700">${Number(row.precio).toFixed(2)}</td>
+                    <td className="p-2 text-center">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getSignalBadgeClass(row.tipoSenal)}`}>
                         {row.tipoSenal}
                       </span>
                     </td>
-                    <td className="p-2.5 text-slate-600">{row.tendencia}</td>
-                    <td className="p-2.5 text-right font-mono font-bold text-slate-950">{row.score.toFixed(3)}</td>
-                    <td className="p-2.5 text-right font-mono text-slate-600">{row.peso.toFixed(2)}</td>
-                    <td className="p-2.5 text-center text-slate-600">{row.estado}</td>
+                    <td className="p-2 text-slate-600">{row.tendencia}</td>
+                    <td className="p-2 text-right font-mono font-bold text-slate-900">{Number(row.score).toFixed(3)}</td>
+                    <td className="p-2 text-right font-mono text-slate-600">{Number(row.peso).toFixed(2)}</td>
                   </tr>
                 ))}
                 {topSignals.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="p-4 text-center text-slate-500 italic">
+                    <td colSpan={7} className="p-4 text-center text-slate-500 italic">
                       No se han registrado señales para esta simulación.
                     </td>
                   </tr>
@@ -222,64 +241,89 @@ export function ReportePDFTemplate({
             </table>
           </div>
 
-          {/* Desglose por Core */}
-          <div>
+          {/* 5. Desglose de Núcleos (Core Breakdown) */}
+          <div className="mb-6">
             <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">
-              Desglose Detallado por Core
+              Desglose Técnico de los 5 Núcleos
             </h2>
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              {cores.map((core) => {
-                const data = getCoreData(core.id);
-                return (
-                  <div
-                    key={core.id}
-                    className="bg-gray-50 border border-gray-200 p-4 rounded-md shadow-sm flex flex-col justify-between"
-                  >
-                    <div className="flex justify-between items-center mb-2 border-b border-gray-200 pb-1.5">
-                      <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                        {core.label}
-                      </span>
-                      <div className="flex gap-2 items-center">
-                        {data.hasData && (
-                          <>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getSignalBadgeClass(data.tipoSenal)}`}>
-                              {data.tipoSenal}
-                            </span>
-                            <span className="text-[10px] font-bold text-slate-600">
-                              Score: {data.score.toFixed(3)}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-slate-600 leading-relaxed overflow-hidden text-ellipsis line-clamp-3">
-                      {core.id === "A_INSTITUCIONAL" && instData ? (
-                        `Ownership: ${instData.metrics?.fundsOwnershipPct?.toFixed(1) ?? "0"}%. Flujo: $${(instData.metrics?.netFlow ?? 0).toLocaleString()}. Tendencia inst: ${instData.trends?.direction ?? "N/A"}.`
-                      ) : core.id === "A_FUNDAMENTAL" && fundamentalAnalysis?.fundamentalData ? (
-                        `PE: ${fundamentalAnalysis.fundamentalData.pe ?? "N/A"} | PB: ${fundamentalAnalysis.fundamentalData.pb ?? "N/A"} | ROE: ${fundamentalAnalysis.fundamentalData.roe ? (fundamentalAnalysis.fundamentalData.roe * 100).toFixed(1) + "%" : "N/A"}. Verdict: ${fundamentalAnalysis.verdict || "N/A"}.`
-                      ) : (
-                        data.resumen
-                      )}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
+            <table className="w-full border-collapse" style={{ tableLayout: "fixed" }}>
+              <tbody>
+                <tr>
+                  <td className="w-1/2 pr-2 pb-3" style={{ verticalAlign: "top" }}>
+                    {renderCoreCard("A_FUNDAMENTAL", "Fundamental")}
+                  </td>
+                  <td className="w-1/2 pl-2 pb-3" style={{ verticalAlign: "top" }}>
+                    {renderCoreCard("A_INSTITUCIONAL", "Institucional")}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="w-1/2 pr-2 pb-3" style={{ verticalAlign: "top" }}>
+                    {renderCoreCard("A_TECNICO", "Técnico")}
+                  </td>
+                  <td className="w-1/2 pl-2 pb-3" style={{ verticalAlign: "top" }}>
+                    {renderCoreCard("A_NOTICIAS", "Noticias")}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="w-1/2 pr-2" style={{ verticalAlign: "top" }}>
+                    {renderCoreCard("A_ESTRATEGIA", "Estrategia")}
+                  </td>
+                  <td className="w-1/2 pl-2">
+                    {/* Celda vacía para mantener la estructura de tabla */}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* Footer info */}
+        {/* 6. Pie de Página (Footer Legal) */}
         <div>
           <div className="border-t border-slate-200 pt-3 text-center text-[10px] text-slate-400">
-            Este documento es confidencial y para uso exclusivo del comité de inversiones de la plataforma Inversions.
+            Aviso: Esta explicación y análisis no constituye orden ni recomendación ejecutable.
           </div>
-          <div className="text-center text-[10px] text-slate-400 mt-1">
+          <div className="text-center text-[9px] text-slate-400 mt-1">
             Página 2 de 2
           </div>
         </div>
       </div>
     </div>
   );
+
+  // Render a clean card for a core
+  function renderCoreCard(coreId: string, label: string) {
+    const data = getCoreData(coreId);
+    return (
+      <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm h-full flex flex-col justify-between">
+        <div className="flex justify-between items-center mb-2 border-b border-slate-200 pb-1">
+          <span className="text-[10px] font-extrabold text-slate-900 uppercase tracking-wider">
+            {label}
+          </span>
+          <div className="flex gap-2 items-center">
+            {data.hasData && (
+              <>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${getSignalBadgeClass(data.tipoSenal)}`}>
+                  {data.tipoSenal}
+                </span>
+                <span className="text-[9px] font-bold text-slate-600">
+                  Score: {data.score.toFixed(3)}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        <p className="text-[10px] text-slate-600 leading-relaxed whitespace-pre-wrap break-words">
+          {coreId === "A_INSTITUCIONAL" && instData ? (
+            `Ownership: ${instData.metrics?.fundsOwnershipPct?.toFixed(1) ?? "0"}%. Flujo: $${(instData.metrics?.netFlow ?? 0).toLocaleString()}. Tendencia inst: ${instData.trends?.direction ?? "N/A"}.`
+          ) : coreId === "A_FUNDAMENTAL" && fundamentalAnalysis?.fundamentalData ? (
+            `PE: ${fundamentalAnalysis.fundamentalData.pe ?? "N/A"} | PB: ${fundamentalAnalysis.fundamentalData.pb ?? "N/A"} | ROE: ${fundamentalAnalysis.fundamentalData.roe ? (fundamentalAnalysis.fundamentalData.roe * 100).toFixed(1) + "%" : "N/A"}. Verdict: ${fundamentalAnalysis.verdict || "N/A"}.`
+          ) : (
+            data.resumen
+          )}
+        </p>
+      </div>
+    );
+  }
 }
 
 export default ReportePDFTemplate;
