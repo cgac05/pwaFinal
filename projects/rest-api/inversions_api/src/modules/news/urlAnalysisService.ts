@@ -160,12 +160,40 @@ function summarize(text: string): string {
 }
 
 function credibilityFor(input: NewsSourceInput, text: string): number {
-  let score = 0.55;
   const url = input.url?.toLowerCase() ?? "";
-  if (/reuters|bloomberg|cnbc|marketwatch|wsj|finance\.yahoo|sec\.gov|nasdaq|investor/.test(url)) score += 0.25;
-  if (url.startsWith("https://")) score += 0.08;
-  if (!input.url && input.text) score -= 0.08;
-  if (text.length > 700) score += 0.07;
+  const provider = (input.provider ?? "").toLowerCase();
+
+  // Tier 1: highest-credibility financial sources
+  const isTier1 = /reuters\.com|bloomberg\.com|wsj\.com|ft\.com|sec\.gov/.test(url);
+  // Tier 2: well-known financial media (includes Yahoo Finance RSS links)
+  const isTier2 = /cnbc\.com|marketwatch\.com|finance\.yahoo\.com|yahoo\.com\/finance|yahoo\.com\/news|nasdaq\.com|investor\.com|seekingalpha\.com|barrons\.com|fortune\.com|thestreet\.com/.test(url);
+  // Tier 3: general reliable media
+  const isTier3 = /nytimes\.com|washingtonpost\.com|apnews\.com|bbc\.com|economist\.com|businessinsider\.com|forbes\.com|morningstar\.com/.test(url);
+
+  let score: number;
+
+  if (isTier1) {
+    // 0.82 - 0.90 range depending on content depth
+    score = 0.82 + (text.length > 2000 ? 0.08 : text.length > 700 ? 0.05 : 0.02);
+  } else if (isTier2) {
+    // 0.68 - 0.75 range
+    score = 0.68 + (text.length > 2000 ? 0.07 : text.length > 700 ? 0.04 : 0.01);
+  } else if (isTier3) {
+    // 0.58 - 0.64 range
+    score = 0.58 + (text.length > 2000 ? 0.06 : text.length > 700 ? 0.03 : 0.0);
+  } else if (url.startsWith("https://")) {
+    // Unknown HTTPS source — scored by content quality only
+    score = 0.42 + (text.length > 2000 ? 0.10 : text.length > 700 ? 0.06 : text.length > 200 ? 0.03 : 0.0);
+  } else if (!input.url && input.text) {
+    // Plain text paste — scored by length/depth
+    score = 0.38 + (text.length > 2000 ? 0.08 : text.length > 700 ? 0.04 : 0.0);
+  } else {
+    score = 0.30;
+  }
+
+  // Bonus for verified data providers (Finnhub, Polygon, Alpha Vantage supply vetted data)
+  if (/finnhub|polygon|alphavantage/.test(provider)) score += 0.05;
+
   return Math.max(0.15, Math.min(0.98, Number(score.toFixed(2))));
 }
 
