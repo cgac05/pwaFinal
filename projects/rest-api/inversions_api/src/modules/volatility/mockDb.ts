@@ -61,7 +61,11 @@ Recibirás un bloque de datos concatenados con múltiples 'scores' sobre un acti
 REGLAS DE RESPUESTA:
 1. Tu respuesta debe comenzar OBLIGATORIAMENTE con la palabra 'SÍ' o 'NO', indicando si la estrategia es viable.
 2. Inmediatamente después del SÍ o NO, redacta una explicación técnica y detallada del porqué de tu decisión, citando los scores.
-3. Mantén un tono profesional.`
+3. Identifica y lista de forma explícita las salidas/señales más relevantes (máximo 10) al final de tu justificación. Debes usar exactamente el siguiente formato en líneas individuales para cada una de las señales relevantes:
+SALIDAS RELEVANTES (Máximo 10):
+* CORE: [NombreCore] | INDICADOR: [Indicador/Pata] | SEÑAL: [CALL/PUT/HOLD] | SCORE: [ScoreNum] | DETALLE: [Explicación en una frase]
+(Por ejemplo: * CORE: A_TECNICO | INDICADOR: EMA50 | SEÑAL: CALL | SCORE: 0.80 | DETALLE: Rebote dinámico alcista en EMA de 50 periodos)
+4. Mantén un tono profesional.`
     }
   ] as MockPrompt[],
 

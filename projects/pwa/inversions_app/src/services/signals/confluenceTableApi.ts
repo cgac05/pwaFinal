@@ -78,6 +78,8 @@ export interface SimulationRequestPayload {
   indicadoresHabilitados: SubCoreIndicador[];
   estrategia: string;
   toleranciaRiesgo: "BAJO" | "MEDIO" | "ALTO";
+  // FIC: Extra rows from strategy-side flows so the backend IA core sees the full table.
+  strategyRows?: ConfluenceSignalRow[];
   // FIC: Optional historical as-of date (ISO yyyy-mm-dd) — backtest a past day (US8).
   fechaHistorica?: string;
   // FIC: When true and >=2 indicators are enabled, only coinciding indicator rows return (US7).

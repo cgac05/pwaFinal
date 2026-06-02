@@ -25,6 +25,7 @@ import {
 import { WheelParamsModal, type WheelModalParams } from "./WheelParamsModal";
 import { ComplexStrategyParamsModal, type ComplexFormState } from "./ComplexStrategyParamsModal";
 import { executeStrategy } from "../../../services/strategies/strategyApi";
+import { buildComplexStrategyRows } from "../../../services/strategies/buildStrategyRows";
 import type { FromChainResponse } from "../../../services/strategies/strategyApi";
 import { useSignalStore } from "../../../store/signals";
 
@@ -799,11 +800,15 @@ export function SimulationControlPanel({
             posiciones_actuales: complexParams.portfolio_posiciones,
           },
         };
-        const [simResult, complexRes] = await Promise.all([
-          runSimulation(simPayload),
-          executeStrategy(complexPayload),
-        ]);
+        const complexRes = await executeStrategy(complexPayload);
         onComplexResult?.(complexRes, estrategia, temporalidad);
+
+        const complexRows = buildComplexStrategyRows(complexRes, estrategia, ticket, temporalidad);
+        const simResult = await runSimulation({
+          ...simPayload,
+          strategyRows: complexRows.rows,
+        });
+
         onResult(simResult);
         incrementSimulationRunCount();
         return;

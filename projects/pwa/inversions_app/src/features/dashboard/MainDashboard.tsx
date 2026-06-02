@@ -22,7 +22,7 @@ import { ActivityBar } from "../../components/ui/ActivityBar";
 import { LeftPanel } from "../sidebar/LeftPanel";
 import { Badge } from "../../components/ui/Badge";
 import type { ConfluenceSignalRow, SimulationResponse, CoreId, SignalMetrics } from "../../services/signals/confluenceTableApi";
-import { buildComplexStrategyRows, STRATEGY_CORE } from "../../services/strategies/buildStrategyRows";
+import { buildComplexStrategyRows } from "../../services/strategies/buildStrategyRows";
 import { ComplexStrategyModal } from "./simulation/ComplexStrategyModal";
 import type { FromChainResponse } from "../../services/strategies/strategyApi";
 import { useSignalStore } from "../../store/signals";
@@ -105,13 +105,7 @@ export function MainDashboard() {
   }, [selectedSymbol, setSelectedStrike]);
 
   const handleSimulationResult = useCallback((result: SimulationResponse) => {
-    setSimulationRows((prev) => {
-      // Preserve any A_ESTRATEGIA rows (from complex strategy execution) that were
-      // added by handleComplexResult, since onResult fires after onComplexResult.
-      const existing = prev ?? [];
-      const strategyRows = existing.filter((r) => r.core === STRATEGY_CORE);
-      return [...result.table, ...strategyRows];
-    });
+    setSimulationRows(result.table);
     setSimulationVerdict(result.verdict);
     // FIC: US-5 — prefer backend-computed metrics; fall back to a client-side count. (EN)
     if (result.signalMetrics) {
@@ -160,12 +154,7 @@ export function MainDashboard() {
     setActiveSimulationStrategy(strategy);
     setStrategyError(null);
     try {
-      const payload = buildComplexStrategyRows(result, strategy, selectedSymbol, timeframe);
-      setSimulationRows((prev) => {
-        const existing = prev ?? [];
-        const filtered = existing.filter((r) => r.core !== STRATEGY_CORE);
-        return [...filtered, ...payload.rows];
-      });
+      buildComplexStrategyRows(result, strategy, selectedSymbol, timeframe);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error desconocido al procesar la estrategia";
       setStrategyError(msg);

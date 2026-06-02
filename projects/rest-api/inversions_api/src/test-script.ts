@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./config/envBootstrap";
 import { buildStrategyFromChain } from "./routes/strategies/complex/strategyFromChainHandler";
 
 async function run() {

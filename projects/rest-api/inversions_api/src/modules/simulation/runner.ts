@@ -135,6 +135,9 @@ export function validateSimulationRequest(body: any): SimulationValidationError 
   if (!Array.isArray(body.indicadoresHabilitados)) {
     return { error_code: "INVALID_SIMULATION_REQUEST", message: "'indicadoresHabilitados' debe ser un array.", field: "indicadoresHabilitados" };
   }
+  if (body.strategyRows !== undefined && !Array.isArray(body.strategyRows)) {
+    return { error_code: "INVALID_SIMULATION_REQUEST", message: "'strategyRows' debe ser un array cuando se envía.", field: "strategyRows" };
+  }
   for (const i of body.indicadoresHabilitados) {
     if (!ALL_SUBCORES_INDICADOR.includes(i)) {
       return { error_code: "INVALID_SIMULATION_REQUEST", message: `indicador invalido: ${i}`, field: "indicadoresHabilitados" };
@@ -268,6 +271,7 @@ export async function runSimulation(
     symbol: request.ticket,
     timeframe: request.temporalidad
   });
+  const strategyRows = Array.isArray(request.strategyRows) ? request.strategyRows : [];
 
   let table: ConfluenceSignalRow[] = [];
   if (enabledCores.has("A_INDICADORES") && enabledSubs.length > 0) {
@@ -370,7 +374,11 @@ export async function runSimulation(
       sourceInputHash: verdict.source_input_hash,
       computedAt: computedAt,
       previousRows: deps.previousRows,
-      precalculatedRows: [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows],
+      precalculatedRows: [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...strategyRows],
+      estrategia: request.estrategia,
+      toleranciaRiesgo: request.toleranciaRiesgo,
+      rangoEstrategia: request.rangoEstrategia,
+      fechaHistorica: request.fechaHistorica,
     });
   }
 
@@ -395,9 +403,9 @@ export async function runSimulation(
       previousRows: deps.previousRows,
       now: computedAt
     });
-    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...stubs];
+    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...strategyRows, ...stubs];
   } else {
-    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows];
+    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...strategyRows];
   }
 
   // FIC: US8 bugfix — when running on historical (as-of) data, the rows MUST display the REAL date

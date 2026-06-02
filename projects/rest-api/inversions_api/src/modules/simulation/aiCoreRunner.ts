@@ -157,6 +157,10 @@ export async function runAiCore(params: {
   computedAt: Date;
   previousRows?: ConfluenceSignalRow[];
   precalculatedRows: ConfluenceSignalRow[];
+  estrategia?: string;
+  toleranciaRiesgo?: string;
+  rangoEstrategia?: { from: string; to: string };
+  fechaHistorica?: string;
 }): Promise<ConfluenceSignalRow> {
   const geminiService = new GeminiAgentService();
 
@@ -239,11 +243,22 @@ export async function runAiCore(params: {
     ? mockDb.prompts[0].basePrompt
     : "Eres un analista financiero. Analiza los siguientes datos.";
 
-  // 4. Serializar la tabla pre-calculada
+  // 4. Serializar la tabla pre-calculada completa. No omitir ninguna fila recibida.
   const rowsContext = simulatedPrecalculatedRows.map((r, i) => {
+    const subCoreStr = r.subCore ? ` | SUBCORE=${r.subCore}` : "";
+    const objetivoStr = r.observacion.objetivo ? ` | OBJETIVO=${r.observacion.objetivo}` : "";
+    const fuenteStr = r.fuente ? ` | FUENTE=${r.fuente}` : "";
+    const fechaStr = r.fecha ? ` | FECHA=${r.fecha}` : "";
+    const estadoStr = r.estado ? ` | ESTADO=${r.estado}` : "";
+    const pesoStr = typeof r.peso === "number" ? ` | PESO=${r.peso.toFixed(2)}` : "";
+    const precioStr = typeof r.precio === "number" ? ` | PRECIO=${r.precio.toFixed(2)}` : "";
+
     const metricEntries = Object.entries(r.observacion.metricas || {}).filter(([, v]) => v != null);
-    const metricsStr = metricEntries.length > 0 ? metricEntries.map(([k, v]) => `${k}=${v}`).join(", ") : "N/A";
-    return `Fila ${i + 1}: CORE=${r.core} | SEÑAL=${r.tipoSenal} | TENDENCIA=${r.tendencia} | SCORE=${r.score.toFixed(3)} | EXPLICACION=${r.observacion.explicacion} | METRICAS=[${metricsStr}]`;
+    const metricsStr = metricEntries.length > 0
+      ? metricEntries.map(([k, v]) => `${k}=${typeof v === "number" ? v.toFixed(4) : v}`).join(", ")
+      : "N/A";
+
+    return `Fila ${i + 1}: CORE=${r.core}${subCoreStr}${objetivoStr}${fuenteStr}${fechaStr}${estadoStr}${pesoStr}${precioStr} | SEÑAL=${r.tipoSenal} | TENDENCIA=${r.tendencia} | SCORE=${r.score.toFixed(3)} | EXPLICACION=${r.observacion.explicacion} | METRICAS=[${metricsStr}]`;
   }).join("\n");
 
   const fullPrompt = `${basePromptText}
@@ -255,12 +270,18 @@ CONFIANZA: [Un número de 0.00 a 1.00 indicando tu nivel de certeza]
 JUSTIFICACION: 
 [Explica tu decisión con:
 1. Un resumen general de tu veredicto.
-2. Un desglose detallado CORE por CORE (Técnico, Fundamental, Institucional, Noticias, etc.) explicando cómo cada uno influyó en la decisión final.]
+2. Un desglose detallado CORE por CORE (Técnico, Fundamental, Institucional, Noticias, Estrategia, IA, etc.) explicando cómo cada uno influyó en la decisión final.
+3. No omitas ninguna fila recibida; si aparece A_ESTRATEGIA o cualquier otra fila de estrategia, inclúyela explícitamente en el razonamiento.
+4. Identifica y lista de forma explícita las salidas/señales más relevantes (máximo 10) al final de tu justificación. Debes usar exactamente el siguiente formato en líneas individuales para cada una de las señales relevantes:
+SALIDAS RELEVANTES (Máximo 10):
+* CORE: [NombreCore] | INDICADOR: [Indicador/Pata] | SEÑAL: [CALL/PUT/HOLD] | SCORE: [ScoreNum] | DETALLE: [Explicación en una frase]
+(Por ejemplo: * CORE: A_TECNICO | INDICADOR: EMA50 | SEÑAL: CALL | SCORE: 0.80 | DETALLE: Rebote dinámico alcista en EMA de 50 periodos)]
 
-Ticker: ${params.ticket}
-Timeframe: ${params.timeframe}
-
-DATOS DE ENTRADA (Cores pre-calculados):
+CONTEXTO DEL ANÁLISIS:
+- Ticker: ${params.ticket}
+- Timeframe (Temporalidad): ${params.timeframe}
+${params.estrategia ? `- Estrategia Seleccionada: ${params.estrategia}\n` : ""}${params.toleranciaRiesgo ? `- Tolerancia al Riesgo: ${params.toleranciaRiesgo}\n` : ""}${params.rangoEstrategia ? `- Rango de Estrategia: Desde ${params.rangoEstrategia.from} hasta ${params.rangoEstrategia.to}\n` : ""}${params.fechaHistorica ? `- Fecha Histórica de Simulación: ${params.fechaHistorica}\n` : ""}
+DATOS DE ENTRADA (Todos los renglones pre-calculados):
 ${rowsContext}`;
 
   try {

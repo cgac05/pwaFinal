@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./config/envBootstrap";
 import express from "express";
 import path from "path";
 import { initializeEnvironment } from "./config/environment";
