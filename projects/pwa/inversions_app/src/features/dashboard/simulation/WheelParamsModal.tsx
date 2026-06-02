@@ -579,25 +579,43 @@ function WheelEligibilitySummary({
 let _setSuggestionStatus: React.Dispatch<React.SetStateAction<"idle"|"loading"|"found"|"not_found">> | null = null;
 let _onChangeSetter: ((p: WheelModalParams) => void) | null = null;
 let _latestParams: WheelModalParams | null = null;
+// FIC: Monotonic counter — incremented on each call so stale async responses are discarded. (EN)
+// FIC: Contador monótono — incrementado en cada llamada para descartar respuestas asíncronas obsoletas. (ES)
+let _suggestCallVersion = 0;
 
-// FIC: Fetch option chain, find nearest OTM call above strikePut, autocomplete CC fields. (EN)
-// FIC: Obtiene la cadena de opciones, encuentra el call OTM más cercano sobre strikePut, autocompleta CC. (ES)
+// FIC: Fetch option chain for the PUT's own expiration, find best OTM call (delta ~0.30). (EN)
+// FIC: Obtiene la cadena de opciones de la expiración del PUT, encuentra el mejor call OTM (delta ~0.30). (ES)
+// FIC: expiration param avoids a redundant fetchExpirations round-trip and anchors to the correct date. (EN)
+// FIC: El parámetro expiration evita un round-trip innecesario a fetchExpirations y ancla la fecha correcta. (ES)
 async function suggestCallFromChain(
   params: WheelModalParams,
   strikePut: number,
-  ticker: string
+  ticker: string,
+  expiration?: string,
 ): Promise<void> {
   if (!_setSuggestionStatus || !_onChangeSetter) return;
+
+  // FIC: Capture version before any await — discard result if a newer call arrived. (EN)
+  // FIC: Captura la versión antes de cualquier await — descarta el resultado si llegó una llamada más reciente. (ES)
+  _suggestCallVersion += 1;
+  const myVersion = _suggestCallVersion;
+
   _setSuggestionStatus("loading");
   _latestParams = params;
 
   try {
-    // FIC: Fetch nearest expiration — same default as OptionChainTable. (EN)
-    const expData = await fetchExpirations(ticker);
-    const expiration = expData.expirations[0];
-    if (!expiration) { _setSuggestionStatus("not_found"); return; }
+    // FIC: Use provided expiration when available; fall back to nearest only if not supplied. (EN)
+    // FIC: Usa la expiración provista si está disponible; retrocede a la más cercana solo si no se proveyó. (ES)
+    let resolvedExpiration = expiration;
+    if (!resolvedExpiration) {
+      const expData = await fetchExpirations(ticker);
+      if (myVersion !== _suggestCallVersion) return; // stale — newer call already in flight
+      resolvedExpiration = expData.expirations[0];
+    }
+    if (!resolvedExpiration) { _setSuggestionStatus("not_found"); return; }
 
-    const chain = await fetchOptionChain(ticker, expiration);
+    const chain = await fetchOptionChain(ticker, resolvedExpiration);
+    if (myVersion !== _suggestCallVersion) return; // stale — discard
 
     // FIC: OTM filter — strike must exceed underlying price, not just PUT strike. (EN)
     // FIC: Filtro OTM — el strike debe superar el precio del subyacente, no solo el strike del PUT. (ES)
@@ -614,6 +632,10 @@ async function suggestCallFromChain(
     if (!best) { _setSuggestionStatus("not_found"); return; }
     const primaCall = parseFloat(((best.callBid + best.callAsk) / 2).toFixed(4));
 
+    // FIC: Final staleness check before writing state — guards against race on slow networks. (EN)
+    // FIC: Verificación final de obsolescencia antes de escribir estado — protege contra race en redes lentas. (ES)
+    if (myVersion !== _suggestCallVersion) return;
+
     // FIC: Use latest params snapshot to avoid stale closure overwriting user edits. (EN)
     const currentParams = _latestParams ?? params;
     _onChangeSetter({
@@ -623,9 +645,9 @@ async function suggestCallFromChain(
     _setSuggestionStatus("found");
 
   } catch {
-    // FIC: Network failure — stay silent, allow manual input. (EN)
-    // FIC: Falla de red — permanecer silencioso, permitir captura manual. (ES)
-    _setSuggestionStatus("idle");
+    // FIC: Network failure or cancellation — stay silent, allow manual input. (EN)
+    // FIC: Falla de red o cancelación — permanecer silencioso, permitir captura manual. (ES)
+    if (myVersion === _suggestCallVersion) _setSuggestionStatus("idle");
   }
 }
 
@@ -782,7 +804,7 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
         fresh.csp.primaPut  = parseFloat(selectedStrike.premium.toFixed(4));
         // FIC: Also suggest a call when modal opens with a PUT already selected. (EN)
         // FIC: También sugerir un call cuando el modal abre con un PUT ya seleccionado. (ES)
-        void suggestCallFromChain(fresh, selectedStrike.strike, ticker);
+        void suggestCallFromChain(fresh, selectedStrike.strike, ticker, selectedStrike.expiration);
       } else if (selectedStrike?.type === "call") {
         fresh.cc.strikeCall = selectedStrike.strike;
         fresh.cc.primaCall  = parseFloat(selectedStrike.premium.toFixed(4));
@@ -822,9 +844,9 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
           csp: { ...params.csp, strikePut: selectedStrike.strike, primaPut: parseFloat(selectedStrike.premium.toFixed(4)) },
         };
         onChange(updatedParams);
-        // FIC: Trigger automatic call suggestion after PUT selection. (EN)
-        // FIC: Disparar sugerencia automática de call tras selección de PUT. (ES)
-        void suggestCallFromChain(updatedParams, selectedStrike.strike, ticker);
+        // FIC: Trigger automatic call suggestion after PUT selection — pass expiration to avoid redundant HTTP. (EN)
+        // FIC: Disparar sugerencia de call tras selección de PUT — pasa expiración para evitar HTTP redundante. (ES)
+        void suggestCallFromChain(updatedParams, selectedStrike.strike, ticker, selectedStrike.expiration);
       } else if (selectedStrike.type === "call") {
         // FIC: CALL selected — update CC only. CSP is left untouched. (EN)
         // FIC: CALL seleccionado — actualiza solo CC. CSP no se modifica. (ES)
@@ -1385,14 +1407,13 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
                       { label: "Vencimiento actual",  value: roll1.currentExpiration ?? "—" },
                       { label: "Nuevo vencimiento",   value: roll1.nextExpiration ?? "—" },
                       { label: "Strike CALL actual",  value: money(roll1.strikeCallCurrent ?? 0) },
-                      { label: "Strike sugerido",     value: money(roll1.strikeCallSuggested) },
-                      { label: "Prima estimada",      value: `${money(roll1.prima ?? 0)} / acción` },
-                      { label: "Crédito estimado",    value: money(roll1.creditoEstimado ?? 0) },
+                      { label: 'Strike sugerido',     value: money(roll1.strikeCallSuggested ?? 0) },
+                      { label: 'Prima estimada',      value: `${money(roll1.prima ?? 0)} / acción` },
+                      { label: 'Crédito estimado',    value: money(roll1.creditoEstimado ?? 0) },
                     ])}
                   </div>
 
                   <div style={stageCardStyle}>
-                    {/* FIC: ETAPA 6 — only real premiums: PUT + CALL + Roll 1 if available. (EN) */}
                     {/* FIC: ETAPA 6 — solo primas reales: PUT + CALL + Roll 1 si existe. (ES) */}
                     <div style={sectionTitleStyle}>ETAPA 6: RESUMEN DE INGRESOS</div>
                     {stage1Available || stage3Available
