@@ -102,24 +102,62 @@ export class GeminiAgentService {
     return this.ai !== null;
   }
 
-  private async callModel(prompt: string, model: string): Promise<string> {
+  private async callModel(
+    prompt: string, 
+    model: string, 
+    systemInstruction?: string,
+    generationConfig?: { temperature?: number; topP?: number; maxOutputTokens?: number }
+  ): Promise<string> {
     if (!this.ai) {
       throw new Error("Gemini is not configured. Set GEMINI_API_KEY to enable AI agent execution.");
     }
 
-    const response = await this.ai.models.generateContent({
-      model,
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-    });
-
-    return getResponseText(response);
-  }
-
-  public async generateAgentResponse(request: IAgentMessage): Promise<IGeminiResponse> {
-    const prompt = createGeminiPrompt(request.role, request.userPrompt);
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const text = await backoffRetry(() => this.callModel(prompt, this.primaryModel), 3, 400);
+      const config: any = {
+        temperature: generationConfig?.temperature ?? 0.2,
+        topP: generationConfig?.topP ?? 0.9,
+        maxOutputTokens: generationConfig?.maxOutputTokens ?? 4096,
+        abortSignal: controller.signal
+      };
+
+      if (systemInstruction) {
+        config.systemInstruction = systemInstruction;
+      }
+
+      const response = await this.ai.models.generateContent({
+        model,
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config
+      });
+
+      return getResponseText(response);
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+  }
+
+  public async generateAgentResponse(
+    request: IAgentMessage,
+    systemInstruction?: string,
+    generationConfig?: { temperature?: number; topP?: number; maxOutputTokens?: number }
+  ): Promise<IGeminiResponse> {
+    const role = request.role;
+    const systemPrompt = role === "analyzer"
+      ? "You are a Gemini-powered market volatility analyzer. Produce both structured market insight and a short opinion summary."
+      : role === "strategist"
+        ? "You are a Gemini-powered strategist. Generate a recommended options strategy with a clear rationale and a structured decision payload."
+        : "You are a Gemini-powered executor advisor. Confirm execution readiness and describe any pre-trade checks required in structured form.";
+
+    const requirements = `Response Requirements:\n- Answer with a concise natural language analysis.\n- Include a valid JSON object under an "analysis" key.\n- Do not wrap JSON in markdown code fences.\n- If JSON cannot be produced, return {"analysis": {}} and explain why.\n- Keep the opinion summary short and specific.`;
+
+    const finalSystemInstruction = systemInstruction ?? `${systemPrompt}\n\n${requirements}`;
+    const userPrompt = request.userPrompt;
+
+    try {
+      const text = await backoffRetry(() => this.callModel(userPrompt, this.primaryModel, finalSystemInstruction, generationConfig), 3, 400);
       return {
         model: this.primaryModel,
         text,
@@ -132,7 +170,7 @@ export class GeminiAgentService {
         throw primaryError;
       }
 
-      const text = await backoffRetry(() => this.callModel(prompt, this.fallbackModel), 3, 800);
+      const text = await backoffRetry(() => this.callModel(userPrompt, this.fallbackModel, finalSystemInstruction, generationConfig), 3, 800);
       return {
         model: this.fallbackModel,
         text,
@@ -143,7 +181,12 @@ export class GeminiAgentService {
     }
   }
 
-  public async generateSimpleResponse(prompt: string, modelType: 'primary' | 'fallback' = 'primary'): Promise<{ model: string; text: string }> {
+  public async generateSimpleResponse(
+    prompt: string, 
+    modelType: 'primary' | 'fallback' = 'primary',
+    systemInstruction?: string,
+    generationConfig?: { temperature?: number; topP?: number; maxOutputTokens?: number }
+  ): Promise<{ model: string; text: string }> {
     if (!this.ai) {
       throw new Error("Gemini is not configured. Set GEMINI_API_KEY to enable AI agent execution.");
     }
@@ -151,7 +194,7 @@ export class GeminiAgentService {
     const targetModel = modelType === 'fallback' ? this.fallbackModel : this.primaryModel;
 
     try {
-      const text = await backoffRetry(() => this.callModel(prompt, targetModel), 3, 400);
+      const text = await backoffRetry(() => this.callModel(prompt, targetModel, systemInstruction, generationConfig), 3, 400);
       return { model: targetModel, text };
     } catch (primaryError) {
       const fallback = targetModel === this.primaryModel ? this.fallbackModel : this.primaryModel;
@@ -160,7 +203,7 @@ export class GeminiAgentService {
       }
 
       console.warn(`Selected model ${targetModel} failed. Switching to fallback ${fallback}.`);
-      const text = await backoffRetry(() => this.callModel(prompt, fallback), 3, 800);
+      const text = await backoffRetry(() => this.callModel(prompt, fallback, systemInstruction, generationConfig), 3, 800);
       return { model: fallback, text };
     }
   }

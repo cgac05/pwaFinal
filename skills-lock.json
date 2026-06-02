@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "inversion": {
+      "source": "guia-matthieu/clawfu-skills",
+      "sourceType": "github",
+      "skillPath": "skills/strategy/inversion/SKILL.md",
+      "computedHash": "b5519e4252e2124e442febb0a1b57249b97b583bd74a6664ff3b93679df21145"
+    }
+  }
+}

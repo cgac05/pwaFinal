@@ -21,13 +21,15 @@ import {
   Trash2, 
   ArrowRight,
   RefreshCw,
-  X
+  X,
+  AlertTriangle
 } from "lucide-react";
 
 interface ExtendedChatMessage extends ChatMessage {
   id: string;
   modelUsed?: string;
   status?: "pending" | "completed" | "error";
+  refused?: boolean;
 }
 
 interface GlobalChatDrawerProps {
@@ -37,7 +39,7 @@ interface GlobalChatDrawerProps {
 }
 
 export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalChatDrawerProps) {
-  const { selectedInstrument, dashboardSnapshot } = useSignalStore();
+  const { selectedInstrument, dashboardSnapshot } = useSignalStore() as any;
   const activeTicker = selectedInstrument?.symbol ?? dashboardSnapshot?.cards[0]?.instrument ?? "SPY";
 
   const [messages, setMessages] = useState<ExtendedChatMessage[]>([]);
@@ -167,6 +169,42 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
   const injectResultQuestion = (ticker: string, decision: string) => {
     const question = `¿Por qué el reporte de ${ticker} se evaluó como ${decision}? Analiza detalladamente sus scores de volatilidad.`;
     setInput(question);
+  };
+
+  const renderMessageContent = (msg: ExtendedChatMessage) => {
+    if (msg.role !== "user" && msg.content.includes("INVERSIÓN (Munger):")) {
+      const parts = msg.content.split("INVERSIÓN (Munger):");
+      const analysisPart = parts[0];
+      const inversionPart = parts[1];
+
+      return (
+        <div style={{ display: "flex", flexDirection: "column", width: "100%", gap: "0.5rem" }}>
+          {analysisPart.trim() && (
+            <div style={{ whiteSpace: "pre-wrap" }}>
+              {analysisPart}
+            </div>
+          )}
+          <div style={{
+            background: "rgba(255, 193, 7, 0.05)",
+            borderLeft: "2px solid #FFC107",
+            padding: "0.6rem 0.8rem",
+            borderRadius: "4px",
+            marginTop: "0.4rem"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.3rem" }}>
+              <AlertTriangle size={14} color="#FFC107" />
+              <span style={{ fontSize: "0.72rem", color: "var(--color-text-muted)", fontWeight: 700, textTransform: "uppercase" }}>
+                Inversión de Munger
+              </span>
+            </div>
+            <div style={{ fontSize: "0.85rem", color: "var(--color-text)", whiteSpace: "pre-wrap" }}>
+              {inversionPart.trim()}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return <div>{msg.content}</div>;
   };
 
   // ==========================================
@@ -557,15 +595,25 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                     lineHeight: 1.5,
                     background: msg.role === "user" 
                       ? "linear-gradient(135deg, rgba(56, 139, 253, 0.15) 0%, rgba(56, 139, 253, 0.08) 100%)" 
-                      : "var(--color-surface-raised)",
+                      : msg.refused 
+                        ? "rgba(255, 255, 255, 0.02)" 
+                        : "var(--color-surface-raised)",
                     border: msg.role === "user" 
                       ? "1px solid rgba(56, 139, 253, 0.3)" 
-                      : "1px solid var(--color-border)",
-                    color: "var(--color-text)",
+                      : msg.refused 
+                        ? "1px dashed var(--color-border)" 
+                        : "1px solid var(--color-border)",
+                    color: msg.refused ? "var(--color-text-muted)" : "var(--color-text)",
                     boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                    whiteSpace: "pre-wrap"
+                    whiteSpace: "pre-wrap",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: msg.refused ? "8px" : "0"
                   }}>
-                    {msg.content}
+                    {msg.refused && (
+                      <AlertCircle size={16} style={{ color: "var(--color-text-muted)", marginTop: "2px", flexShrink: 0 }} />
+                    )}
+                    {renderMessageContent(msg)}
                   </div>
                 </div>
               ))
@@ -1052,15 +1100,25 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
                   lineHeight: 1.45,
                   background: msg.role === "user" 
                     ? "rgba(56, 139, 253, 0.12)" 
-                    : "var(--color-surface-raised)",
+                    : msg.refused 
+                      ? "rgba(255, 255, 255, 0.02)" 
+                      : "var(--color-surface-raised)",
                   border: msg.role === "user" 
                     ? "1px solid rgba(56, 139, 253, 0.25)" 
-                    : "1px solid var(--color-border)",
-                  color: "var(--color-text)",
+                    : msg.refused 
+                      ? "1px dashed var(--color-border)" 
+                      : "1px solid var(--color-border)",
+                  color: msg.refused ? "var(--color-text-muted)" : "var(--color-text)",
                   boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
-                  whiteSpace: "pre-wrap"
+                  whiteSpace: "pre-wrap",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: msg.refused ? "8px" : "0"
                 }}>
-                  {msg.content}
+                  {msg.refused && (
+                    <AlertCircle size={14} style={{ color: "var(--color-text-muted)", marginTop: "2px", flexShrink: 0 }} />
+                  )}
+                  {renderMessageContent(msg)}
                 </div>
               </div>
             ))

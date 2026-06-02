@@ -24,7 +24,12 @@ export class GeminiExplainer implements LlmExplainer {
     }
 
     try {
-      const response = await this.geminiService.generateSimpleResponse(prompt, "primary");
+      const response = await this.geminiService.generateSimpleResponse(
+        prompt,
+        "primary",
+        "Eres un analista técnico. Explicas señales financieras citando únicamente los valores numéricos del contexto provisto. No recomiendas operaciones. No respondes preguntas fuera del análisis técnico.",
+        { temperature: 0.15, maxOutputTokens: 600 }
+      );
       return {
         text: response.text || CHAT_DISCLAIMER,
         model: response.model || this.model,

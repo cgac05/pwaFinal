@@ -9,6 +9,7 @@ import {
   VolatilityCircuitBreaker,
   type VolatilityAssessment,
 } from '../../modules/volatility/analysisEngine';
+import { EXECUTION_INTENT_PATTERN, STRATEGY_EVALUATION_PATTERN } from '../indicators/chatExplainer';
 
 const router = Router();
 const volatilityCircuitBreaker = new VolatilityCircuitBreaker({
@@ -192,10 +193,43 @@ router.post('/results/:id/chat', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { message } = req.body;
-
+    
     const result = mockDb.results.find(r => r.id === id);
     if (!result) {
       return res.status(404).json({ error: 'Análisis no encontrado' });
+    }
+
+    // Normalización de texto y guardas de seguridad
+    const normalizedMsg = (message || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    // Extraer la pregunta limpia quitando el prefijo del activo "[activo: spy]" o similar si existiera
+    const cleanMsg = normalizedMsg.replace(/^\[activo:\s*[^\]]+\]\s*/i, "").trim();
+
+    // 1. EXECUTION INTENT CHECK
+    const executionRefusalMsg = "No puedo ejecutar ni recomendar operaciones. Mi funcion es unicamente explicar la señal tecnica con base en los indicadores. Puedo describir por que la señal actual es alcista, neutral o bajista, pero no puedo colocar ordenes ni sugerir comprar o vender.";
+    if (EXECUTION_INTENT_PATTERN.test(cleanMsg)) {
+      return res.json({
+        success: true,
+        data: executionRefusalMsg
+      });
+    }
+
+    // 2. FINANCIAL CONTEXT GUARD (Scope check)
+    const financialKeywords = [
+      'reporte', 'volatilidad', 'iron condor', 'viabilidad', 
+      'decision', 'canal', 'strike', 'prima', 'historico', 'implicita', 
+      'ticker', 'analiz', 'analisis', 'por que', 'score', 'opcion', 
+      'comprar', 'vender', 'resumen', 'detalle', 'simulaci', 'grafic', 'explica'
+    ];
+    const isStrategyEvaluation = STRATEGY_EVALUATION_PATTERN.test(cleanMsg);
+    const hasKeyword = financialKeywords.some((word) => cleanMsg.includes(word)) || isStrategyEvaluation;
+
+    if (cleanMsg.length < 10 || !hasKeyword) {
+      const scopeRefusalMsg = "Soy un modelo de análisis financiero limitado a los análisis realizados aquí.";
+      return res.json({
+        success: true,
+        data: scopeRefusalMsg
+      });
     }
 
     const contextPrompt = `Eres el mismo analista. Anteriormente evaluaste el ticker ${result.ticker} con estos scores:\n${result.scores}\nTu veredicto fue: ${result.decision}. Tu justificación: ${result.justification}.\n\nEl usuario tiene una pregunta de seguimiento sobre este análisis específico. Responde de forma concisa, experta y en español.\n\nPregunta del usuario: ${message}`;
@@ -261,6 +295,72 @@ router.post('/global-chat', async (req: Request, res: Response) => {
 
     const modelType = model === 'fallback' ? 'fallback' : 'primary';
 
+    // Normalización de texto y guardas de seguridad
+    const normalizedMsg = (message || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    // Extraer la pregunta limpia quitando el prefijo del activo "[activo: spy]" o similar
+    const cleanMsg = normalizedMsg.replace(/^\[activo:\s*[^\]]+\]\s*/i, "").trim();
+
+    // 1. EXECUTION INTENT CHECK
+    const executionRefusalMsg = "No puedo ejecutar ni recomendar operaciones. Mi funcion es unicamente explicar la señal tecnica con base en los indicadores. Puedo describir por que la señal actual es alcista, neutral o bajista, pero no puedo colocar ordenes ni sugerir comprar o vender.";
+    if (EXECUTION_INTENT_PATTERN.test(cleanMsg)) {
+      return res.json({
+        success: true,
+        data: {
+          text: executionRefusalMsg,
+          reply: executionRefusalMsg,
+          refused: true,
+          model: "refusal-guard"
+        }
+      });
+    }
+
+    // 2. FINANCIAL CONTEXT GUARD (Scope check)
+    const financialKeywords = [
+      'reporte', 'volatilidad', 'iron condor', 'viabilidad', 
+      'decision', 'canal', 'strike', 'prima', 'historico', 'implicita', 
+      'ticker', 'analiz', 'analisis', 'por que', 'score', 'opcion', 
+      'comprar', 'vender', 'resumen', 'detalle', 'simulaci', 'grafic', 'explica'
+    ];
+    const isStrategyEvaluation = STRATEGY_EVALUATION_PATTERN.test(cleanMsg);
+    const hasKeyword = financialKeywords.some((word) => cleanMsg.includes(word)) || isStrategyEvaluation;
+
+    if (cleanMsg.length < 10 || !hasKeyword) {
+      const scopeRefusalMsg = "Soy un modelo de análisis financiero limitado a los análisis realizados aquí.";
+      return res.json({
+        success: true,
+        data: {
+          text: scopeRefusalMsg,
+          reply: scopeRefusalMsg,
+          refused: true,
+          model: "context-guard"
+        }
+      });
+    }
+
+    let systemInstruction = "Eres un analista financiero cuantitativo especializado en volatilidad de opciones. Respondes ÚNICAMENTE sobre los reportes de análisis presentados en el contexto. Si no hay información suficiente en el contexto para responder, dices exactamente: 'Esta información no está en los análisis cargados.' Nunca inventas datos, scores, ni métricas que no estén en el contexto.";
+
+    if (isStrategyEvaluation) {
+      systemInstruction = `Eres un analista financiero cuantitativo especializado en volatilidad de opciones. Respondes ÚNICAMENTE sobre los reportes presentados en el contexto.
+
+Estructura tu respuesta en DOS secciones:
+
+ANÁLISIS:
+[explica los datos del reporte, máx 150 palabras]
+
+INVERSIÓN (Munger):
+¿Qué garantizaría el fallo de esta estrategia?
+• [fallo basado en dato real del reporte]
+• [fallo basado en dato real del reporte]
+• [fallo basado en dato real del reporte]
+
+REGLAS OBLIGATORIAS:
+- Nunca inventas datos, scores ni métricas
+- Cada punto de inversión debe citar un indicador real
+- Si no hay datos suficientes, di exactamente:
+  'No hay suficientes datos en el reporte para aplicar inversión'`;
+    }
+
     const results = mockDb.results;
     let resultsContext = '';
 
@@ -297,7 +397,12 @@ ${message}`;
       usedModel = modelType === 'primary' ? 'Gemma 4 31B (Simulado)' : 'Gemma 4 26B (Simulado Fallback)';
     } else {
       try {
-        const response = await geminiService.generateSimpleResponse(contextPrompt, modelType);
+        const response = await geminiService.generateSimpleResponse(
+          contextPrompt,
+          modelType,
+          systemInstruction,
+          { temperature: 0.1, topP: 0.85, maxOutputTokens: 600 }
+        );
         replyText = response.text || '';
         usedModel = response.model;
       } catch (err: any) {
