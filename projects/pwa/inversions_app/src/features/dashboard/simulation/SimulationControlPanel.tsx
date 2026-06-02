@@ -10,7 +10,6 @@ import {
   ALL_SUBCORES,
   CANONICAL_ESTRATEGIAS,
   type CoreId,
-  type SubCoreIndicador,
   type SimulationRequestPayload,
   type SimulationResponse,
 } from "../../../services/signals/confluenceTableApi";
@@ -27,6 +26,7 @@ import { ComplexStrategyParamsModal, type ComplexFormState } from "./ComplexStra
 import { executeStrategy } from "../../../services/strategies/strategyApi";
 import type { FromChainResponse } from "../../../services/strategies/strategyApi";
 import { useSignalStore } from "../../../store/signals";
+import { useIndicatorStore } from "../../../store/indicators";
 
 // ─── Panel CSS ─────────────────────────────────────────────────────────────────
 // Uses only real Revolut design-system tokens from tokens.css.
@@ -535,10 +535,6 @@ function isoPlusDays(n: number)   { return new Date(Date.now() + n * 86_400_000)
 const defaultCoresOn = (): Record<CoreId, boolean> =>
   ALL_CORES.reduce((acc, c) => ({ ...acc, [c]: c !== "A_INDICADORES" }), {} as Record<CoreId, boolean>);
 
-// FIC: Individual technical indicators start DISABLED; the user opts in (US-2). (EN)
-const defaultIndicadoresOn = (): Record<SubCoreIndicador, boolean> =>
-  ALL_SUBCORES.reduce((acc, s) => ({ ...acc, [s]: false }), {} as Record<SubCoreIndicador, boolean>);
-
 // ─── Section label style (shared) ─────────────────────────────────────────────
 const sectionLabelStyle: React.CSSProperties = {
   fontSize: "var(--font-size-xs)",
@@ -585,8 +581,11 @@ export function SimulationControlPanel({
   const [tolerancia, setTolerancia]       = useState<"BAJO" | "MEDIO" | "ALTO">("MEDIO");
   // FIC: A_INDICADORES core starts DISABLED at system start (initial state only). (EN)
   const [coresOn, setCoresOn]             = useState<Record<CoreId, boolean>>(defaultCoresOn);
-  // FIC: US-2 — technical indicators start DISABLED; the user opts in explicitly. (EN)
-  const [indicadoresOn, setIndicadoresOn] = useState<Record<SubCoreIndicador, boolean>>(defaultIndicadoresOn);
+  // FIC: US-2 — technical indicator toggles live in the shared store so the chart ("arriba") and
+  // FIC: this panel ("abajo") stay synchronized in both directions, including deactivation. (EN)
+  // FIC: US-2 — los toggles de indicadores viven en el store compartido para que el gráfico
+  // FIC: ("arriba") y este panel ("abajo") queden sincronizados en ambos sentidos, incluso al desactivar. (ES)
+  const { indicators: indicadoresOn, toggleIndicator: toggleSub, setIndicator } = useIndicatorStore();
   // FIC: US-8 — optional historical as-of date; empty means "use latest data". (EN)
   // FIC: US-8 — fecha historica opcional; vacio significa "usar datos mas recientes". (ES)
   const [fechaHistorica, setFechaHistorica] = useState<string>("");
@@ -677,7 +676,6 @@ export function SimulationControlPanel({
   };
 
   const toggleCore = (c: CoreId)          => setCoresOn((p) => ({ ...p, [c]: !p[c] }));
-  const toggleSub  = (s: SubCoreIndicador) => setIndicadoresOn((p) => ({ ...p, [s]: !p[s] }));
 
   // FIC: US-3 — full control-panel reset to defaults (also clears any prior results). (EN)
   // FIC: US-3 — reset completo del panel de control a defaults (limpia tambien resultados previos). (ES)
@@ -690,7 +688,9 @@ export function SimulationControlPanel({
     onStrategyChange?.("IRON_CONDOR");
     setTolerancia("MEDIO");
     setCoresOn(defaultCoresOn());
-    setIndicadoresOn(defaultIndicadoresOn());
+    // FIC: Reset shared indicator toggles to OFF (keeps chart "arriba" in sync). (EN)
+    // FIC: Restablece los toggles compartidos de indicadores a OFF (mantiene sincronía con el gráfico "arriba"). (ES)
+    ALL_SUBCORES.forEach((s) => setIndicator(s, false));
     setFechaHistorica("");
     setCoverageParams(DEFAULT_COVERAGE_PARAMS);
     setTermParams(DEFAULT_TERM_PARAMS);
