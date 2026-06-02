@@ -267,6 +267,11 @@ export function OptionStrategyParamsModal({ open, strategy, ticker, onClose, onC
     setForm((prev) => {
       const nextTicker = ticker.toUpperCase();
 
+      // FIC: Resolver prima por tipo de opción de la estrategia (call/put), con fallback al premium genérico. (ES)
+      const resolvedPremium = selectedStrikeMatchesStrategy
+        ? (meta.optionType === "CALL" ? selectedStrike.callPremium : selectedStrike.putPremium) ?? selectedStrike.premium
+        : undefined;
+
       return {
         ...prev,
         ticker: nextTicker,
@@ -274,7 +279,7 @@ export function OptionStrategyParamsModal({ open, strategy, ticker, onClose, onC
           ? selectedStrike.underlyingPrice.toFixed(2)
           : prev.currentPrice,
         strikePrice: selectedStrikeMatchesStrategy ? String(selectedStrike.strike) : prev.strikePrice,
-        premium: selectedStrikeMatchesStrategy && selectedStrike.premium > 0 ? String(selectedStrike.premium) : "",
+        premium: typeof resolvedPremium === "number" && resolvedPremium > 0 ? String(resolvedPremium) : prev.premium,
         expiration: selectedStrikeMatchesStrategy && selectedStrike.expiration ? selectedStrike.expiration : prev.expiration,
         impliedVolatility: selectedStrikeMatchesStrategy ? (ivToPercent(selectedStrike.iv) ?? prev.impliedVolatility) : prev.impliedVolatility,
         riskFreeRate: selectedStrikeMatchesStrategy && typeof selectedStrike.estimatedRiskFreeRate === "number"
@@ -283,7 +288,7 @@ export function OptionStrategyParamsModal({ open, strategy, ticker, onClose, onC
       };
     });
     setResult(null);
-  }, [open, ticker, selectedStrike, selectedStrikeMatchesStrategy]);
+  }, [open, ticker, strategy, selectedStrike, selectedStrikeMatchesStrategy]);
 
   useEffect(() => {
     if (!open || !form.ticker) return;

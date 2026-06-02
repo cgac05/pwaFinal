@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   BarChart2, BookOpen, TrendingUp, Building2, Newspaper,
-  Cpu, Play, ChevronDown, Calendar, RotateCcw,
+  Cpu, Play, ChevronDown, Calendar, RotateCcw, Loader2,
 } from "lucide-react";
 import { getMarketQuotes } from "../../../services/signals/marketApi";
 import {
@@ -184,6 +184,8 @@ const PANEL_CSS = `
   .sim-exec:hover:not(:disabled) { background: var(--color-accent-hover); transform: translateY(-1px); }
   .sim-exec:active:not(:disabled) { transform: translateY(0); }
   .sim-exec:disabled { opacity: 0.6; cursor: not-allowed; }
+  .sim-exec__spinner { animation: sim-exec-spin 0.7s linear infinite; }
+  @keyframes sim-exec-spin { to { transform: rotate(360deg); } }
 `;
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
@@ -1088,7 +1090,9 @@ export function SimulationControlPanel({
                 background: "rgba(255,255,255,0.18)",
                 flexShrink: 0,
               }}>
-                <Play size={11} fill="currentColor" strokeWidth={0} />
+                {loading
+                  ? <Loader2 size={13} strokeWidth={2.5} className="sim-exec__spinner" />
+                  : <Play size={11} fill="currentColor" strokeWidth={0} />}
               </span>
               {loading ? "Ejecutando…" : "Ejecutar Simulación"}
             </button>
