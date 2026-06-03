@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createSeriesMarkers, LineSeries, LineStyle } from "lightweight-charts";
 import { useSignalStore } from "../../store/signals";
 import { useIndicatorStore } from "../../store/indicators";
@@ -92,13 +92,15 @@ export const SuperChart: React.FC<SuperChartProps> = ({
   // FIC: Los toggles vienen del store compartido; mapea los 5 indicadores canónicos a las banderas
   // FIC: de series del gráfico. Activar aquí también actualiza el panel de simulación ("abajo"). (ES)
   const { indicators, toggleIndicator: toggleStoreIndicator } = useIndicatorStore();
-  const activeIndicators: ActiveIndicators = {
+  // Memoizado para que useChartInit no re-cree el objeto en cada render
+  // y evitar el loop infinito en el useEffect([activeIndicators]) de useChartInit.
+  const activeIndicators: ActiveIndicators = useMemo(() => ({
     rsi: indicators.RSI,
     macd: indicators.MACD,
     bb: indicators.BB,
     ema: indicators.EMA,
     adx: indicators.ADX,
-  };
+  }), [indicators.RSI, indicators.MACD, indicators.BB, indicators.EMA, indicators.ADX]);
 
   const { selectedSignal } = useSignalStore();
 

@@ -81,9 +81,6 @@ export function MainDashboard() {
   const [activeChartTab, setActiveChartTab] = useState<"chart" | "chain">("chart");
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
   const [noticias2Active, setNoticias2Active] = useState(false);
-  // noticias2SimulationRan: true SOLO cuando la simulación corrió con el chip Noticias 2 activo.
-  // simulationHasRun: true cuando cualquier simulación completó (para NewsSection de A_NOTICIAS).
-  const [noticias2SimulationRan, setNoticias2SimulationRan] = useState(false);
   const [simulationHasRun, setSimulationHasRun] = useState(false);
   const [noticiasCoreWasActive, setNoticiasCoreWasActive] = useState(false);
   const [noticias2DateRange, setNoticias2DateRange] = useState<{ from?: string; to?: string } | undefined>();
@@ -114,9 +111,7 @@ export function MainDashboard() {
 
   // FIC: Clear simulation results and institutional flag when the user selects a new ticker. (EN)
   // FIC: Limpiar resultados de simulación y flag institucional cuando el usuario selecciona un nuevo ticker. (ES)
-  const prevSymbolRef     = useRef(selectedSymbol);
-  const noticias2ActiveRef = useRef(noticias2Active);
-  useEffect(() => { noticias2ActiveRef.current = noticias2Active; }, [noticias2Active]);
+  const prevSymbolRef = useRef(selectedSymbol);
   useEffect(() => {
     if (prevSymbolRef.current !== selectedSymbol) {
       prevSymbolRef.current = selectedSymbol;
@@ -135,7 +130,6 @@ export function MainDashboard() {
       // Bug 4 — limpieza absoluta de Noticias 2 al cambiar ticker:
       // oculta el módulo y borra toda la data para que el usuario parta de cero
       setNoticias2Active(false);
-      setNoticias2SimulationRan(false);
       setSimulationHasRun(false);
       setNoticiasCoreWasActive(false);
       setNoticias2Result(null);
@@ -154,10 +148,6 @@ export function MainDashboard() {
     });
     setSimulationVerdict(result.verdict);
     setSimulationHasRun(true);
-    // Noticias 2 solo se despliega si el chip estaba activo CUANDO corrió la simulación
-    setNoticias2SimulationRan(prev => prev || noticias2ActiveRef.current);
-    // NewsSection solo se despliega si A_NOTICIAS estaba activo en la simulación
-    // (se registra en handleSimulationExecute via noticiasCoreWasActive)
     // Req 2: captura el rango de fechas para pasarlo a NewsSourcesAnalyzer
     if (result.inputs_echo?.rangoEstrategia) {
       setNoticias2DateRange(result.inputs_echo.rangoEstrategia);
@@ -264,7 +254,6 @@ export function MainDashboard() {
     setInstitutionalCoreWasActive(institutionalActive);
     // Registra si A_NOTICIAS y Noticias2 estaban activos al ejecutar la simulación
     setNoticiasCoreWasActive(activeCoreIds.includes("A_NOTICIAS"));
-    if (noticias2ActiveRef.current) setNoticias2SimulationRan(true);
 
     if (activeCoreIds.includes("A_FUNDAMENTAL")) {
       setFundamentalAutoRunKey((key) => key + 1);
@@ -441,10 +430,7 @@ export function MainDashboard() {
         onTermResult={handleTermResult}
         onClear={handleClearTable}
         onComplexResult={handleComplexResult}
-        onNoticias2Change={(v) => {
-          setNoticias2Active(v);
-          if (!v) setNoticias2SimulationRan(false); // al desactivar, requiere nueva simulación
-        }}
+        onNoticias2Change={(v) => setNoticias2Active(v)}
       />
 
       {/* ── Strategy error (from buildComplexStrategyRows validation) */}
@@ -678,7 +664,7 @@ export function MainDashboard() {
       )}
 
       {/* Noticias 2: solo aparece cuando la simulación corrió CON el chip Noticias 2 activo */}
-      {noticias2Active && noticias2SimulationRan && (
+      {noticias2Active && simulationHasRun && (
         <NewsSourcesAnalyzer
           selectedSymbol={selectedSymbol}
           watchlistSymbols={watchlistSymbols.length > 0 ? watchlistSymbols : undefined}

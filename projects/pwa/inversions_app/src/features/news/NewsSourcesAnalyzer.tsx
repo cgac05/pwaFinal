@@ -184,7 +184,10 @@ export const NewsSourcesAnalyzer: React.FC<NewsSourcesAnalyzerProps> = ({
   // Punto 3 — limpiar todas las fuentes seleccionadas
   const clearSources = () => setSelectedIds([]);
 
-  const vm    = state.result ? V[state.result.verdict] : null;
+  // Fallback para veredictos inesperados (NEUTRAL, undefined, etc.)
+  const vm    = state.result
+    ? (V[state.result.verdict as keyof typeof V] ?? V['HOLD'])
+    : null;
   const other = (watchlistSymbols ?? []).filter(s => s !== selectedSymbol);
 
   // ─── Render ─────────────────────────────────────────────────────────────────
