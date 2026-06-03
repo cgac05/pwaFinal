@@ -78,16 +78,17 @@ export function MainDashboard() {
   } | null>(null);
   const [activeChartTab, setActiveChartTab] = useState<"chart" | "chain">("chart");
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
+  const [noticias2Active, setNoticias2Active] = useState(false);
 
   const { selectedInstrument, selectedStrike, runtimeMode, operationalMode, setSelectedStrike } = useSignalStore();
-  const { setAnalysisCategory, analysisCategory } = useAppShellStore();
+  const { setAnalysisCategory } = useAppShellStore();
   const { results: institutionalResults, loading: institutionalLoading, errors: institutionalErrors } = useInstitutionalStore();
 
   const selectedSymbol = selectedInstrument?.symbol ?? "SPY";
 
   // Carga los símbolos de la watchlist cuando el usuario activa "Noticias 2"
   useEffect(() => {
-    if (analysisCategory !== "news2") return;
+    if (!noticias2Active) return;
     fetch("/api/watchlist", { headers: getAuthHeaders() })
       .then((r) => r.json())
       .then((data) => {
@@ -95,7 +96,7 @@ export function MainDashboard() {
         if (symbols.length > 0) setWatchlistSymbols(symbols);
       })
       .catch(() => {});
-  }, [analysisCategory]);
+  }, [noticias2Active]);
 
   // FIC: Clear simulation results and institutional flag when the user selects a new ticker. (EN)
   // FIC: Limpiar resultados de simulación y flag institucional cuando el usuario selecciona un nuevo ticker. (ES)
@@ -397,6 +398,7 @@ export function MainDashboard() {
         onTermResult={handleTermResult}
         onClear={handleClearTable}
         onComplexResult={handleComplexResult}
+        onNoticias2Change={setNoticias2Active}
       />
 
       {/* ── Strategy error (from buildComplexStrategyRows validation) */}
@@ -631,7 +633,7 @@ export function MainDashboard() {
         autoRunKey={fundamentalAutoRunKey}
         onAnalysisComplete={setFundamentalAnalysis}
       />
-      {analysisCategory === "news2" && (
+      {noticias2Active && (
         <NewsSourcesAnalyzer watchlistSymbols={watchlistSymbols.length > 0 ? watchlistSymbols : undefined} />
       )}
     </div>

@@ -558,6 +558,7 @@ interface Props {
   onWheelParamsConfirmed?: (params: WheelModalParams) => void;
   onTermResult?: (data: any) => void;
   onComplexResult?: (result: FromChainResponse, strategy: string, timeframe?: string) => void;
+  onNoticias2Change?: (active: boolean) => void;
 }
 
 // ─── Main component ────────────────────────────────────────────────────────────
@@ -571,6 +572,7 @@ export function SimulationControlPanel({
   onWheelParamsConfirmed,
   onTermResult,
   onComplexResult,
+  onNoticias2Change,
 }: Props) {
   const incrementSimulationRunCount = useSignalStore().incrementSimulationRunCount;
   const [preset, setPreset]               = useState<Preset>("3M");
@@ -581,6 +583,7 @@ export function SimulationControlPanel({
   const [tolerancia, setTolerancia]       = useState<"BAJO" | "MEDIO" | "ALTO">("MEDIO");
   // FIC: A_INDICADORES core starts DISABLED at system start (initial state only). (EN)
   const [coresOn, setCoresOn]             = useState<Record<CoreId, boolean>>(defaultCoresOn);
+  const [noticias2On, setNoticias2On]     = useState<boolean>(false);
   // FIC: US-2 — technical indicator toggles live in the shared store so the chart ("arriba") and
   // FIC: this panel ("abajo") stay synchronized in both directions, including deactivation. (EN)
   // FIC: US-2 — los toggles de indicadores viven en el store compartido para que el gráfico
@@ -944,6 +947,17 @@ export function SimulationControlPanel({
                   />
                 );
               })}
+              {/* Noticias 2 — analizador propio de fuentes, independiente del core A_NOTICIAS */}
+              <ChipButton
+                active={noticias2On}
+                onClick={() => {
+                  const next = !noticias2On;
+                  setNoticias2On(next);
+                  onNoticias2Change?.(next);
+                }}
+                label="Noticias 2"
+                tooltip="Análisis de fuentes de noticias personalizadas con recomendación BUY/SELL/HOLD (TEAM-02)"
+              />
             </div>
           </div>
 
