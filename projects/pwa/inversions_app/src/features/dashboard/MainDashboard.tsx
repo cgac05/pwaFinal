@@ -34,12 +34,8 @@ import { getInstitutionalAnalysis } from "../../services/institutional/instituti
 import type { FundamentalAnalysisResponse } from "../../services/fundamental/fundamentalApi";
 import { formatCurrency } from "../../utils/format";
 import { Tooltip } from "../../components/ui/Tooltip";
-<<<<<<< HEAD
 import { ReportePDFTemplate } from "./ReportePDFTemplate";
-=======
 import { getAuthHeaders } from "../../services/signals/signalApi";
-
->>>>>>> Global/main
 // FIC: US-5 — compact buy/sell/hold counter chip shown above the confluence table. (EN)
 // FIC: US-5 — chip compacto de conteo compra/venta/hold mostrado sobre la tabla. (ES)
 function SignalMetricChip({ label, value, color }: { label: string; value: number; color: string }) {
