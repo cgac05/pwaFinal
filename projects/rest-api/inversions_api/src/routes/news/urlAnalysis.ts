@@ -123,32 +123,31 @@ router.post('/analyze-sources', async (req: Request, res: Response) => {
 
     // Mapa de noticias de contexto por ticker — fallback cuando RSS no devuelve artículos
     // Permite que el módulo siempre muestre algo relevante para la presentación.
-    const TICKER_CONTEXT: Record<string, { headline: string; snippet: string; source: string }[]> = {
+    const TICKER_CONTEXT: Record<string, { headline: string; snippet: string; source: string; url: string }[]> = {
       NVDA: [
-        { headline: `NVIDIA (${symbol}) reports record AI data center revenue as demand for H100 chips remains strong`, snippet: 'NVIDIA continues to dominate the AI chip market with strong demand from cloud hyperscalers and enterprises.', source: 'Market Context' },
-        { headline: `${symbol} Blackwell GPU shipments accelerate in Q2 2026 amid enterprise AI adoption surge`, snippet: 'The new Blackwell architecture is seeing faster-than-expected adoption across major cloud providers.', source: 'Market Context' },
-        { headline: `Analysts raise ${symbol} price targets following data center expansion announcements`, snippet: 'Multiple Wall Street firms updated their NVIDIA price targets citing strong AI infrastructure spending.', source: 'Market Context' },
+        { headline: `NVIDIA (${symbol}) reports record AI data center revenue as demand for H100 chips remains strong`, snippet: 'NVIDIA continues to dominate the AI chip market with strong demand from cloud hyperscalers and enterprises.', source: 'Market Context', url: '' },
+        { headline: `${symbol} Blackwell GPU shipments accelerate in Q2 2026 amid enterprise AI adoption surge`, snippet: 'The new Blackwell architecture is seeing faster-than-expected adoption across major cloud providers.', source: 'Market Context', url: '' },
+        { headline: `Analysts raise ${symbol} price targets following data center expansion announcements`, snippet: 'Multiple Wall Street firms updated their NVIDIA price targets citing strong AI infrastructure spending.', source: 'Market Context', url: '' },
       ],
       AAPL: [
-        { headline: `Apple (${symbol}) launches AI-powered Siri 2.0 at WWDC 2026, co-developed with Google Gemini`, snippet: 'Apple unveiled a completely rebuilt Siri with deep AI integration, targeting users of generative AI tools.', source: 'Market Context' },
-        { headline: `${symbol} iPhone 17 pre-orders exceed analyst expectations on AI feature set`, snippet: 'Strong consumer interest in AI-native features is driving record pre-order numbers for the new iPhone lineup.', source: 'Market Context' },
+        { headline: `Apple (${symbol}) launches AI-powered Siri 2.0 at WWDC 2026, co-developed with Google Gemini`, snippet: 'Apple unveiled a completely rebuilt Siri with deep AI integration, targeting users of generative AI tools.', source: 'Market Context', url: '' },
+        { headline: `${symbol} iPhone 17 pre-orders exceed analyst expectations on AI feature set`, snippet: 'Strong consumer interest in AI-native features is driving record pre-order numbers for the new iPhone lineup.', source: 'Market Context', url: '' },
       ],
       SPY: [
-        { headline: `S&P 500 (${symbol}) hits new all-time high as tech sector leads gains amid AI optimism`, snippet: 'The index continued its strong run driven by technology stocks benefiting from AI infrastructure spending.', source: 'Market Context' },
-        { headline: `Fed holds rates steady — ${symbol} gains 1.2% on positive economic outlook`, snippet: 'The Federal Reserve decision to maintain current interest rates boosted investor confidence in equities.', source: 'Market Context' },
+        { headline: `S&P 500 (${symbol}) hits new all-time high as tech sector leads gains amid AI optimism`, snippet: 'The index continued its strong run driven by technology stocks benefiting from AI infrastructure spending.', source: 'Market Context', url: '' },
+        { headline: `Fed holds rates steady — ${symbol} gains 1.2% on positive economic outlook`, snippet: 'The Federal Reserve decision to maintain current interest rates boosted investor confidence in equities.', source: 'Market Context', url: '' },
       ],
       MSFT: [
-        { headline: `Microsoft (${symbol}) Azure AI revenue surges 45% YoY as Copilot adoption accelerates`, snippet: 'Microsoft reported strong cloud growth driven by AI services embedded across its product suite.', source: 'Market Context' },
+        { headline: `Microsoft (${symbol}) Azure AI revenue surges 45% YoY as Copilot adoption accelerates`, snippet: 'Microsoft reported strong cloud growth driven by AI services embedded across its product suite.', source: 'Market Context', url: '' },
       ],
       TSLA: [
-        { headline: `Tesla (${symbol}) Cybertruck deliveries ramp up in Q2 2026; Full Self-Driving version 13 released`, snippet: 'Tesla accelerated its Cybertruck production and released a major FSD update targeting full autonomy.', source: 'Market Context' },
+        { headline: `Tesla (${symbol}) Cybertruck deliveries ramp up in Q2 2026; Full Self-Driving version 13 released`, snippet: 'Tesla accelerated its Cybertruck production and released a major FSD update targeting full autonomy.', source: 'Market Context', url: '' },
       ],
     };
 
-    // Genera artículos de fallback para cualquier ticker no en el mapa
-    const genericFallback = [
-      { headline: `${symbol} market update: institutional investors increase positions amid strong sector momentum`, snippet: `Institutional buying activity for ${symbol} has increased over the past weeks according to 13F filings.`, source: 'Market Context' },
-      { headline: `${symbol} technical analysis: key support levels hold as volume trends positive`, snippet: `${symbol} has maintained critical support levels with increasing volume suggesting accumulation phase.`, source: 'Market Context' },
+    const genericFallback: { headline: string; snippet: string; source: string; url: string }[] = [
+      { headline: `${symbol} market update: institutional investors increase positions amid strong sector momentum`, snippet: `Institutional buying activity for ${symbol} has increased over the past weeks according to 13F filings.`, source: 'Market Context', url: '' },
+      { headline: `${symbol} technical analysis: key support levels hold as volume trends positive`, snippet: `${symbol} has maintained critical support levels with increasing volume suggesting accumulation phase.`, source: 'Market Context', url: '' },
     ];
 
     // ── 1. Obtener artículos de Yahoo RSS + Finnhub en paralelo ───────────────
