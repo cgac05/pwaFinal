@@ -69,6 +69,10 @@ interface Props {
   rows?: ConfluenceSignalRow[];
   activeStrategy?: string;
   fundamentalAnalysis?: any;
+  /** Veredicto del módulo Noticias 2 para el ticker activo. */
+  noticias2Verdict?: "BUY" | "SELL" | "HOLD" | null;
+  /** Callback cuando el usuario hace clic en una fila de estrategia. */
+  onStrategyRowClick?: (row: ConfluenceSignalRow) => void;
 }
 
 function colorForTipo(tipo: string): string {
@@ -88,6 +92,7 @@ export function ConfluenceSignalsTable({
   rows: rowsProp,
   activeStrategy,
   fundamentalAnalysis,
+  noticias2Verdict,
 }: Props) {
   const [rows, setRows] = useState<ConfluenceSignalRow[]>(rowsProp ?? []);
   const [loading, setLoading] = useState(false);
@@ -174,6 +179,55 @@ export function ConfluenceSignalsTable({
         <span className="badge badge-hold" style={{ fontSize: "0.72rem" }}>
           Estrategia: {(activeStrategy ?? "SIN_ESTRATEGIA").replace(/_/g, " ")}
         </span>
+        {noticias2Verdict && (() => {
+          // Estrategias alcistas (BUY apoya, SELL contradice)
+          const BULLISH_STRATS = new Set(["LONG_CALL","BUY_CALL","BULL_CALL_SPREAD","CALENDAR_SPREAD","DIAGONAL_SPREAD","WHEEL"]);
+          // Estrategias bajistas (SELL apoya, BUY contradice)
+          const BEARISH_STRATS = new Set(["LONG_PUT","BUY_PUT","BEAR_PUT_SPREAD"]);
+          // Estrategias neutras de volatilidad (HOLD es lo ideal, BUY/SELL añaden sesgo)
+          const NEUTRAL_STRATS = new Set(["IRON_CONDOR","IRON_BUTTERFLY","CONDOR","BUTTERFLY_SPREAD","STRADDLE","STRANGLE","BUTTERFLY"]);
+
+          const strat = (activeStrategy ?? "").toUpperCase();
+          const v     = noticias2Verdict;
+
+          // Calcula si la noticia alinea o contradice la estrategia
+          let alignment: "apoya" | "contradice" | "neutral" = "neutral";
+          let bg = "#ffa000";
+
+          if (BULLISH_STRATS.has(strat)) {
+            alignment = v === "BUY" ? "apoya" : v === "SELL" ? "contradice" : "neutral";
+            bg = v === "BUY" ? "#00c853" : v === "SELL" ? "#ff1744" : "#ffa000";
+          } else if (BEARISH_STRATS.has(strat)) {
+            alignment = v === "SELL" ? "apoya" : v === "BUY" ? "contradice" : "neutral";
+            bg = v === "SELL" ? "#00c853" : v === "BUY" ? "#ff1744" : "#ffa000";
+          } else if (NEUTRAL_STRATS.has(strat)) {
+            // En estrategias de volatilidad, cualquier sesgo fuerte contradice
+            alignment = v === "HOLD" ? "apoya" : "sesgo";
+            bg = v === "HOLD" ? "#00c853" : "#ffa000";
+          }
+
+          const ICON  = { BUY: "▲", SELL: "▼", HOLD: "—" };
+          const LABEL = { BUY: "Comprar", SELL: "Vender", HOLD: "Esperar" };
+          const ALIGN_ICON = alignment === "apoya" ? "✓" : alignment === "contradice" ? "✗" : "~";
+          const tooltipText = `Sentimiento de noticias: ${LABEL[v]}. ${alignment === "apoya" ? "Apoya" : alignment === "contradice" ? "Contradice" : "Neutral respecto a"} la estrategia ${strat.replace(/_/g, " ")}.`;
+
+          return (
+            <span
+              title={tooltipText}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
+                padding: "4px 12px", borderRadius: "var(--radius-pill)",
+                background: bg, color: "#fff",
+                fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.03em",
+                cursor: "help", boxShadow: `0 0 0 2px ${bg}44`,
+              }}
+            >
+              <span>{ICON[v]}</span>
+              <span>Noticias 2: {LABEL[v]}</span>
+              <span style={{ opacity: 0.8, fontSize: "0.65rem" }}>{ALIGN_ICON}</span>
+            </span>
+          );
+        })()}
       </div>
 
       <div style={{ maxHeight: 500, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>

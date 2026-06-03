@@ -147,7 +147,8 @@ export function validateSimulationRequest(body: any): SimulationValidationError 
       return { error_code: "INVALID_SIMULATION_REQUEST", message: `indicador invalido: ${i}`, field: "indicadoresHabilitados" };
     }
   }
-  if (typeof body.estrategia !== "string" || !KNOWN_ESTRATEGIAS.has(body.estrategia)) {
+  if (body.estrategia !== undefined && body.estrategia !== "" &&
+      (typeof body.estrategia !== "string" || !KNOWN_ESTRATEGIAS.has(body.estrategia))) {
     return {
       error_code: "INVALID_SIMULATION_REQUEST",
       message: `'estrategia' '${body.estrategia}' fuera del catalogo canonico.`,
@@ -438,6 +439,16 @@ export async function runSimulation(
 
   if (aiRow) {
     table.push(aiRow);
+  }
+
+  // FIC: US8 bugfix — when running on historical (as-of) data, the rows MUST display the REAL date
+  // FIC: of the data point, not today's date. Stamp every row's `fecha` with the last candle's day.
+  // FIC: `computed_at` keeps the real computation timestamp; only `fecha` (the data date) changes.
+  // FIC: US8 fix — al correr sobre datos historicos, las filas DEBEN mostrar la fecha real del dato,
+  // FIC: no la de hoy. Sella el `fecha` de cada fila con el dia de la ultima vela usada. (ES)
+  if (endTimeMs && candles.length > 0) {
+    const dataDate = new Date(candles[candles.length - 1].time * 1000).toISOString().slice(0, 10);
+    table = table.map((r) => ({ ...r, fecha: dataDate }));
   }
 
   const disabled = (ALL_CORE_IDS as readonly CoreId[]).filter((c) => !enabledCores.has(c));

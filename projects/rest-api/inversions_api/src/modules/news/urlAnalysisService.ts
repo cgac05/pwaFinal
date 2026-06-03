@@ -3,12 +3,10 @@
 
 import {
   createSentimentAnalyzerForRuntime,
-  sentimentToVerdict,
   type NewsSentimentAnalyzer
 } from "./sentimentService";
 import { resolveVerdict } from "./investmentAdvisor";
-import { NEWS_DISCLAIMER, type AnalyzedNewsSource, type NewsAnalysisAggregate, type NewsArticle, type NewsSourceInput, type SourceAnalysisResult } from "./types";
-import { attachNewsCanonicalToSource, buildNewsCanonicalPayloadFromSources } from "./newsCanonicalOutput";
+import { NEWS_DISCLAIMER, type AnalyzedNewsSource, type NewsArticle, type NewsSourceInput, type NewsVerdict, type SentimentResult, type SourceAnalysisResult } from "./types";
 
 export interface URLContent {
   url: string;
@@ -28,20 +26,24 @@ export interface URLAnalysisOptions {
 const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
-const SYMBOL_ALIASES: Record<string, string[]> = {
-  AAPL: ["apple", "iphone", "ipad", "mac"],
-  MSFT: ["microsoft", "azure", "windows", "copilot"],
-  NVDA: ["nvidia", "gpu", "blackwell", "cuda"],
-  TSLA: ["tesla", "elon", "model y", "model 3"],
-  AMZN: ["amazon", "aws", "prime"],
-  GOOGL: ["alphabet", "google", "youtube", "gemini"],
-  META: ["meta", "facebook", "instagram", "whatsapp"],
-  AMD: ["advanced micro devices", "radeon", "epyc", "ryzen"],
-  SPY: ["s&p 500", "sp500", "s&p", "stock market"],
-  QQQ: ["nasdaq 100", "nasdaq", "qqq"],
-  JPM: ["jpmorgan", "jp morgan", "chase"],
-  COIN: ["coinbase", "crypto exchange"]
+// Punto 2 — URLs de búsqueda específicas por dominio.
+// En lugar de la página raíz (genérica), se busca el ticker/empresa directamente.
+const SEARCH_TEMPLATES: Record<string, (company: string) => string> = {
+  "nasdaq.com":        c => `https://www.nasdaq.com/search?q=${encodeURIComponent(c)}+stock+news`,
+  "investing.com":     c => `https://www.investing.com/search/?q=${encodeURIComponent(c)}+stock`,
+  "cnbc.com":          c => `https://www.cnbc.com/search/?query=${encodeURIComponent(c)}+stock+news`,
+  "bloomberg.com":     c => `https://www.bloomberg.com/search?query=${encodeURIComponent(c)}+stock`,
+  "reuters.com":       c => `https://www.reuters.com/search/news?blob=${encodeURIComponent(c)}+stock`,
+  "marketwatch.com":   c => `https://www.marketwatch.com/search?q=${encodeURIComponent(c)}&ts=0&tab=All%20News`,
+  "finance.yahoo.com": c => `https://finance.yahoo.com/quote/${encodeURIComponent(c)}/news/`,
+  "seekingalpha.com":  c => `https://seekingalpha.com/search?q=${encodeURIComponent(c)}+stock`,
 };
+
+function buildSearchUrl(domain: string, company: string): string {
+  const host = hostnameOf(domain.startsWith("http") ? domain : `https://${domain}`);
+  const key  = Object.keys(SEARCH_TEMPLATES).find(k => host.includes(k));
+  return key ? SEARCH_TEMPLATES[key](company) : (domain.startsWith("http") ? domain : `https://${domain}`);
+}
 
 export class URLAnalysisService {
   private analyzer: NewsSentimentAnalyzer;
@@ -73,13 +75,123 @@ export class URLAnalysisService {
       return {
         url,
         title: extractTitle(html) || company,
-        content: extractRelevantContent(html, this.maxChars, company),
+        content: extractRelevantContent(html, this.maxChars),
         source: hostnameOf(url),
         fetchedAt: new Date().toISOString()
       };
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  // FIC: Validate that a domain is reachable. Returns true if HTTP response is ok.
+  // FIC: Valida que un dominio sea accesible. Devuelve true si la respuesta HTTP es ok.
+  async validateURL(domain: string): Promise<boolean> {
+    const fullUrl = domain.startsWith("http") ? domain : `https://${domain}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await this.fetchImpl(fullUrl, {
+        headers: { "User-Agent": "Mozilla/5.0" },
+        signal: controller.signal
+      });
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // FIC: Analyze multiple source domains for a company and return a consolidated verdict.
+  // FIC: Analiza multiples dominios de fuentes para una empresa y devuelve un veredicto consolidado.
+  async analyzeSourcesForCompany(
+    company: string,
+    domains: string[]
+  ): Promise<{
+    url: string;
+    company: string;
+    verdict: string;
+    score: number;
+    confidence: number;
+    reasoning: string;
+    keyPoints: string[];
+    timestamp: string;
+  }> {
+    const results: SourceAnalysisResult[] = [];
+
+    for (const domain of domains) {
+      // Punto 2 — usa URL de búsqueda específica al ticker, no la homepage genérica
+      const searchUrl = buildSearchUrl(domain, company);
+      try {
+        const content = await this.fetchURLContent(searchUrl, company);
+        const analysis = await this.analyzeSourceImpact(content, company);
+        results.push(analysis);
+      } catch {
+        // FIC: Fuente inaccesible — se omite del consolidado sin lanzar error.
+      }
+    }
+
+    const timestamp = new Date().toISOString();
+
+    if (results.length === 0) {
+      return {
+        url: domains.join(", "),
+        company: company.toUpperCase(),
+        verdict: "HOLD",
+        score: 0,
+        confidence: 0,
+        reasoning: `No fue posible obtener contenido de ninguna fuente para ${company}. Verifica que los dominios sean accesibles.`,
+        keyPoints: [],
+        timestamp
+      };
+    }
+
+    const avgScore = Number(
+      (results.reduce((s, r) => s + r.score, 0) / results.length).toFixed(3)
+    );
+    const avgConfidence = Number(
+      (results.reduce((s, r) => s + r.confidence, 0) / results.length).toFixed(3)
+    );
+    const keyPoints = [...new Set(results.flatMap(r => r.keyPoints))].slice(0, 5);
+    const sourcesLabel = results.map(r => hostnameOf(r.url)).join(", ");
+
+    const aggregated: SentimentResult = {
+      score: avgScore,
+      label: avgScore > 0.3 ? "BULLISH" : avgScore < -0.3 ? "BEARISH" : "NEUTRAL",
+      confidence: avgConfidence,
+      reasoning: "",
+      keyFactors: keyPoints
+    };
+
+    // Punto 3 — razonamiento transparente que explica el score al usuario
+    const positiveResults = results.filter(r => r.score >  0.1);
+    const negativeResults = results.filter(r => r.score < -0.1);
+    const neutralResults  = results.filter(r => r.score >= -0.1 && r.score <= 0.1);
+    const topReason = results.sort((a, b) => Math.abs(b.score) - Math.abs(a.score))[0]?.reasoning ?? "";
+
+    const reasoningParts = [
+      `Análisis de ${results.length} fuente(s) sobre ${company}: ` +
+      `${positiveResults.length} alcista(s), ${negativeResults.length} bajista(s), ${neutralResults.length} neutral(es).`,
+      positiveResults.length > 0
+        ? `Señales positivas: ${positiveResults.map(r => hostnameOf(r.url)).join(", ")}.`
+        : "",
+      negativeResults.length > 0
+        ? `Señales negativas: ${negativeResults.map(r => hostnameOf(r.url)).join(", ")}.`
+        : "",
+      topReason ? `Razonamiento principal: ${topReason}` : "",
+    ].filter(Boolean).join(" ");
+
+    return {
+      url: domains.join(", "),
+      company: company.toUpperCase(),
+      verdict: resolveVerdict(aggregated),
+      score: avgScore,
+      confidence: avgConfidence,
+      reasoning: reasoningParts,
+      keyPoints,
+      timestamp
+    };
   }
 
   // FIC: Analyze fetched content as a single-article sentiment in the company's context.
@@ -113,249 +225,6 @@ export class URLAnalysisService {
       timestamp: new Date().toISOString()
     };
   }
-
-  async analyzeSourcesForCompany(company: string, urls: string[]): Promise<NewsAnalysisAggregate> {
-    const safeCompany = company.trim().toUpperCase();
-    const results = await Promise.all(urls.map(async (url) => {
-      const normalizedUrl = normalizeUrl(url);
-      const content = await this.fetchURLContent(normalizedUrl, safeCompany);
-      return analyzeNewsSource({
-        id: normalizedUrl,
-        title: content.title,
-        url: normalizedUrl,
-        text: content.content,
-        provider: content.source,
-        publishedAt: content.fetchedAt,
-        symbol: safeCompany,
-      }, safeCompany);
-    }));
-
-    const total = results.length || 1;
-    const weighted = results.reduce((sum, item) => sum + item.sentimentScore * item.credibilityScore, 0) / total;
-    const score = Number(Math.max(-1, Math.min(1, weighted)).toFixed(3));
-    const sentiment = score > 0.12 ? "positive" : score < -0.12 ? "negative" : "neutral";
-    const verdict = sentimentToVerdict(score);
-
-    const generatedAt = new Date().toISOString();
-
-    return {
-      symbol: safeCompany,
-      generatedAt,
-      totalSources: results.length,
-      sentiment,
-      sentimentScore: score,
-      confidence: Number(Math.min(0.98, Math.max(0.2, results.reduce((sum, item) => sum + item.confidence, 0) / total)).toFixed(3)),
-      verdict,
-      buyCount: results.filter((item) => item.verdict === "BUY").length,
-      holdCount: results.filter((item) => item.verdict === "HOLD").length,
-      sellCount: results.filter((item) => item.verdict === "SELL").length,
-      sources: results,
-      highlights: results.slice(0, 4).map((item) => `${item.verdict}: ${item.title}`),
-      canonical: buildNewsCanonicalPayloadFromSources(safeCompany, results, generatedAt, "manual-url-analysis")
-    };
-  }
-
-  async validateURL(url: string): Promise<boolean> {
-    const normalizedUrl = normalizeUrl(url);
-    const hostname = hostnameOf(normalizedUrl).toLowerCase();
-    return /bloomberg|cnbc|reuters|wsj|marketwatch|finance\.yahoo|nasdaq|sec\.gov|investor/.test(hostname);
-  }
-}
-
-function normalizeWhitespace(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function summarize(text: string): string {
-  const clean = normalizeWhitespace(text);
-  if (clean.length <= 260) return clean;
-  const sentences = clean.match(/[^.!?]+[.!?]+/g) ?? [];
-  const selected = sentences.slice(0, 2).join(" ").trim();
-  return selected.length > 80 ? selected.slice(0, 340) : `${clean.slice(0, 337)}...`;
-}
-
-function credibilityFor(input: NewsSourceInput, text: string): number {
-  const url = input.url?.toLowerCase() ?? "";
-  const provider = (input.provider ?? "").toLowerCase();
-
-  // Tier 1: highest-credibility financial sources
-  const isTier1 = /reuters\.com|bloomberg\.com|wsj\.com|ft\.com|sec\.gov/.test(url);
-  // Tier 2: well-known financial media (includes Yahoo Finance RSS links)
-  const isTier2 = /cnbc\.com|marketwatch\.com|finance\.yahoo\.com|yahoo\.com\/finance|yahoo\.com\/news|nasdaq\.com|investor\.com|seekingalpha\.com|barrons\.com|fortune\.com|thestreet\.com/.test(url);
-  // Tier 3: general reliable media
-  const isTier3 = /nytimes\.com|washingtonpost\.com|apnews\.com|bbc\.com|economist\.com|businessinsider\.com|forbes\.com|morningstar\.com/.test(url);
-
-  let score: number;
-
-  if (isTier1) {
-    // 0.82 - 0.90 range depending on content depth
-    score = 0.82 + (text.length > 2000 ? 0.08 : text.length > 700 ? 0.05 : 0.02);
-  } else if (isTier2) {
-    // 0.68 - 0.75 range
-    score = 0.68 + (text.length > 2000 ? 0.07 : text.length > 700 ? 0.04 : 0.01);
-  } else if (isTier3) {
-    // 0.58 - 0.64 range
-    score = 0.58 + (text.length > 2000 ? 0.06 : text.length > 700 ? 0.03 : 0.0);
-  } else if (url.startsWith("https://")) {
-    // Unknown HTTPS source — scored by content quality only
-    score = 0.42 + (text.length > 2000 ? 0.10 : text.length > 700 ? 0.06 : text.length > 200 ? 0.03 : 0.0);
-  } else if (!input.url && input.text) {
-    // Plain text paste — scored by length/depth
-    score = 0.38 + (text.length > 2000 ? 0.08 : text.length > 700 ? 0.04 : 0.0);
-  } else {
-    score = 0.30;
-  }
-
-  // Bonus for verified data providers (Finnhub, Polygon, Alpha Vantage supply vetted data)
-  if (/finnhub|polygon|alphavantage/.test(provider)) score += 0.05;
-
-  return Math.max(0.15, Math.min(0.98, Number(score.toFixed(2))));
-}
-
-function extractKeywords(text: string): string[] {
-  const normalized = text.toLowerCase();
-  const terms = ["earnings", "revenue", "guidance", "stock", "shares", "market", "sec", "options", "analyst", "upgrade", "downgrade", "inflation", "rates", "fed", "ai", "cloud"];
-  const found = new Set<string>();
-  for (const term of terms) {
-    if (normalized.includes(term)) found.add(term);
-  }
-  const tickers = text.match(/\b[A-Z]{2,5}\b/g) ?? [];
-  for (const ticker of tickers.slice(0, 8)) found.add(ticker);
-  return [...found].slice(0, 12);
-}
-
-function detectSymbols(text: string, explicitSymbol?: string): string[] {
-  const normalized = text.toLowerCase();
-  const symbols = new Set<string>();
-  if (explicitSymbol) symbols.add(explicitSymbol.toUpperCase());
-  const tickers = text.match(/\b[A-Z]{1,5}\b/g) ?? [];
-  for (const ticker of tickers) symbols.add(ticker);
-  const aliases: Record<string, string[]> = {
-    AAPL: ["apple", "iphone", "mac"],
-    MSFT: ["microsoft", "azure", "copilot"],
-    NVDA: ["nvidia", "gpu", "cuda"],
-    TSLA: ["tesla", "elon"],
-    AMZN: ["amazon", "aws"],
-    GOOGL: ["alphabet", "google"],
-    META: ["meta", "facebook", "instagram"],
-    SPY: ["s&p 500", "sp500", "market"],
-    QQQ: ["nasdaq 100", "nasdaq", "qqq"]
-  };
-  for (const [symbol, list] of Object.entries(aliases)) {
-    if (list.some((alias) => normalized.includes(alias))) symbols.add(symbol);
-  }
-  return [...symbols].slice(0, 8);
-}
-
-function sentimentToNews(sentiment: { label: string }): "positive" | "neutral" | "negative" {
-  if (sentiment.label === "BULLISH") return "positive";
-  if (sentiment.label === "BEARISH") return "negative";
-  return "neutral";
-}
-
-export async function analyzeNewsSource(input: NewsSourceInput, symbol?: string): Promise<AnalyzedNewsSource> {
-  const safeSymbol = (symbol ?? input.symbol ?? "SPY").trim().toUpperCase() || "SPY";
-  const sourceId = input.id ?? `src-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const analyzer = createSentimentAnalyzerForRuntime();
-
-  let title = input.title?.trim();
-  let rawText = input.text ?? "";
-  let provider = input.provider ?? "manual";
-  let publishedAt = input.publishedAt ?? new Date().toISOString();
-
-  if (input.url && !rawText) {
-    provider = "url";
-    try {
-      const service = new URLAnalysisService();
-      const fetched = await service.fetchURLContent(input.url, safeSymbol);
-      title = title ?? fetched.title;
-      rawText = fetched.content;
-      provider = fetched.source;
-      publishedAt = fetched.fetchedAt;
-    } catch (error) {
-      rawText = `No se pudo descargar la URL ${input.url}. Error: ${(error as Error).message}`;
-      title = title ?? "Fuente no disponible";
-    }
-  }
-
-  if (!rawText && input.url) {
-    rawText = input.url;
-  }
-
-  const cleanText = normalizeWhitespace(rawText || input.title || "Sin contenido para analizar.");
-  const analysisText = `${title ?? ""} ${cleanText}`.trim();
-  const sentiment = await analyzer.analyzeNewsSentiment(safeSymbol, [{
-    id: sourceId,
-    headline: title ?? summarize(cleanText).slice(0, 90),
-    summary: cleanText,
-    author: "",
-    source: String(provider),
-    url: input.url ?? "",
-    symbols: [safeSymbol],
-    createdAt: publishedAt
-  }]);
-  const credibilityScore = credibilityFor({ ...input, provider }, cleanText);
-  const sentimentScore = Number((sentiment.score).toFixed(3));
-  const confidenceScore = Number(Math.max(0, Math.min(1, sentiment.confidence)).toFixed(3));
-  const weightedConfidence = Number((confidenceScore * credibilityScore).toFixed(3));
-  const verdict = sentimentToVerdict(sentimentScore * credibilityScore);
-  const calculationReason =
-    `Calculo A_NOTICIAS: confianza_sentimiento(${confidenceScore.toFixed(3)}) ` +
-    `x credibilidad_fuente(${credibilityScore.toFixed(3)}) = peso(${weightedConfidence.toFixed(3)}).`;
-
-  const analyzed: AnalyzedNewsSource = {
-    id: sourceId,
-    title: title ?? summarize(cleanText).slice(0, 90),
-    url: input.url,
-    provider: String(provider),
-    publishedAt,
-    summary: summarize(cleanText),
-    rawText: cleanText.slice(0, 5000),
-    sentiment: sentimentToNews(sentiment),
-    sentimentScore,
-    // v13: confidence guarda la confianza del sentimiento, NO el producto doble con credibilidad.
-    // El peso canonico se calcula aparte como confidence * credibilityScore.
-    confidence: confidenceScore,
-    credibilityScore,
-    affectedSymbols: detectSymbols(analysisText, safeSymbol),
-    keywords: extractKeywords(analysisText),
-    verdict,
-    rationale: `${sentiment.reasoning || `Sentimiento ${sentiment.label}.`} ${calculationReason}`
-  };
-
-  return attachNewsCanonicalToSource(safeSymbol, analyzed);
-}
-
-export async function analyzeNewsSources(inputs: NewsSourceInput[], symbol?: string): Promise<NewsAnalysisAggregate> {
-  const safeSymbol = symbol?.trim().toUpperCase() || inputs.find((input) => input.symbol)?.symbol?.toUpperCase() || "SPY";
-  const sources = await Promise.all(inputs.map((input) => analyzeNewsSource(input, safeSymbol)));
-  const total = sources.length || 1;
-  const weighted = sources.reduce((sum, item) => sum + item.sentimentScore * item.credibilityScore, 0) / total;
-  const score = Number(Math.max(-1, Math.min(1, weighted)).toFixed(3));
-  const sentiment = score > 0.12 ? "positive" : score < -0.12 ? "negative" : "neutral";
-  const verdict = score > 0.18 ? "BUY" : score < -0.18 ? "SELL" : "HOLD";
-  const buyCount = sources.filter((item) => item.verdict === "BUY").length;
-  const sellCount = sources.filter((item) => item.verdict === "SELL").length;
-  const holdCount = sources.filter((item) => item.verdict === "HOLD").length;
-  const confidence = Number(Math.min(0.98, Math.max(0.2, sources.reduce((sum, item) => sum + item.confidence, 0) / total)).toFixed(3));
-
-  const generatedAt = new Date().toISOString();
-
-  return {
-    symbol: safeSymbol,
-    generatedAt,
-    totalSources: sources.length,
-    sentiment,
-    sentimentScore: score,
-    confidence,
-    verdict,
-    buyCount,
-    holdCount,
-    sellCount,
-    sources,
-    highlights: sources.slice(0, 4).map((item) => `${item.verdict}: ${item.title}`),
-    canonical: buildNewsCanonicalPayloadFromSources(safeSymbol, sources, generatedAt, "manual-source-analysis")
-  };
 }
 
 // FIC: Extract <title> text from raw HTML.
@@ -367,7 +236,7 @@ export function extractTitle(html: string): string {
 
 // FIC: Strip scripts/styles/tags and collapse whitespace, capped at maxChars.
 // FIC: Elimina scripts/styles/etiquetas y colapsa espacios, acotado a maxChars.
-export function extractRelevantContent(html: string, maxChars = 5000, symbol?: string): string {
+export function extractRelevantContent(html: string, maxChars = 5000): string {
   const withoutScripts = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -375,51 +244,7 @@ export function extractRelevantContent(html: string, maxChars = 5000, symbol?: s
   const text = decodeEntities(withoutScripts.replace(/<[^>]+>/g, " "))
     .replace(/\s+/g, " ")
     .trim();
-  if (!symbol) return text.slice(0, maxChars);
-
-  const relevant = extractTickerRelevantText(text, symbol, maxChars);
-  return relevant || `No se encontro contenido dentro de la pagina que mencione directamente ${symbol.toUpperCase()}. Texto base: ${text.slice(0, Math.min(maxChars, 900))}`;
-}
-
-function extractTickerRelevantText(text: string, symbol: string, maxChars: number): string {
-  const clean = normalizeWhitespace(text);
-  const terms = tickerTerms(symbol);
-  const chunks = clean
-    .split(/(?<=[.!?])\s+|\s{2,}|\n+/)
-    .map((chunk) => chunk.trim())
-    .filter((chunk) => chunk.length >= 40);
-  const matches: string[] = [];
-
-  chunks.forEach((chunk, index) => {
-    if (!mentionsAny(chunk, terms)) return;
-    const before = chunks[index - 1];
-    const after = chunks[index + 1];
-    if (before && !matches.includes(before)) matches.push(before);
-    if (!matches.includes(chunk)) matches.push(chunk);
-    if (after && !matches.includes(after)) matches.push(after);
-  });
-
-  const relevant = normalizeWhitespace(matches.join(" "));
-  return relevant.slice(0, maxChars);
-}
-
-function tickerTerms(symbol: string): string[] {
-  const safeSymbol = symbol.toUpperCase();
-  return [safeSymbol, ...(SYMBOL_ALIASES[safeSymbol] ?? [])].map((term) => term.toLowerCase());
-}
-
-function mentionsAny(text: string, terms: string[]): boolean {
-  const normalized = text.toLowerCase();
-  return terms.some((term) => {
-    if (term.length <= 5 && /^[a-z0-9.]+$/i.test(term)) {
-      return new RegExp(`\\b${escapeRegExp(term)}\\b`, "i").test(normalized);
-    }
-    return normalized.includes(term);
-  });
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.slice(0, maxChars);
 }
 
 function decodeEntities(s: string): string {
@@ -432,15 +257,43 @@ function decodeEntities(s: string): string {
     .replace(/&nbsp;/g, " ");
 }
 
-function normalizeUrl(url: string): string {
-  const trimmed = url.trim();
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-}
-
 function hostnameOf(url: string): string {
   try {
     return new URL(url).hostname;
   } catch {
     return url;
   }
+}
+
+// FIC: Analyze a raw NewsSourceInput (from any provider) and return a scored AnalyzedNewsSource.
+// FIC: Analiza un NewsSourceInput crudo (de cualquier proveedor) y devuelve un AnalyzedNewsSource puntuado.
+export async function analyzeNewsSource(source: NewsSourceInput, symbol: string): Promise<AnalyzedNewsSource> {
+  const analyzer = createSentimentAnalyzerForRuntime();
+  const pseudoArticle: NewsArticle = {
+    id: source.id,
+    headline: source.title ?? "",
+    summary: source.text ?? "",
+    author: "",
+    source: source.provider,
+    url: source.url ?? "",
+    symbols: [symbol.toUpperCase()],
+    createdAt: source.publishedAt ?? new Date().toISOString()
+  };
+
+  const sentiment = await analyzer.analyzeNewsSentiment(symbol.toUpperCase(), [pseudoArticle]);
+  const verdict: NewsVerdict = sentiment.score > 0.3 ? "BUY" : sentiment.score < -0.3 ? "SELL" : "HOLD";
+
+  return {
+    id: source.id,
+    url: source.url,
+    title: source.title ?? "",
+    summary: source.text,
+    rationale: sentiment.reasoning,
+    verdict,
+    sentimentScore: sentiment.score,
+    confidence: sentiment.confidence,
+    credibilityScore: sentiment.degraded ? 0.3 : 0.7,
+    provider: source.provider,
+    publishedAt: source.publishedAt ?? new Date().toISOString()
+  };
 }

@@ -22,17 +22,21 @@ vi.mock("../../../src/services/signals/confluenceTableApi", async () => {
 describe("SimulationControlPanel", () => {
   it("renders the canonical inputs from PDF v1", () => {
     render(<SimulationControlPanel ticket="AAPL" onResult={() => {}} />);
-    expect(screen.getByText(/Rango Historico/i)).toBeTruthy();
+    expect(screen.getByText(/Rango Hist[oó]rico/i)).toBeTruthy();
     expect(screen.getByText(/Temporalidad/i)).toBeTruthy();
-    expect(screen.getByText(/Estrategia$/i)).toBeTruthy();
-    expect(screen.getByText(/Tolerancia Riesgo/i)).toBeTruthy();
+    expect(screen.getByText(/^Estrategia$/i)).toBeTruthy();
+    expect(screen.getByText(/Tolerancia al Riesgo/i)).toBeTruthy();
+    // FIC: Phase 8 — optional historical as-of date field. (EN)
+    expect(screen.getByText(/Fecha Hist[oó]rica/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /Ejecutar/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Limpiar panel/i })).toBeTruthy();
   });
 
-  it("toggles cores SI/NO buttons", () => {
+  it("starts with the A_INDICADORES core disabled by default (Phase 8)", () => {
     render(<SimulationControlPanel ticket="AAPL" onResult={() => {}} />);
-    const noLabels = screen.getAllByText(/A_INDICADORES/i);
-    expect(noLabels.length).toBeGreaterThan(0);
+    // The A_INDICADORES core chip renders with the Spanish label "Indicadores".
+    const indicadoresChip = screen.getByRole("button", { name: "Indicadores" });
+    expect(indicadoresChip.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("calls onResult after clicking Ejecutar Simulacion", async () => {

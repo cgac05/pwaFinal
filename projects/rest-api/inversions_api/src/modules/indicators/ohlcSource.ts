@@ -5,10 +5,6 @@ import type { OhlcBar, Timeframe } from "./types";
 import { fetchYahooOhlc } from "../institutional/yahooChartParser";
 import { createHash } from "node:crypto";
 
-// FIC: 5-minute cache prevents Yahoo Finance rate-limiting when multiple strategies run concurrently. (EN)
-// FIC: Caché de 5 minutos previene rate-limiting de Yahoo cuando varias estrategias corren en paralelo. (ES)
-const candleCache = new Map<string, { data: OhlcBar[]; expiresAt: number }>();
-
 const TIMEFRAME_MS: Record<Timeframe, number> = {
   "1m": 60_000,
   "5m": 300_000,
@@ -61,14 +57,13 @@ function getMockCandles({ symbol, timeframe, count = 300, endTimeMs }: GetCandle
 export async function getCandles(opts: GetCandlesOptions): Promise<OhlcBar[]> {
   const { symbol, timeframe, count = 300, endTimeMs } = opts;
 
-  const cacheKey = `${symbol}:${timeframe}:${count}:${endTimeMs ?? "latest"}`;
-  const cached = candleCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.data;
-  }
-
   try {
-    // FIC: US8 — si se pide una fecha historica, ampliar el rango de Yahoo y cortar velas hasta ese dia.
+    // FIC: When an as-of date is requested, widen the Yahoo range so it reaches well BEFORE that
+    // FIC: past point (enough bars to compute indicators), then keep only candles up to that date
+    // FIC: (US8 — historical snapshot). The 1.6x factor compensates for weekend/holiday gaps. (EN)
+    // FIC: Cuando se pide una fecha as-of, ensancha el rango de Yahoo para llegar bastante ANTES de
+    // FIC: ese punto (suficientes velas para los indicadores) y conserva solo las velas hasta esa
+    // FIC: fecha (US8 — snapshot historico). El factor 1.6x compensa fines de semana/festivos. (ES)
     const startDateIso = endTimeMs
       ? new Date(endTimeMs - count * intervalMs(timeframe) * 1.6).toISOString()
       : undefined;
@@ -78,7 +73,7 @@ export async function getCandles(opts: GetCandlesOptions): Promise<OhlcBar[]> {
       const upToDate = cutoffSec ? yahooCandles.filter((c) => c.time <= cutoffSec) : yahooCandles;
       if (upToDate.length >= Math.min(count, 20)) {
         const sliced = upToDate.slice(-count);
-        const result = sliced.map((c) => ({
+        return sliced.map((c) => ({
           time: c.time,
           open: c.open,
           high: c.high,
@@ -86,8 +81,6 @@ export async function getCandles(opts: GetCandlesOptions): Promise<OhlcBar[]> {
           close: c.close,
           volume: c.volume,
         }));
-        candleCache.set(cacheKey, { data: result, expiresAt: Date.now() + 300_000 });
-        return result;
       }
     }
   } catch {

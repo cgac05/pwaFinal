@@ -18,6 +18,7 @@ import type { OptionStrategyAnalysis } from "./simulation/OptionStrategyParamsMo
 import type { WheelModalParams } from "./simulation/WheelParamsModal";
 import type { SpreadModalParams } from "./simulation/SpreadParamsModal";
 import { TechnicalAnalysisExtendedSection } from "./TechnicalAnalysisExtendedSection";
+import { NewsSourcesAnalyzer, type NewsAnalysisResult } from "../news";
 import { AppShell } from "../../layouts/AppShell";
 import { ActivityBar } from "../../components/ui/ActivityBar";
 import { LeftPanel } from "../sidebar/LeftPanel";
@@ -33,7 +34,12 @@ import { getInstitutionalAnalysis } from "../../services/institutional/instituti
 import type { FundamentalAnalysisResponse } from "../../services/fundamental/fundamentalApi";
 import { formatCurrency } from "../../utils/format";
 import { Tooltip } from "../../components/ui/Tooltip";
+<<<<<<< HEAD
 import { ReportePDFTemplate } from "./ReportePDFTemplate";
+=======
+import { getAuthHeaders } from "../../services/signals/signalApi";
+
+>>>>>>> Global/main
 // FIC: US-5 — compact buy/sell/hold counter chip shown above the confluence table. (EN)
 // FIC: US-5 — chip compacto de conteo compra/venta/hold mostrado sobre la tabla. (ES)
 function SignalMetricChip({ label, value, color }: { label: string; value: number; color: string }) {
@@ -57,7 +63,7 @@ export function MainDashboard() {
   const [periodRange, setPeriodRange] = useState<{ startDate: Date; endDate: Date } | null>(null);
   const [simulationRows, setSimulationRows] = useState<ConfluenceSignalRow[] | undefined>(undefined);
   const [simulationVerdict, setSimulationVerdict] = useState<{ verdict?: unknown; score?: number; degraded?: boolean } | null>(null);
-  const [activeSimulationStrategy, setActiveSimulationStrategy] = useState("");
+  const [activeSimulationStrategy, setActiveSimulationStrategy] = useState("IRON_CONDOR");
   const [coverageRequest, setCoverageRequest] = useState<{ params: CoverageModalParams; kind: string } | null>(null);
   const [optionStrategyAnalysis, setOptionStrategyAnalysis] = useState<OptionStrategyAnalysis | null>(null);
   const [fundamentalAnalysis, setFundamentalAnalysis] = useState<FundamentalAnalysisResponse | null>(null);
@@ -79,12 +85,35 @@ export function MainDashboard() {
   const [activeChartTab, setActiveChartTab] = useState<"chart" | "chain">("chart");
   const [pdfChartImg, setPdfChartImg] = useState<string | undefined>(undefined);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
+  const [noticias2Active, setNoticias2Active] = useState(false);
+  // Bug 1 — el módulo solo existe en el DOM después de que el usuario ejecutó la simulación
+  const [simulationHasRun, setSimulationHasRun] = useState(false);
+  const [noticias2DateRange, setNoticias2DateRange] = useState<{ from?: string; to?: string } | undefined>();
+  const [noticias2Result, setNoticias2Result] = useState<NewsAnalysisResult | null>(null);
+  const [noticias2ChatContext, setNoticias2ChatContext] = useState<string | null>(null);
 
   const { selectedInstrument, selectedStrike, runtimeMode, operationalMode, setSelectedStrike } = useSignalStore();
   const { setAnalysisCategory } = useAppShellStore();
   const { results: institutionalResults, loading: institutionalLoading, errors: institutionalErrors } = useInstitutionalStore();
 
   const selectedSymbol = selectedInstrument?.symbol ?? "SPY";
+
+  // Carga watchlist al activar Noticias 2; limpia resultados al desactivar
+  useEffect(() => {
+    if (!noticias2Active) {
+      setNoticias2Result(null);
+      setNoticias2ChatContext(null);
+      return;
+    }
+    fetch("/api/watchlist", { headers: getAuthHeaders() })
+      .then((r) => r.json())
+      .then((data) => {
+        const symbols: string[] = (data.items ?? []).map((i: any) => i.symbol).filter(Boolean);
+        if (symbols.length > 0) setWatchlistSymbols(symbols);
+      })
+      .catch(() => {});
+  }, [noticias2Active]);
 
   // FIC: Clear simulation results and institutional flag when the user selects a new ticker. (EN)
   // FIC: Limpiar resultados de simulación y flag institucional cuando el usuario selecciona un nuevo ticker. (ES)
@@ -104,12 +133,25 @@ export function MainDashboard() {
       setComplexResult(null);
       setSelectedStrikeData(null);
       setSelectedStrike(undefined);
+      // Bug 4 — limpieza absoluta de Noticias 2 al cambiar ticker:
+      // oculta el módulo y borra toda la data para que el usuario parta de cero
+      setNoticias2Active(false);
+      setSimulationHasRun(false);
+      setNoticias2Result(null);
+      setNoticias2ChatContext(null);
+      setNoticias2DateRange(undefined);
     }
   }, [selectedSymbol, setSelectedStrike]);
 
   const handleSimulationResult = useCallback((result: SimulationResponse) => {
     setSimulationRows(result.table);
     setSimulationVerdict(result.verdict);
+    // Bug 1 — la simulación se ejecutó: habilita la visibilidad de Noticias 2
+    setSimulationHasRun(true);
+    // Req 2: captura el rango de fechas para pasarlo a NewsSourcesAnalyzer
+    if (result.inputs_echo?.rangoEstrategia) {
+      setNoticias2DateRange(result.inputs_echo.rangoEstrategia);
+    }
     // FIC: US-5 — prefer backend-computed metrics; fall back to a client-side count. (EN)
     if (result.signalMetrics) {
       setSimulationMetrics(result.signalMetrics);
@@ -480,7 +522,7 @@ export function MainDashboard() {
               height: 420,
               padding: "var(--space-md)",
             }}>
-              <OptionChainTableConnected onSelectStrike={handleStrikeSelect} />
+              <OptionChainTableConnected onSelectStrike={handleStrikeSelect} activeStrategy={activeSimulationStrategy} />
             </div>
           </div>
 
@@ -506,7 +548,9 @@ export function MainDashboard() {
         onOptionStrategyCalculated={handleOptionStrategyCalculated}
         onWheelParamsConfirmed={handleWheelConfirmed}
         onTermResult={handleTermResult}
+        onClear={handleClearTable}
         onComplexResult={handleComplexResult}
+        onNoticias2Change={(v) => setNoticias2Active(v)}
       />
 
       {/* ── Strategy error (from buildComplexStrategyRows validation) */}
@@ -517,16 +561,7 @@ export function MainDashboard() {
         </div>
       )}
 
-      {/* ── Simulation verdict */}
-      {simulationVerdict && (
-        <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-          <strong>Verdict derivado:</strong>
-          <span>
-            {String(simulationVerdict.verdict)} (score {Number(simulationVerdict.score ?? 0).toFixed(3)})
-            {simulationVerdict.degraded && <em style={{ color: "var(--color-text-muted)" }}> · degradado</em>}
-          </span>
-        </div>
-      )}
+      {/* Verdict derivado: eliminado del body — la info se muestra en la Tabla de Confluencias */}
 
       {/* ── Confluence table — empty state until simulation runs */}
       {simulationRows === undefined ? (
@@ -539,13 +574,42 @@ export function MainDashboard() {
           </p>
         </section>
       ) : (
-        <ConfluenceSignalsTable
-          symbol={selectedSymbol}
-          rows={simulationRows}
-          activeStrategy={activeSimulationStrategy}
-          fundamentalAnalysis={fundamentalAnalysis}
-          onStrategyRowClick={handleStrategyRowClick}
-        />
+        <div style={{ display: "grid", gap: "var(--space-sm)" }}>
+          {/* US-5 metrics + US-1 clear table action */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-md)", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "var(--space-sm)", flexWrap: "wrap" }}>
+              <SignalMetricChip label="Compra (CALL)" value={simulationMetrics?.buy ?? 0} color="var(--color-buy)" />
+              <SignalMetricChip label="Venta (PUT)" value={simulationMetrics?.sell ?? 0} color="var(--color-sell)" />
+              <SignalMetricChip label="Hold" value={simulationMetrics?.hold ?? 0} color="var(--color-text-muted)" />
+              <SignalMetricChip label="Total generadas" value={simulationMetrics?.total ?? (simulationRows?.length ?? 0)} color="var(--color-accent)" />
+            </div>
+            <button
+              type="button"
+              onClick={handleClearTable}
+              title="Limpiar la tabla de resultados"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "6px",
+                padding: "7px 14px", background: "transparent",
+                color: "var(--color-text-muted)", border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-sm)", cursor: "pointer",
+                fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-emphasis)" as any,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <Trash2 size={13} />
+              Limpiar tabla
+            </button>
+          </div>
+
+          <ConfluenceSignalsTable
+            symbol={selectedSymbol}
+            rows={simulationRows}
+            activeStrategy={activeSimulationStrategy}
+            fundamentalAnalysis={fundamentalAnalysis}
+            onStrategyRowClick={handleStrategyRowClick}
+            noticias2Verdict={noticias2Result?.verdict ?? null}
+          />
+        </div>
       )}
 
       {/* ── Institutional analysis section */}
@@ -714,7 +778,27 @@ export function MainDashboard() {
         autoRunKey={fundamentalAutoRunKey}
         onAnalysisComplete={setFundamentalAnalysis}
       />
-<NewsSection symbol={selectedSymbol} />
+      {/* NewsSection del equipo de Noticias (otro equipo — coexiste con Noticias 2) */}
+      <NewsSection symbol={selectedSymbol} />
+
+      {/* Bug 1: el módulo Noticias 2 NO existe en el DOM hasta que la simulación se haya ejecutado */}
+      {noticias2Active && simulationHasRun && (
+        <NewsSourcesAnalyzer
+          selectedSymbol={selectedSymbol}
+          watchlistSymbols={watchlistSymbols.length > 0 ? watchlistSymbols : undefined}
+          dateRange={noticias2DateRange}
+          onResult={(r) => {
+            setNoticias2Result(r);
+            const LABELS: Record<string, string> = { BUY: 'COMPRAR', SELL: 'VENDER', HOLD: 'ESPERAR' };
+            const topPoint = r.keyPoints?.[0] ?? r.reasoning?.slice(0, 120) ?? 'análisis de noticias recientes';
+            const prefill = `Las noticias recientes sugieren [${LABELS[r.verdict] ?? r.verdict}] ${r.company} ` +
+              `(score ${r.score.toFixed(2)}, confianza ${(r.confidence * 100).toFixed(0)}%) ` +
+              `debido a: "${topPoint}". ¿Qué indicadores técnicos actuales respaldan o contradicen esta decisión?`;
+            setNoticias2ChatContext(prefill);
+          }}
+          onSendToChat={() => { setCopilotOpen(true); }}
+        />
+      )}
     </div>
   );
 
@@ -758,6 +842,7 @@ export function MainDashboard() {
       <GlobalChatDrawer
         isOpen={copilotOpen}
         onClose={() => setCopilotOpen(false)}
+        prefillInput={noticias2ChatContext}
       />
 
       {/* PDF Generation: Overlay Pattern (Estructura de DOM Segura) */}

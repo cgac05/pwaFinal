@@ -4,7 +4,7 @@
 import { useSyncExternalStore } from "react";
 
 export type AppShellSection = "watchlist" | "analysis" | "strategies";
-export type AnalysisCategory = "technical" | "institutional" | "fundamental" | "news" | "ai";
+export type AnalysisCategory = "technical" | "institutional" | "fundamental" | "news" | "news2" | "ai";
 
 interface AppShellStoreState {
   activeSection: AppShellSection;

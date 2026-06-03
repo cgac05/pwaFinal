@@ -145,7 +145,7 @@ Las decisiones documentales tienen sus tasks de implementacion concreta en **Pha
 
 ## Resumen de progreso
 
-- Completado: TODAS las phases 0-6 (T000-T148). 
+- Completado: phases 0-6 (T000-T148) + Phase 7 mejoras UX dashboard (T149-T159, ver `changes/001-dashboard-ux-8-cambios.md`) + Phase 8 reglas de confluencia + default de core + fix de fecha (T160-T164, ver `changes/002-confluence-rules-y-fecha-historica.md`). 
 - Backend: 233/233 tests passing (41 archivos). PWA: 16/16 tests passing (5 archivos). Lint TypeScript OK.
 - Phase 5 Bloque B: nuevos endpoints `GET /api/signals/confluence-table` y `POST /api/simulation/run` + runner + persistencia + 12 tests nuevos.
 - Phase 5 Bloque C: nueva `ConfluenceSignalsTable` (13 columnas PDF v1), `SimulationControlPanel` + `StrategySelector` + `RiskToleranceToggle` + `ExecuteSimulationButton`, `ObservationCell`, `OptionGreeksRow`, toggles SI/NO en `CoreSelector`, integracion en `MainDashboard`.
@@ -159,6 +159,8 @@ Las decisiones documentales tienen sus tasks de implementacion concreta en **Pha
 - Phase 6 Bloque F: `thresholds.ts` centraliza VERDICT_THRESHOLDS y ADX_THRESHOLDS + tests parametrizados con limites exactos.
 - Phase 6 Bloque G: `cache.ts` in-process por sha256(symbol|timeframe|params|last_bar_ts), TTL = duracion de 1 vela.
 - Phase 6 Bloque H: documentacion y contratos OpenAPI actualizados.
+- Phase 7 (mejoras UX dashboard, 8 cambios): limpiar tabla (US1), indicadores off por defecto (US2), limpiar panel (US3), badge Yahoo corregido (US4), métricas compra/venta/total (US5), CALL/PUT confirmado + "PULL"=typo (US6), filtro de coincidencias multi-indicador (US7), `fechaHistorica` snapshot histórico (US8). Backend 483/484 tests passing (1 falla preexistente ajena en runtimeMode). Detalle: `changes/001-dashboard-ux-8-cambios.md`.
+- Phase 8 (reglas confluencia + default core + fix fecha): A_INDICADORES off por defecto al iniciar; sin indicadores individuales → 0 filas de indicadores; regla multicore (otros cores siguen mostrando); bugfix fecha real en datos históricos. Backend 486/487 tests passing (misma falla preexistente). Detalle: `changes/002-confluence-rules-y-fecha-historica.md`.
 
 ## Phase 6: Implementacion post-clarify + post-correcciones (deriva de spec actualizado)
 
@@ -221,3 +223,39 @@ Las decisiones documentales tienen sus tasks de implementacion concreta en **Pha
 - [x] **T146** `npm run lint:fic` y `npm run -w @inversions/rest-api lint` sin errores. Owner: H.
 - [x] **T147** Actualizar `contracts/chat-explain.openapi.yaml` y `contracts/health.openapi.yaml` con los nuevos campos (`degraded`, `error_code: LLM_*`, `dependencies[]`). Owner: H + M.
 - [x] **T148** Documentar en `quickstart.md`: como configurar `ANTHROPIC_API_KEY`, como simular degradacion del LLM, como inspeccionar `chat_explanations`. Owner: H.
+
+## Phase 7 — Mejoras UX Dashboard (8 cambios funcionales)
+
+Ref: `changes/001-dashboard-ux-8-cambios.md`. Cambios aditivos y retrocompatibles sobre el core de señales/indicadores. Los campos de request nuevos son opcionales.
+
+### Bloque A — Frontend (limpieza + defaults + métricas)
+
+- [x] **T149** US-1: botón "Limpiar tabla" en `MainDashboard.tsx` (`handleClearTable` resetea filas/verdict/métricas/flag institucional). Owner: E.
+- [x] **T150** US-2: indicadores técnicos (`indicadoresOn`) inician todos en `false` en `SimulationControlPanel.tsx`; el usuario los activa. Owner: E.
+- [x] **T151** US-3: botón "Limpiar panel" + `resetPanel()` que restablece todos los campos a default e invoca `onClear` para limpiar resultados. Owner: E. Depende: T149.
+- [x] **T152** US-5: chips de métricas (`SignalMetricChip`) Compra/Venta/Hold/Total sobre la tabla; consume `signalMetrics` del backend con fallback client-side. Owner: E. Depende: T155.
+
+### Bloque B — Backend (datos reales + métricas + coincidencias + histórico)
+
+- [x] **T153** US-4 (detalle): corregir `source: "yahoo_finance"` → `"yahoo"` en `routes/market-data/ohlc.ts` para que el badge del front coincida. Owner: K.
+- [x] **T154** US-6: confirmar y documentar que "PULL" es typo de PUT; `TipoSenal = CALL|PUT|HOLD` es la clasificación canónica. Owner: K.
+- [x] **T155** US-5: `SignalMetrics` en `types.ts` + `computeSignalMetrics` y campo `signalMetrics` en `SimulationRunResult` (`runner.ts`). Owner: K.
+- [x] **T156** US-7: `applyCoincidenceFilter` en `runner.ts` — con ≥2 indicadores solo pasan filas de indicador cuya `tipoSenal` coincide con ≥1 par; flag `soloCoincidencias?` (default true) en `SimulationRequest`. Owner: M.
+- [x] **T157** US-8: `fechaHistorica?` en `SimulationRequest` + `getCandles` honra `endTimeMs` (`ohlcSource.ts`) + validación y truncado en `runner.ts` (snapshot a la fecha). Owner: K. Depende: T155.
+- [x] **T158** Tests `tests/unit/simulation/runner.test.ts`: validación `fechaHistorica`, consistencia de `signalMetrics`, filtro de coincidencias (1 indicador y ≥2). Owner: K. Depende: T155, T156, T157.
+
+### Bloque C — Tipos del cliente
+
+- [x] **T159** `confluenceTableApi.ts`: añadir `fechaHistorica?` y `soloCoincidencias?` a `SimulationRequestPayload`, tipo `SignalMetrics` y `signalMetrics?` a `SimulationResponse`. Owner: E. Depende: T155.
+
+> Nota: falla preexistente y ajena a esta fase — `tests/integration/runtime/runtimeMode.test.ts` (`runtimeModeStore.ts` default `operationalMode:"real"` vs test que espera `"demo"`). No se tocó el módulo runtime.
+
+## Phase 8 — Reglas de confluencia + default de core + fix de fecha
+
+Ref: `changes/002-confluence-rules-y-fecha-historica.md`. Refina US2/US7/US8 de Phase 7.
+
+- [x] **T160** Core `A_INDICADORES` desactivado por defecto al iniciar (solo estado inicial, sin auto-apagado al ejecutar). Factories `defaultCoresOn()`/`defaultIndicadoresOn()` reusadas en init y `resetPanel()` en `SimulationControlPanel.tsx`. Owner: E.
+- [x] **T161** Quitar fallback "vacío → 5 indicadores" en `runner.ts`: la tabla de indicadores solo se construye si A_INDICADORES está activo **y** hay ≥1 indicador individual. Sin indicadores → 0 filas de A_INDICADORES. Owner: K.
+- [x] **T162** Regla multicore: confirmar que los demás cores emiten sus filas independientemente; la tabla queda totalmente vacía solo si A_INDICADORES es el único core encendido y sin indicadores. Owner: K. Depende: T161.
+- [x] **T163** Bugfix fecha histórica: sellar `fecha` de todas las filas con la fecha real de la última vela cuando la corrida es histórica (`endTimeMs`); `computed_at` conserva el timestamp real. Owner: K.
+- [x] **T164** Tests `runner.test.ts`: sin indicadores → 0 filas A_INDICADORES; multicore emite otros cores; fecha histórica correcta (no hoy). Owner: K. Depende: T161, T162, T163.

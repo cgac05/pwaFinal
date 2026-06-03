@@ -8,12 +8,14 @@
 - PWA: `projects/pwa/inversions_app` (`@inversions/pwa`)
 
 Este repo contiene el monorepo completo. Este README documenta el **alcance total entregado
-por TEAM-02 a la fecha 2026-05-26**, que incluye:
+por TEAM-02 a la fecha 2026-05-31**, que incluye:
 
 - Core tecnico de 5 indicadores (RSI, MACD, EMA, ADX, Bollinger).
 - Motor de confluencia + Chat IA explicativo.
 - **Phase 5** completa: tabla canonica de confluencia segun PDF v1 + panel de simulacion (boton EJECUTAR SIMULACION).
 - **Phase 6** completa: integracion Anthropic Claude Opus 4.7, persistencia chat con TTL 90 dias, rate limiting, health endpoint con 3 dependencias, cache in-process, constantes centralizadas, tests de auth US7.
+- **Phase 7** (2026-05-31): 8 mejoras UX del dashboard — limpiar tabla, indicadores off por defecto, limpiar panel, badge de fuente Yahoo, metricas compra/venta/total, snapshot historico por fecha, y filtro de coincidencias multi-indicador. Detalle: [`changes/001`](specs/003-team-02-core-indicadores/changes/001-dashboard-ux-8-cambios.md).
+- **Phase 8** (2026-05-31): reglas de confluencia + default de core + fix de fecha — core `A_INDICADORES` desactivado por defecto al iniciar, tabla sin filas de indicadores si no hay indicadores individuales activos (regla multicore), y bugfix de la fecha real en datos historicos. Detalle: [`changes/002`](specs/003-team-02-core-indicadores/changes/002-confluence-rules-y-fecha-historica.md).
 
 > **Regla constitucional:** la IA y los indicadores **solo evaluan / explican**, nunca
 > ejecutan ni recomiendan operaciones. Toda respuesta del Chat IA incluye el disclaimer
@@ -26,7 +28,8 @@ por TEAM-02 a la fecha 2026-05-26**, que incluye:
 1. [Como correr (backend + PWA)](#1-como-correr-backend--pwa)
 2. [Verificacion rapida con curl](#2-verificacion-rapida-con-curl)
 3. [Estado actual y datos reales — donde nos quedamos](#3-estado-actual-y-datos-reales--donde-nos-quedamos)
-4. [Que se hizo hoy (2026-05-26) — alcance completo](#4-que-se-hizo-hoy-2026-05-26--alcance-completo)
+4. [Que se hizo el 2026-05-26 — Phase 5 + 6](#4-que-se-hizo-hoy-2026-05-26--alcance-completo)
+4b. [Mejoras recientes (Phase 7-8, 2026-05-31)](#4b-mejoras-recientes-phase-7-8-2026-05-31)
 5. [Arquitectura del feature](#5-arquitectura-del-feature)
 6. [Endpoints REST](#6-endpoints-rest)
 7. [Modelo de datos en Supabase](#7-modelo-de-datos-en-supabase)
@@ -70,20 +73,33 @@ npm run dev
 
 Abre la URL que imprima Vite. Veras:
 
-- **Panel de Control de Simulacion** (arriba) con: Rango Historico (2A/1A/6M/3M/1M), Estrategia Desde/Hasta, Temporalidad, Estrategia, Tolerancia Riesgo (BAJO/MEDIO/ALTO) y toggles SI/NO por cada core y por cada indicador.
+- **Panel de Control de Simulacion** (arriba) con: Rango Historico (2A/1A/6M/3M/1M), Estrategia Desde/Hasta, Temporalidad, Estrategia, Tolerancia al Riesgo (BAJO/MEDIO/ALTO), **Fecha Historica (opcional)** y toggles SI/NO por cada core y por cada indicador.
+  - **El core `A_INDICADORES` y todos los indicadores individuales arrancan DESACTIVADOS** (Phase 8). El usuario los activa a mano; es solo el estado inicial, no se apagan al ejecutar.
+  - Boton **Limpiar panel** (resetea todo a defaults y limpia resultados).
 - Boton amarillo **▶ Ejecutar Simulacion**.
+- **Metricas** sobre la tabla: chips de Compra (CALL), Venta (PUT), Hold y Total generadas + boton **Limpiar tabla**.
 - **Tabla de Confluencia de Señales** debajo, con las 13 columnas canonicas del PDF v1:
   `TICKET | CORE | SUBCORE | PRECIO | TIPO SEÑAL | FECHA | TIMEFRAME | TENDENCIA | SCORE | PESO | INVERTIR | ESTADO | OBSERVACION`.
+  - Con **≥2 indicadores** activos, la tabla muestra solo las filas donde coinciden (filtro de confluencia, Phase 7).
+  - Si `A_INDICADORES` esta on pero sin indicadores individuales, no muestra filas de indicadores; otros cores activos si muestran lo suyo (regla multicore).
+  - Con **Fecha Historica** seleccionada, las filas muestran la fecha real del dato historico, no la de hoy.
 - Badge `IA` en filas del core `A_IA`, opacidad reducida en filas `DEGRADADA`.
 - Click en una fila → abre las `evidencia_refs` debajo del panel de evidencia.
+- Grafica con datos reales de Yahoo Finance (badge `Yahoo`/`Live`) y fallback a mock determinista (badge `DEMO`).
 
 ### Tests
 
 ```bash
-npm run -w @inversions/rest-api test    # 233 tests passing
-npm run -w @inversions/rest-api lint    # tsc --noEmit
-npm run -w @inversions/pwa test         # 16 tests passing
+npm run -w @inversions/rest-api test    # 487 tests (486 passing; 1 falla preexistente ajena: ver nota)
+npm run -w @inversions/rest-api lint    # tsc --noEmit (OK)
+npm run -w @inversions/pwa test         # suite repo-wide; las suites propias de TEAM-02 (indicadores,
+                                        # confluencia, simulationControlPanel) pasan
 ```
+
+> **Nota de tests:** la unica falla del backend es `tests/integration/runtime/runtimeMode.test.ts`,
+> **preexistente y ajena** a TEAM-02 (`runtimeModeStore.ts` tiene `operationalMode:"real"` hardcodeado
+> mientras el test espera `"demo"`). En el PWA, las fallas de `ActivityBar`/`AppShell`/`appShell` son del
+> shell de dashboard de otro equipo; no provienen del core de TEAM-02.
 
 ---
 
@@ -107,6 +123,10 @@ curl 'http://localhost:3000/api/indicators/confluence?symbol=AAPL&timeframe=1h'
 curl 'http://localhost:3000/api/signals/confluence-table?ticket=AAPL&timeframe=1h'
 
 # Simulacion (boton EJECUTAR del PDF)
+# Campos opcionales (Phase 7-8):
+#   - fechaHistorica: "YYYY-MM-DD" → snapshot historico (la senal se calcula como si fuera ese dia)
+#   - soloCoincidencias: true (default) → con >=2 indicadores solo devuelve filas que coinciden
+# La respuesta incluye signalMetrics: { buy, sell, hold, total }.
 curl -X POST http://localhost:3000/api/simulation/run \
   -H "Content-Type: application/json" \
   -d '{
@@ -118,7 +138,9 @@ curl -X POST http://localhost:3000/api/simulation/run \
     "coresHabilitados": ["A_INDICADORES","A_IA"],
     "indicadoresHabilitados": ["RSI","MACD","EMA","ADX","BB"],
     "estrategia": "IRON_CONDOR",
-    "toleranciaRiesgo": "MEDIO"
+    "toleranciaRiesgo": "MEDIO",
+    "fechaHistorica": "2025-09-15",
+    "soloCoincidencias": true
   }'
 
 # Chat IA (siempre incluye disclaimer)
@@ -131,9 +153,13 @@ curl -X POST http://localhost:3000/api/chat/explain \
 
 ## 3. Estado actual y datos reales — donde nos quedamos
 
-> **Nos quedamos parados aqui al cierre del 2026-05-26.** Falta cerrar la correlacion
-> entre la tabla del dashboard y la base de datos para ver datos reales. Lo que se hizo
-> y lo que falta:
+> **Estado de la persistencia en DB al 2026-05-31** (sin cambios desde el 2026-05-26). Falta cerrar
+> la correlacion entre la tabla del dashboard y la base de datos para ver datos reales **persistidos**.
+> Lo que se hizo y lo que falta:
+>
+> **Aclaracion (Phase 7):** la *grafica de precios* del dashboard ya consume datos reales de Yahoo
+> Finance via `GET /api/market-data/ohlc` (con fallback a mock determinista). Eso es independiente de
+> esta seccion, que trata de **persistir** las corridas/filas de confluencia en Supabase.
 
 ### ✅ Lo que YA funciona
 
@@ -301,6 +327,35 @@ Se aplico en el proyecto Supabase `xqtfovmmndsloqnyqhfv` la version reconciliada
 
 ---
 
+## 4b. Mejoras recientes (Phase 7-8, 2026-05-31)
+
+Mejoras funcionales sobre el core ya entregado, reutilizandolo sin reescribirlo. Todos los campos
+de request nuevos son opcionales (retrocompatibles). Documentadas en
+[`changes/001`](specs/003-team-02-core-indicadores/changes/001-dashboard-ux-8-cambios.md) y
+[`changes/002`](specs/003-team-02-core-indicadores/changes/002-confluence-rules-y-fecha-historica.md).
+
+### Phase 7 — 8 mejoras UX del dashboard (T149-T159)
+
+1. **Limpiar tabla** — boton que resetea la tabla de resultados (`MainDashboard.tsx`).
+2. **Indicadores off por defecto** — los indicadores individuales arrancan desactivados (`SimulationControlPanel.tsx`).
+3. **Limpiar panel** — boton de reset completo del panel a defaults + limpia resultados.
+4. **Badge Yahoo** — corregido `source: "yahoo_finance"` → `"yahoo"` en `routes/market-data/ohlc.ts` (la grafica ya usaba datos reales; era cosmetico).
+5. **Metricas** — `signalMetrics { buy, sell, hold, total }` en el backend + chips en el dashboard.
+6. **CALL/PUT por fecha** — clasificacion canonica `CALL|PUT|HOLD` confirmada; **"PULL" es typo de PUT**.
+7. **Filtro de coincidencias** — con ≥2 indicadores, solo se muestran filas donde coinciden (`applyCoincidenceFilter` en `runner.ts`). Con 1 indicador se muestran todas.
+8. **Fecha historica** — `fechaHistorica` (snapshot): trunca la serie a esa fecha y calcula la senal como si fuera ese dia. `getCandles` honra `endTimeMs` (`ohlcSource.ts`).
+
+### Phase 8 — reglas de confluencia + default de core + fix de fecha (T160-T164)
+
+- **Core `A_INDICADORES` desactivado por defecto al iniciar** — solo estado inicial; no se apaga al ejecutar (evita apagarlo por error si el usuario lo activo).
+- **Tabla sin filas de indicadores** si el core esta on pero no hay ningun indicador individual activo (se elimino el fallback "vacio → 5 indicadores" en `runner.ts`).
+- **Regla multicore** — la tabla queda totalmente vacia solo si `A_INDICADORES` es el unico core encendido; otros cores activos siguen mostrando sus resultados.
+- **Bugfix de fecha** — en datos historicos, las filas muestran la fecha real del dato (ultima vela), no la de hoy; `computed_at` conserva el timestamp real de computo.
+
+**Tests Phase 7-8**: ampliados en `tests/unit/simulation/runner.test.ts` (validacion `fechaHistorica`, consistencia `signalMetrics`, filtro de coincidencias con 1 y ≥2 indicadores, tabla vacia sin indicadores, regla multicore, fecha real en historicos) y `tests/components/dashboard/simulationControlPanel.test.tsx` (default de core off + campos del panel).
+
+---
+
 ## 5. Arquitectura del feature
 
 ```
@@ -342,10 +397,18 @@ PWA (Vite + React)                Backend (Express + TS)            Supabase Pos
 | GET | `/api/indicators/confluence` | Verdict consolidado [-1,1] | 60/min |
 | GET | `/api/indicators/health` | 3 deps en paralelo | — |
 | GET | `/api/signals/confluence-table` | Tabla canonica PDF v1 | 60/min |
+| GET | `/api/market-data/ohlc` | OHLC real (Yahoo) + fallback mock | — |
 | POST | `/api/simulation/run` | Boton EJECUTAR SIMULACION | 60/min |
 | POST | `/api/chat/explain` | Chat IA explicativo (Opus 4.7) | 10/min |
 
 Todos respetan el contrato de errores: `{ error_code, message, hint? }` con codigos `400/401/403/404/422/429/503`.
+
+**`POST /api/simulation/run` — campos añadidos (Phase 7-8, todos opcionales y retrocompatibles):**
+
+- `fechaHistorica?: "YYYY-MM-DD"` — snapshot historico: trunca la serie al fin de ese dia y calcula la senal como si fuera esa fecha. Validacion: no parseable → `400 INVALID_SIMULATION_REQUEST`; futura → `400 INVALID_RANGE`.
+- `soloCoincidencias?: boolean` (default `true`) — con ≥2 indicadores activos, solo devuelve las filas de indicador cuya `tipoSenal` coincide con ≥1 par.
+- La respuesta incluye `signalMetrics: { buy, sell, hold, total }` (buy = CALL, sell = PUT).
+- Si `A_INDICADORES` esta habilitado pero `indicadoresHabilitados` viene vacio, el core no emite filas (los demas cores activos si).
 
 ---
 
@@ -375,22 +438,24 @@ Todos respetan el contrato de errores: `{ error_code, message, hint? }` con codi
 ```bash
 # Backend
 npm run -w @inversions/rest-api test
-# > Test Files  41 passed (41)
-# >      Tests  233 passed (233)
+# > Test Files  52 passed | 1 failed (53)
+# >      Tests  486 passed | 1 failed (487)
+# El unico fallo es preexistente y ajeno a TEAM-02 (runtimeMode, ver nota de seccion 1).
 
 npm run -w @inversions/rest-api lint
 # > tsc --noEmit (OK)
 
 # PWA
 npm run -w @inversions/pwa test
-# > Test Files  5 passed (5)
-# >      Tests  16 passed (16)
+# Suite repo-wide (varios equipos). Las suites propias de TEAM-02 pasan:
+#   - tests/components/dashboard/simulationControlPanel.test.tsx (3/3)
+#   - unit de indicadores / confluencia / runner
 ```
 
 Suites principales:
 
 - **Unit indicators**: rsi, macd, ema, adx, bollinger, confluence, confluenceTable, cache, chatExplainer, llmAnthropic.
-- **Unit simulation**: runner.
+- **Unit simulation**: runner (incluye Phase 7-8: `signalMetrics`, validacion `fechaHistorica`, filtro de coincidencias, tabla vacia sin indicadores, fecha real en historicos).
 - **Integration**: cada ruta indicador + confluence + health + chatExplain + confluenceTableRoute + runRoute + rateLimit + chatExplanationsStore + auth/authScenarios.
 - **E2E**: pipeline ohlc → 5 indicadores → confluencia → chat, y `simulation/run` → tabla → verdict IA.
 
@@ -438,9 +503,10 @@ projects/pwa/inversions_app/
 specs/003-team-02-core-indicadores/
 ├── spec.md           # 7 user stories, 20 FR, 10 SC, clarifications
 ├── plan.md           # arquitectura
-├── tasks.md          # T000-T148 todos en [x]
+├── tasks.md          # T000-T164 todos en [x] (Phase 0-8)
 ├── quickstart.md
 ├── contracts/        # 10 OpenAPI yamls
+├── changes/          # 001 (8 mejoras UX) · 002 (reglas confluencia + fix fecha)
 └── checklists/
 ```
 
@@ -451,8 +517,8 @@ specs/003-team-02-core-indicadores/
 | Integrante | Slice | Tareas principales |
 |---|---|---|
 | **Hansel** (lead) | Chat IA + tests cross + coordinacion + IA estructurada Phase 5 + Anthropic Phase 6 | T050-T055, T104-T106, T120-T124, T145-T148 |
-| **Kevin** | Momentum (RSI, MACD) + backend Phase 5 (tabla + simulacion) + rate limit + cache | T010-T020, T085-T087, T091-T092, T130-T134, T142-T144 |
-| **Edgar** | Tendencia/Volatilidad (EMA, ADX, BB) + frontend Phase 5 + thresholds | T030-T033, T095-T099, T103, T139, T141 |
+| **Kevin** | Momentum (RSI, MACD) + backend Phase 5 (tabla + simulacion) + rate limit + cache + backend Phase 7-8 (metricas, coincidencias, fechaHistorica, fix fecha) | T010-T020, T085-T087, T091-T092, T130-T134, T142-T144, T153-T158, T161-T164 |
+| **Edgar** | Tendencia/Volatilidad (EMA, ADX, BB) + frontend Phase 5 + thresholds + frontend Phase 7-8 (limpiar tabla/panel, metricas, default core off, fecha historica) | T030-T033, T095-T099, T103, T139, T141, T149-T152, T159-T160 |
 | **Mauricio** | Confluencia + trazabilidad + health + modelo de datos Phase 5 + persistencia chat | T040-T046, T080-T084, T088-T089, T093, T125-T129, T136-T141 |
 
 ---

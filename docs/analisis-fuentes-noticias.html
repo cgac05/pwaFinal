@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Análisis de Fuentes de Noticias — InversionsPWA</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 13px;
+    line-height: 1.65;
+    color: #1a1a2e;
+    background: #fff;
+    padding: 48px 56px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    border-bottom: 3px solid #4f46e5;
+    padding-bottom: 18px;
+    margin-bottom: 32px;
+  }
+  .header-left h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #4f46e5;
+    margin-bottom: 4px;
+  }
+  .header-left p {
+    font-size: 12px;
+    color: #6b7280;
+  }
+  .badge {
+    display: inline-block;
+    background: #ede9fe;
+    color: #4f46e5;
+    border: 1px solid #c4b5fd;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* ── Section titles ── */
+  h2 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1e1b4b;
+    margin: 28px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1.5px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  h2 .num {
+    background: #4f46e5;
+    color: #fff;
+    border-radius: 50%;
+    width: 22px; height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin: 18px 0 8px;
+  }
+
+  p { margin-bottom: 10px; }
+
+  /* ── Flow diagram ── */
+  .flow {
+    background: #f8f7ff;
+    border: 1px solid #c4b5fd;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 12px 0 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.9;
+    color: #1e1b4b;
+  }
+  .flow .arrow { color: #4f46e5; font-weight: 700; }
+  .flow .step  { margin-left: 16px; color: #374151; }
+  .flow .label { color: #7c3aed; font-weight: 600; }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 20px;
+    font-size: 12px;
+  }
+  thead th {
+    background: #4f46e5;
+    color: #fff;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  tbody tr:nth-child(even) { background: #f9f8ff; }
+  tbody tr:nth-child(odd)  { background: #fff; }
+  tbody td {
+    padding: 7px 12px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  td .tag-real  { color: #059669; font-weight: 600; }
+  td .tag-demo  { color: #d97706; font-weight: 600; }
+  td .tag-cond  { color: #4f46e5; font-weight: 600; }
+
+  /* ── Verdict boxes ── */
+  .verdicts {
+    display: flex;
+    gap: 14px;
+    margin: 14px 0 20px;
+  }
+  .verdict-box {
+    flex: 1;
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-align: center;
+    border: 1.5px solid;
+  }
+  .verdict-box.buy  { background: #ecfdf5; border-color: #6ee7b7; color: #065f46; }
+  .verdict-box.sell { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
+  .verdict-box.hold { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+  .verdict-box .vlab  { font-size: 18px; font-weight: 800; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .verdict-box .vcond { font-size: 11px; line-height: 1.4; }
+
+  /* ── Callout boxes ── */
+  .callout {
+    border-left: 4px solid #4f46e5;
+    background: #f8f7ff;
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    margin: 12px 0 20px;
+    font-size: 12.5px;
+    color: #1e1b4b;
+  }
+  .callout.warning {
+    border-color: #d97706;
+    background: #fffbeb;
+    color: #78350f;
+  }
+  .callout.success {
+    border-color: #059669;
+    background: #ecfdf5;
+    color: #064e3b;
+  }
+  .callout strong { color: inherit; }
+
+  /* ── Env var list ── */
+  code {
+    font-family: 'Courier New', monospace;
+    background: #ede9fe;
+    color: #4f46e5;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 11.5px;
+  }
+
+  ul, ol {
+    padding-left: 20px;
+    margin: 8px 0 12px;
+  }
+  li { margin-bottom: 5px; }
+
+  /* ── Footer ── */
+  .footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid #e5e7eb;
+    font-size: 11px;
+    color: #9ca3af;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* ── Print ── */
+  @media print {
+    body { padding: 24px 32px; }
+    h2 { page-break-after: avoid; }
+    table { page-break-inside: avoid; }
+    .flow { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="header">
+  <div class="header-left">
+    <h1>Análisis de Fuentes de Noticias</h1>
+    <p>InversionsPWA · Módulo NEWS · Documentación técnica</p>
+    <p style="margin-top:4px; color:#9ca3af;">TEAM-06 · Junio 2026</p>
+  </div>
+  <div>
+    <span class="badge">003 · Core Indicadores</span>
+  </div>
+</div>
+
+<!-- ── 1. ¿Qué hace? ── -->
+<h2><span class="num">1</span> ¿Qué hace este apartado?</h2>
+<p>
+  El apartado <strong>Análisis de Fuentes de Noticias</strong> permite al usuario ingresar dominios de
+  sitios financieros (por ejemplo <code>bloomberg.com</code>, <code>cnbc.com</code>) y seleccionar una
+  empresa. El sistema visita esas páginas, extrae el contenido visible y, usando inteligencia artificial
+  o un motor léxico, genera una recomendación de inversión consolidada: <strong>Comprar, Vender o Mantener</strong>.
+</p>
+
+<!-- ── 2. Flujo ── -->
+<h2><span class="num">2</span> Flujo completo paso a paso</h2>
+<div class="flow">
+  <span class="arrow">1.</span> Usuario ingresa dominios (<code>bloomberg.com</code>, <code>cnbc.com</code>) + nombre empresa<br>
+  <span class="arrow">   ↓</span><br>
+  <span class="arrow">2.</span> Frontend valida cada URL → <code>GET /api/news/validate-url?url=...</code><br>
+  <span class="arrow">   ↓</span><br>
+  <span class="arrow">3.</span> Frontend envía análisis → <code>POST /api/news/analyze-sources</code><br>
+  <span class="step">   Body: <code>{ company: "Apple", urls: ["bloomberg.com", "cnbc.com"] }</code></span><br>
+  <span class="arrow">   ↓</span><br>
+  <span class="arrow">4.</span> <span class="label">Backend:</span> Hace fetch del HTML de cada dominio (timeout 15 s)<br>
+  <span class="arrow">   ↓</span><br>
+  <span class="arrow">5.</span> <span class="label">Backend:</span> Extrae texto legible, máx. 5,000 caracteres por fuente<br>
+  <span class="arrow">   ↓</span><br>
+  <span class="arrow">6.</span> <span class="label">Backend:</span> Analiza sentimiento (Claude API o lexicón determinista)<br>
+  <span class="arrow">   ↓</span><br>
+  <span class="arrow">7.</span> <span class="label">Backend:</span> Consolida puntajes de todos los dominios<br>
+  <span class="arrow">   ↓</span><br>
+  <span class="arrow">8.</span> Frontend recibe: <code>{ verdict: "BUY", score: 0.72, confidence: 0.85, reasoning: "..." }</code>
+</div>
+
+<!-- ── 3. Fuentes de datos ── -->
+<h2><span class="num">3</span> ¿Los datos son reales o demo?</h2>
+<p>El sistema usa una <strong>estrategia multi-proveedor con degradación gradual</strong>. Dependiendo de las API keys configuradas en el backend:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Fuente</th>
+      <th>¿Real o Demo?</th>
+      <th>Condición</th>
+      <th>Uso</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Yahoo Finance RSS</strong></td>
+      <td><span class="tag-real">✅ Real</span></td>
+      <td>Siempre activa (sin API key)</td>
+      <td>Noticias del ticker en tiempo real</td>
+    </tr>
+    <tr>
+      <td><strong>Finnhub</strong></td>
+      <td><span class="tag-cond">⚙ Real si hay key</span></td>
+      <td><code>FINNHUB_API_KEY</code> en .env</td>
+      <td>Noticias estructuradas, 30 días atrás</td>
+    </tr>
+    <tr>
+      <td><strong>NewsAPI</strong></td>
+      <td><span class="tag-cond">⚙ Real si hay key</span></td>
+      <td><code>NEWSAPI_API_KEY</code> en .env</td>
+      <td>Búsqueda de noticias por empresa/símbolo</td>
+    </tr>
+    <tr>
+      <td><strong>Polygon</strong></td>
+      <td><span class="tag-cond">⚙ Real si hay key</span></td>
+      <td><code>POLYGON_API_KEY</code> en .env</td>
+      <td>Noticias de ticker específico</td>
+    </tr>
+    <tr>
+      <td><strong>Alpha Vantage</strong></td>
+      <td><span class="tag-cond">⚙ Real si hay key</span></td>
+      <td><code>ALPHA_VANTAGE_API_KEY</code> en .env</td>
+      <td>Sentimiento de noticias con puntuación propia</td>
+    </tr>
+    <tr>
+      <td><strong>URLs del usuario</strong></td>
+      <td><span class="tag-real">✅ Real</span></td>
+      <td>Siempre activo</td>
+      <td>Scraping HTML del dominio ingresado</td>
+    </tr>
+    <tr>
+      <td><strong>Anthropic Claude (IA)</strong></td>
+      <td><span class="tag-cond">⚙ Real si hay key</span></td>
+      <td><code>ANTHROPIC_API_KEY</code> en .env</td>
+      <td>Análisis de sentimiento con LLM</td>
+    </tr>
+    <tr>
+      <td><strong>Lexicón determinista</strong></td>
+      <td><span class="tag-demo">⚠ Fallback</span></td>
+      <td>Si Claude API no está disponible</td>
+      <td>Conteo de palabras alcistas/bajistas</td>
+    </tr>
+    <tr>
+      <td><strong>Templates hardcodeados</strong></td>
+      <td><span class="tag-demo">⚠ Demo</span></td>
+      <td>Si TODAS las APIs fallan</td>
+      <td>Último recurso, datos de ejemplo</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ── 4. Lógica de veredicto ── -->
+<h2><span class="num">4</span> ¿Cómo se calcula BUY / SELL / HOLD?</h2>
+<p>El score final va de <strong>-1.0</strong> (muy bajista) a <strong>+1.0</strong> (muy alcista) y se promedia entre todos los dominios analizados:</p>
+
+<div class="verdicts">
+  <div class="verdict-box buy">
+    <div class="vlab">BUY</div>
+    <div class="vcond">Score &gt; 0.3<br>+ Confianza &gt; 0.4</div>
+  </div>
+  <div class="verdict-box sell">
+    <div class="vlab">SELL</div>
+    <div class="vcond">Score &lt; −0.3<br>+ Confianza &gt; 0.4</div>
+  </div>
+  <div class="verdict-box hold">
+    <div class="vlab">HOLD</div>
+    <div class="vcond">Cualquier otro caso<br>(valor por defecto conservador)</div>
+  </div>
+</div>
+
+<!-- ── 5. Cómo analiza las URLs ── -->
+<h2><span class="num">5</span> ¿Qué hace exactamente con los dominios ingresados?</h2>
+
+<div class="callout warning">
+  <strong>Importante:</strong> El sistema NO busca noticias específicas dentro del dominio. Toma lo que
+  esté en la <strong>página raíz</strong> del dominio en ese momento y analiza ese contenido
+  para determinar si es alcista o bajista respecto a la empresa seleccionada.
+</div>
+
+<ol>
+  <li>Hace <code>fetch("https://bloomberg.com")</code> con User-Agent de Chrome y timeout de 15 segundos.</li>
+  <li>Extrae el texto visible: elimina scripts, estilos y etiquetas HTML.</li>
+  <li>Toma los primeros <strong>5,000 caracteres</strong> del texto resultante.</li>
+  <li>Construye un objeto <em>pseudo-artículo</em> con el título de la página y ese texto.</li>
+  <li>Lo envía a <strong>Claude API</strong> con el prompt: <em>"Analiza este contenido respecto a [empresa]. Responde SOLO con JSON: score, verdict, confidence, reasoning."</em></li>
+  <li>Si Claude falla o no hay API key → usa el <strong>lexicón determinista</strong> (palabras clave en español e inglés).</li>
+</ol>
+
+<!-- ── 6. Variables de entorno ── -->
+<h2><span class="num">6</span> Variables de entorno que controlan el comportamiento</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Variable</th>
+      <th>Efecto si está presente</th>
+      <th>Efecto si NO está</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>ANTHROPIC_API_KEY</code></td>
+      <td>Usa Claude para analizar sentimiento (IA real)</td>
+      <td>Usa lexicón de palabras clave (sin IA)</td>
+    </tr>
+    <tr>
+      <td><code>FINNHUB_API_KEY</code></td>
+      <td>Incluye noticias de Finnhub en el análisis</td>
+      <td>Omite Finnhub</td>
+    </tr>
+    <tr>
+      <td><code>NEWSAPI_API_KEY</code></td>
+      <td>Incluye resultados de NewsAPI</td>
+      <td>Omite NewsAPI</td>
+    </tr>
+    <tr>
+      <td><code>POLYGON_API_KEY</code></td>
+      <td>Incluye noticias de Polygon.io</td>
+      <td>Omite Polygon</td>
+    </tr>
+    <tr>
+      <td><code>ALPHA_VANTAGE_API_KEY</code></td>
+      <td>Incluye sentimiento de Alpha Vantage</td>
+      <td>Omite Alpha Vantage</td>
+    </tr>
+    <tr>
+      <td><code>NEWS_FETCH_TIMEOUT_MS</code></td>
+      <td>Tiempo límite para llamadas externas</td>
+      <td>Default: 5,500 ms</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ── 7. Garantías constitucionales ── -->
+<h2><span class="num">7</span> Salvaguardas y disclaimer</h2>
+
+<div class="callout success">
+  <strong>Todos los resultados incluyen el siguiente disclaimer constitucional:</strong><br><br>
+  <em>"Este análisis de noticias es informativo y no constituye orden ni recomendación ejecutable."</em><br><br>
+  Además, cada fila de señal está marcada con <code>ia_revisada: true</code> para garantizar
+  trazabilidad en la auditoría. El ser humano siempre toma la decisión final.
+</div>
+
+<!-- ── 8. Archivos clave ── -->
+<h2><span class="num">8</span> Archivos clave del módulo</h2>
+
+<table>
+  <thead>
+    <tr><th>Archivo</th><th>Responsabilidad</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>NewsSourcesAnalyzer.tsx</code></td><td>Componente React: input de URLs, botón analizar, visualización de resultados</td></tr>
+    <tr><td><code>newsApi.ts</code></td><td>Cliente HTTP del frontend para todos los endpoints de noticias</td></tr>
+    <tr><td><code>newsDataService.ts</code></td><td>Orquestador multi-proveedor (Yahoo, Finnhub, NewsAPI, Polygon, Alpha Vantage)</td></tr>
+    <tr><td><code>urlAnalysisService.ts</code></td><td>Scraping HTML, extracción de texto, análisis multi-dominio</td></tr>
+    <tr><td><code>newsImpactEngine.ts</code></td><td>Agrega artículos y calcula veredicto ponderado final</td></tr>
+    <tr><td><code>newsConfluenceRows.ts</code></td><td>Convierte análisis de noticias en filas de señal para la tabla de confluencia</td></tr>
+    <tr><td><code>routes/news/urlAnalysis.ts</code></td><td>Rutas Express: <code>/validate-url</code> y <code>/analyze-sources</code></td></tr>
+  </tbody>
+</table>
+
+<!-- ── Footer ── -->
+<div class="footer">
+  <span>InversionsPWA-NOSQL · Módulo NEWS · Documentación interna</span>
+  <span>Generado: Junio 2026</span>
+</div>
+
+</body>
+</html>

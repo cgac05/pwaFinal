@@ -145,38 +145,38 @@ const overlayStyle: React.CSSProperties = {
 const panelStyle: React.CSSProperties = {
   background: "var(--color-surface)",
   borderRadius: "var(--radius-md)",
-  padding: "var(--space-lg)",
-  width: "min(1120px, 96vw)",
+  padding: "var(--space-md)",
+  width: "min(1200px, 98vw)",
   boxSizing: "border-box",
   border: "1px solid rgba(255,255,255,0.08)",
   boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
   display: "flex",
   flexDirection: "column",
-  gap: "var(--space-lg)",
+  gap: "var(--space-sm)",
 };
 
 const modalColumnsStyle: React.CSSProperties = {
   display: "grid",
-  gap: "var(--space-lg)",
-  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))",
+  gap: "var(--space-sm)",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
   alignItems: "start",
 };
 
 const modalColumnStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: "var(--space-lg)",
+  gap: "var(--space-sm)",
   minWidth: 0,
 };
 
 const sectionStyle: React.CSSProperties = {
   background: "var(--color-surface-raised)",
   borderRadius: "var(--radius-sm)",
-  padding: "var(--space-md)",
+  padding: "var(--space-sm)",
   border: "1px solid var(--color-border-subtle)",
   display: "flex",
   flexDirection: "column",
-  gap: "var(--space-sm)",
+  gap: "4px",
 };
 
 const sectionTitleStyle: React.CSSProperties = {
@@ -185,12 +185,12 @@ const sectionTitleStyle: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   color: "var(--color-accent)",
-  marginBottom: "var(--space-xs)",
+  marginBottom: "2px",
 };
 
 const gridStyle: React.CSSProperties = {
   display: "grid",
-  gap: "var(--space-sm)",
+  gap: "var(--space-xs)",
   gridTemplateColumns: "repeat(3, 1fr)",
 };
 
@@ -199,8 +199,8 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid var(--color-border)",
   borderRadius: "var(--radius-sm)",
   color: "var(--color-text)",
-  fontSize: "var(--font-size-sm)",
-  padding: "var(--space-xs) var(--space-sm)",
+  fontSize: "var(--font-size-xs)",
+  padding: "3px var(--space-xs)",
   width: "100%",
   outline: "none",
   boxSizing: "border-box",
@@ -213,9 +213,9 @@ const readonlyStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: "var(--font-size-xs)",
+  fontSize: "0.68rem",
   color: "var(--color-text-muted)",
-  marginBottom: "var(--space-xs)",
+  marginBottom: "2px",
   display: "block",
 };
 
@@ -223,32 +223,34 @@ const resultRowStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  padding: "var(--space-xs) 0",
+  padding: "2px 0",
   borderBottom: "1px solid var(--color-border-subtle)",
-  fontSize: "var(--font-size-sm)",
+  fontSize: "var(--font-size-xs)",
 };
 
 const resultLabelStyle: React.CSSProperties = {
   color: "var(--color-text-muted)",
-  fontSize: "var(--font-size-xs)",
+  fontSize: "0.68rem",
 };
 
 const resultValueStyle: React.CSSProperties = {
   fontWeight: 600,
   color: "var(--color-text)",
+  fontSize: "var(--font-size-xs)",
 };
 
 const stageGridStyle: React.CSSProperties = {
   display: "grid",
-  gap: "var(--space-sm)",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: "var(--space-xs)",
+  gridTemplateColumns: "repeat(6, 1fr)",
 };
 
 const stageCardStyle: React.CSSProperties = {
   background: "var(--color-surface)",
   borderRadius: "var(--radius-sm)",
-  padding: "var(--space-sm)",
+  padding: "6px 8px",
   border: "1px solid var(--color-border-subtle)",
+  minWidth: 0,
 };
 
 const unavailableStageStyle: React.CSSProperties = {
@@ -519,7 +521,8 @@ function WheelEligibilitySummary({
             color: "var(--color-text-muted)",
             fontVariantNumeric: "tabular-nums",
           }}>
-            {result.summary.passed}/{result.summary.total} criterios
+            {result.summary.passed}/{result.summary.total - result.summary.unavailable} evaluados
+            {result.summary.unavailable > 0 && ` · ${result.summary.unavailable} N/D`}
           </span>
         )}
       </div>
@@ -716,6 +719,453 @@ async function computeRoll1(
   }
 }
 
+// ─── Day-by-day simulation (pure, no backend) ─────────────────────────────────
+
+interface DaySimRow {
+  day: number;
+  fecha: string;
+  dte: number;
+  precioEstimado: number;
+  valorOpcion: number;
+  pnlAcum: number;
+  pctGanado: number;
+  estado: "normal" | "take_profit" | "stop_loss" | "roll" | "zona_roll" | "vencimiento";
+  accion: string;
+}
+
+function isoDate(d: Date): string {
+  return d.toISOString().split("T")[0];
+}
+
+function buildDaySim(
+  currentPrice: number,
+  strikePut: number,
+  primaPut: number,
+  contratos: number,
+  precioFinal: number,
+  fechaInicio: string,
+  fechaFin: string,
+): DaySimRow[] {
+  if (currentPrice <= 0 || strikePut <= 0 || primaPut <= 0 || precioFinal <= 0) return [];
+  if (!fechaInicio || !fechaFin) return [];
+
+  const startMs    = new Date(fechaInicio).getTime();
+  const endMs      = new Date(fechaFin).getTime();
+  const dteEntrada = Math.max(1, Math.round((endMs - startMs) / 86400000));
+
+  const multiplier       = contratos * 100;
+  const intrinsicAtEntry = Math.max(strikePut - currentPrice, 0);
+  const timeValueAtEntry = Math.max(primaPut - intrinsicAtEntry, 0);
+  const slThreshold      = primaPut * 4;
+
+  const rows: DaySimRow[] = [];
+  let rollTriggered = false;
+
+  for (let day = 0; day <= dteEntrada; day++) {
+    const dte  = dteEntrada - day;
+    const t    = day / dteEntrada;
+
+    const rowDate = new Date(startMs + day * 86400000);
+    const fecha   = isoDate(rowDate);
+
+    const precioEstimado = parseFloat((currentPrice + (precioFinal - currentPrice) * t).toFixed(2));
+    const intrinsicValue = Math.max(strikePut - precioEstimado, 0);
+    const timeDecay      = Math.sqrt((dteEntrada - day) / dteEntrada);
+    const valorOpcion    = parseFloat((intrinsicValue + timeValueAtEntry * timeDecay).toFixed(4));
+    const pnlAcum        = parseFloat(((primaPut - valorOpcion) * multiplier).toFixed(2));
+    const pctGanado      = primaPut > 0 ? (primaPut - valorOpcion) / primaPut : 0;
+
+    let estado: DaySimRow["estado"] = "normal";
+    let accion = "Mantener posición";
+
+    if (pctGanado >= 0.50) {
+      estado = "take_profit";
+      accion = "CERRAR — Take profit 50%: ganaste la mitad de la prima en menos tiempo";
+    } else if (valorOpcion >= slThreshold) {
+      estado = "stop_loss";
+      accion = "CERRAR URGENTE — recompra supera 4× prima cobrada (SL 400%)";
+    } else if (dte === 21 && !rollTriggered) {
+      estado = "roll";
+      accion = "ROLL al siguiente vencimiento — 21 DTE sin alcanzar TP del 50%";
+      rollTriggered = true;
+    } else if (rollTriggered && dte > 0) {
+      estado = "zona_roll";
+      accion = "Zona de riesgo — la posición debería estar rolada al mes siguiente";
+    } else if (day === dteEntrada) {
+      estado = "vencimiento";
+      accion = precioEstimado >= strikePut
+        ? "PUT expiró sin valor — ciclo completo, volver a Etapa 1"
+        : "ASIGNADO — precio < strike, pasar a Etapa 2 (Covered Call)";
+    }
+
+    rows.push({ day, fecha, dte, precioEstimado, valorOpcion, pnlAcum, pctGanado, estado, accion });
+    if (estado === "take_profit" || estado === "stop_loss") break;
+  }
+
+  return rows;
+}
+
+// ─── Operational Rules Panel ──────────────────────────────────────────────────
+
+function WheelRulesPanel({
+  csp,
+  cc,
+  dteEntrada,
+  fechaInicio,
+}: {
+  csp: WheelCspParams;
+  cc: WheelCcParams;
+  dteEntrada: number;
+  fechaInicio: string;
+}) {
+  const hasCsp = csp.strikePut > 0 && csp.primaPut > 0;
+  const hasCc  = cc.strikeCall > 0 && cc.primaCall > 0;
+  const tpPut  = csp.primaPut  * csp.contratos * 100 * 0.50;
+  const slPut  = csp.primaPut  * csp.contratos * 100 * 4;
+  const tpCall = cc.primaCall  * cc.contratos  * 100 * 0.50;
+  const rollDia = dteEntrada > 21 ? dteEntrada - 21 : 0;
+  const rollFecha = rollDia > 0 && fechaInicio
+    ? isoDate(new Date(new Date(fechaInicio).getTime() + rollDia * 86400000))
+    : "";
+  const money = (v: number) => `$${v.toFixed(2)}`;
+
+  const chip = (
+    label: string,
+    value: string,
+    color: string,
+    detail: string,
+  ) => (
+    <div style={{
+      background: "var(--color-surface)",
+      border: `1px solid ${color}30`,
+      borderRadius: "var(--radius-sm)",
+      padding: "5px 8px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "1px",
+    }}>
+      <div style={{ fontSize: "0.63rem", color: "var(--color-text-muted)", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>
+        {label}
+      </div>
+      <div style={{ fontWeight: 700, color, fontSize: "var(--font-size-xs)" }}>
+        {value}
+      </div>
+      <div style={{ fontSize: "0.6rem", color: "var(--color-text-muted)", fontStyle: "italic", lineHeight: 1.3 }}>
+        {detail}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{
+      background: "var(--color-surface-raised)",
+      borderRadius: "var(--radius-sm)",
+      padding: "var(--space-sm)",
+      border: "1px solid var(--color-border-subtle)",
+    }}>
+      <div style={{
+        fontSize: "var(--font-size-xs)",
+        fontWeight: 700,
+        textTransform: "uppercase" as const,
+        letterSpacing: "0.08em",
+        color: "var(--color-accent)",
+        marginBottom: "var(--space-xs)",
+      }}>
+        REGLAS OPERATIVAS
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-xs)" }}>
+        {chip("TP PUT (50%)", hasCsp ? money(tpPut) : "—", "var(--color-buy)",   "Cierra al 50% de ganancia")}
+        {chip("SL PUT (400%)", hasCsp ? money(slPut) : "—", "var(--color-sell)", "Cierra si recompra > 4× prima")}
+        {chip("Roll PUT", rollDia > 0 ? `Día ${rollDia}${rollFecha ? ` · ${rollFecha}` : ""}` : "< 21 DTE", "var(--color-warning)", "Si no hay 50% a 21 DTE, rolar")}
+        {chip("TP CALL (50%)", hasCc ? money(tpCall) : "—", "var(--color-buy)",  "Cierra al 50% de ganancia")}
+        <div style={{ gridColumn: "1 / -1" }}>
+          {chip("SL CALL", "Stage 4 Weinstein", "var(--color-sell)", "Cierra todo si el activo entra en tendencia bajista")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Day Simulation Table ──────────────────────────────────────────────────────
+
+function WheelDaySimSection({ rows, primaTotal }: { rows: DaySimRow[]; primaTotal: number }) {
+  if (rows.length === 0) return null;
+
+  // Día 0: entrada. Siempre el mejor momento para VENDER (abrir la posición corta en el PUT)
+  const openRow = rows[0];
+
+  // Mejor día para CERRAR (comprar de vuelta el PUT):
+  //   1. Take Profit (50%) — escenario ideal, se cierra antes de tiempo
+  //   2. Roll (21 DTE)     — si no hubo TP, la estrategia dice rolar al mes siguiente
+  //   3. Stop Loss (400%)  — emergencia, pérdida excede lo tolerable
+  //   4. Vencimiento       — último recurso
+  const bestCloseRow =
+    rows.find((r) => r.estado === "take_profit") ??
+    rows.find((r) => r.estado === "roll")         ??
+    rows.find((r) => r.estado === "stop_loss")    ??
+    rows[rows.length - 1];
+
+  const estadoColors: Record<DaySimRow["estado"], string> = {
+    normal:       "var(--color-text-muted)",
+    take_profit:  "var(--color-buy)",
+    stop_loss:    "var(--color-sell)",
+    roll:         "var(--color-warning)",
+    zona_roll:    "#9a6f00",
+    vencimiento:  "var(--color-accent)",
+  };
+
+  const estadoLabels: Record<DaySimRow["estado"], string> = {
+    normal:       "Normal",
+    take_profit:  "Take Profit ✓",
+    stop_loss:    "Stop Loss ✕",
+    roll:         "ROLL (21 DTE)",
+    zona_roll:    "Sin rolar ⚠",
+    vencimiento:  "Vencimiento",
+  };
+
+  const thStyle: React.CSSProperties = {
+    padding: "3px 7px",
+    textAlign: "left",
+    color: "var(--color-text-muted)",
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+    fontSize: "0.68rem",
+    borderBottom: "2px solid var(--color-border)",
+    position: "sticky" as const,
+    top: 0,
+    background: "var(--color-surface-raised)",
+  };
+
+  const tdBase: React.CSSProperties = {
+    padding: "2px 7px",
+    fontVariantNumeric: "tabular-nums",
+    fontSize: "0.68rem",
+    whiteSpace: "nowrap",
+  };
+
+  const summaryCard = (
+    label: string,
+    day: number,
+    dte: number,
+    precio: number,
+    pnl: number,
+    pct: number,
+    estado: DaySimRow["estado"],
+    accion: string,
+    borderColor: string,
+  ) => (
+    <div style={{
+      border: `1px solid ${borderColor}`,
+      borderRadius: "var(--radius-sm)",
+      padding: "6px 10px",
+      background: `${borderColor}10`,
+      display: "flex",
+      flexDirection: "column",
+      gap: "2px",
+      flex: 1,
+    }}>
+      <div style={{ fontSize: "0.6rem", textTransform: "uppercase" as const, letterSpacing: "0.07em", color: borderColor, fontWeight: 700 }}>
+        {label}
+      </div>
+      <div style={{ display: "flex", gap: "var(--space-sm)", alignItems: "baseline", flexWrap: "wrap" as const }}>
+        <span style={{ fontWeight: 700, fontSize: "var(--font-size-sm)", color: borderColor }}>Día {day}</span>
+        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>DTE {dte}</span>
+        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text)" }}>${precio.toFixed(2)}</span>
+      </div>
+      <div style={{ display: "flex", gap: "var(--space-sm)", flexWrap: "wrap" as const }}>
+        <span style={{ fontSize: "var(--font-size-xs)", color: pnl >= 0 ? "var(--color-buy)" : "var(--color-sell)", fontWeight: 600 }}>
+          {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+        </span>
+        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+          ({(pct * 100).toFixed(1)}% prima)
+        </span>
+        <span style={{ fontSize: "0.63rem", color: estadoColors[estado] }}>
+          {estadoLabels[estado]}
+        </span>
+      </div>
+      <div style={{ fontSize: "0.6rem", color: "var(--color-text-muted)", fontStyle: "italic" }}>{accion}</div>
+    </div>
+  );
+
+  return (
+    <div style={{
+      background: "var(--color-surface-raised)",
+      borderRadius: "var(--radius-sm)",
+      padding: "var(--space-sm)",
+      border: "1px solid var(--color-border-subtle)",
+      display: "flex",
+      flexDirection: "column",
+      gap: "var(--space-xs)",
+    }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-sm)" }}>
+        <div style={{
+          fontSize: "var(--font-size-xs)",
+          fontWeight: 700,
+          textTransform: "uppercase" as const,
+          letterSpacing: "0.08em",
+          color: "var(--color-accent)",
+        }}>
+          SIMULACIÓN DÍA A DÍA — PUT
+        </div>
+        <div style={{ fontSize: "0.6rem", color: "var(--color-text-muted)", fontStyle: "italic" }}>
+          Precio lineal · Decay √tiempo
+        </div>
+      </div>
+
+      {/* Aviso cuando precio final = precio de entrada (simulación plana) */}
+      {rows[0].precioEstimado === rows[rows.length - 1].precioEstimado && (
+        <div style={{
+          background: "rgba(251,191,36,0.10)",
+          border: "1px solid var(--color-warning)",
+          borderRadius: "var(--radius-sm)",
+          padding: "5px 10px",
+          fontSize: "0.68rem",
+          color: "var(--color-warning)",
+        }}>
+          Precio plano: el "Precio final al vencimiento" es igual al precio actual (${rows[0].precioEstimado.toFixed(2)}).
+          Las dos tarjetas muestran el mismo precio porque no hay movimiento simulado.
+          Cambia el precio final para ver escenarios de subida o bajada.
+        </div>
+      )}
+
+      {/* Mejores días */}
+      <div style={{ display: "flex", gap: "var(--space-xs)", flexWrap: "wrap" as const }}>
+
+        {/* Card VENDER: precio = precio de ENTRADA (hoy), prima total a cobrar */}
+        <div style={{
+          border: "1px solid var(--color-buy)",
+          borderRadius: "var(--radius-sm)",
+          padding: "6px 10px",
+          background: "rgba(34,197,94,0.06)",
+          display: "flex", flexDirection: "column", gap: "2px", flex: 1,
+        }}>
+          <div style={{ fontSize: "0.6rem", textTransform: "uppercase" as const, letterSpacing: "0.07em", color: "var(--color-buy)", fontWeight: 700 }}>
+            Mejor día para VENDER el PUT (abrir posición)
+          </div>
+          <div style={{ display: "flex", gap: "var(--space-sm)", alignItems: "baseline", flexWrap: "wrap" as const }}>
+            <span style={{ fontWeight: 700, fontSize: "var(--font-size-sm)", color: "var(--color-buy)" }}>Día {openRow.day} — {openRow.fecha}</span>
+            <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+              DTE {openRow.dte} <span style={{ fontStyle: "italic" }}>(días hasta vencimiento al entrar)</span>
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <span style={{ fontSize: "0.63rem", color: "var(--color-text-muted)" }}>Precio de entrada:</span>
+            <span style={{ fontSize: "var(--font-size-xs)", fontWeight: 600, color: "var(--color-text)" }}>${openRow.precioEstimado.toFixed(2)}</span>
+          </div>
+          <div style={{ display: "flex", gap: "var(--space-sm)", flexWrap: "wrap" as const }}>
+            <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-buy)", fontWeight: 600 }}>
+              Prima cobrada: +${primaTotal.toFixed(2)}
+            </span>
+            <span style={{ fontSize: "0.63rem", color: "var(--color-text-muted)" }}>crédito máximo</span>
+          </div>
+          <div style={{ fontSize: "0.6rem", color: "var(--color-text-muted)", fontStyle: "italic" }}>
+            Vendes el PUT hoy y cobras la prima completa. Tu máx. ganancia = ${primaTotal.toFixed(2)}
+          </div>
+        </div>
+
+        {/* Card COMPRAR: precio = precio ESTIMADO en el día de salida (diferente al de entrada) */}
+        <div style={{
+          border: `1px solid ${bestCloseRow.estado === "take_profit" ? "var(--color-buy)" : bestCloseRow.estado === "stop_loss" ? "var(--color-sell)" : "var(--color-warning)"}`,
+          borderRadius: "var(--radius-sm)",
+          padding: "6px 10px",
+          background: bestCloseRow.estado === "take_profit" ? "rgba(34,197,94,0.06)" : bestCloseRow.estado === "stop_loss" ? "rgba(239,68,68,0.06)" : "rgba(251,191,36,0.06)",
+          display: "flex", flexDirection: "column", gap: "2px", flex: 1,
+        }}>
+          <div style={{ fontSize: "0.6rem", textTransform: "uppercase" as const, letterSpacing: "0.07em", fontWeight: 700,
+            color: bestCloseRow.estado === "take_profit" ? "var(--color-buy)" : bestCloseRow.estado === "stop_loss" ? "var(--color-sell)" : "var(--color-warning)" }}>
+            {bestCloseRow.estado === "take_profit"
+              ? "Mejor día para COMPRAR de vuelta el PUT (TP 50%)"
+              : bestCloseRow.estado === "roll"
+                ? "Mejor día para CERRAR y ROLAR al mes siguiente (21 DTE)"
+                : bestCloseRow.estado === "stop_loss"
+                  ? "Mejor día para CERRAR urgente (Stop Loss 400%)"
+                  : "Mejor día para CERRAR (vencimiento)"}
+          </div>
+          <div style={{ display: "flex", gap: "var(--space-sm)", alignItems: "baseline", flexWrap: "wrap" as const }}>
+            <span style={{ fontWeight: 700, fontSize: "var(--font-size-sm)",
+              color: bestCloseRow.estado === "take_profit" ? "var(--color-buy)" : bestCloseRow.estado === "stop_loss" ? "var(--color-sell)" : "var(--color-warning)" }}>
+              Día {bestCloseRow.day} — {bestCloseRow.fecha}
+            </span>
+            <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+              DTE {bestCloseRow.dte} <span style={{ fontStyle: "italic" }}>(días restantes al cerrar)</span>
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <span style={{ fontSize: "0.63rem", color: "var(--color-text-muted)" }}>Precio estimado del activo al cerrar:</span>
+            <span style={{ fontSize: "var(--font-size-xs)", fontWeight: 600, color: "var(--color-text)" }}>${bestCloseRow.precioEstimado.toFixed(2)}</span>
+            {bestCloseRow.precioEstimado === openRow.precioEstimado && (
+              <span style={{ fontSize: "0.58rem", color: "var(--color-warning)", fontStyle: "italic" }}>(igual al de entrada — precio plano)</span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: "var(--space-sm)", flexWrap: "wrap" as const }}>
+            <span style={{ fontSize: "var(--font-size-xs)", fontWeight: 600,
+              color: bestCloseRow.pnlAcum >= 0 ? "var(--color-buy)" : "var(--color-sell)" }}>
+              {bestCloseRow.pnlAcum >= 0 ? "+" : ""}${bestCloseRow.pnlAcum.toFixed(2)}
+            </span>
+            <span style={{ fontSize: "0.63rem", color: "var(--color-text-muted)" }}>
+              ({(bestCloseRow.pctGanado * 100).toFixed(1)}% de la prima cobrada)
+            </span>
+          </div>
+          <div style={{ fontSize: "0.6rem", color: "var(--color-text-muted)", fontStyle: "italic" }}>
+            {bestCloseRow.accion}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabla con scroll */}
+      <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "240px" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              {["Fecha", "Día", "DTE", "Precio", "Valor opt.", "P&L", "% ganado", "Estado", "Acción"].map((h) => (
+                <th key={h} style={thStyle}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr
+                key={r.day}
+                style={{
+                  borderBottom: "1px solid var(--color-border-subtle)",
+                  background: r.estado !== "normal" ? `${estadoColors[r.estado]}14` : undefined,
+                }}
+              >
+                <td style={{ ...tdBase, color: "var(--color-text-muted)" }}>{r.fecha}</td>
+                <td style={tdBase}>{r.day}</td>
+                <td style={{
+                  ...tdBase,
+                  color: r.dte > 0 && r.dte <= 21 ? "var(--color-warning)" : undefined,
+                  fontWeight: r.dte > 0 && r.dte <= 21 ? 700 : undefined,
+                }}>
+                  {r.dte}
+                </td>
+                <td style={tdBase}>${r.precioEstimado.toFixed(2)}</td>
+                <td style={tdBase}>${r.valorOpcion.toFixed(4)}</td>
+                <td style={{ ...tdBase, color: r.pnlAcum >= 0 ? "var(--color-buy)" : "var(--color-sell)" }}>
+                  {r.pnlAcum >= 0 ? "+" : ""}${r.pnlAcum.toFixed(2)}
+                </td>
+                <td style={{
+                  ...tdBase,
+                  color: r.pctGanado >= 0.50 ? "var(--color-buy)" : undefined,
+                  fontWeight: r.pctGanado >= 0.50 ? 700 : undefined,
+                }}>
+                  {(r.pctGanado * 100).toFixed(1)}%
+                </td>
+                <td style={{ ...tdBase, color: estadoColors[r.estado], fontWeight: 600 }}>
+                  {estadoLabels[r.estado]}
+                </td>
+                <td style={{ ...tdBase, color: estadoColors[r.estado] }}>{r.accion}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function WheelParamsModal({ open, ticker, params, onChange, onClose, onConfirm }: Props) {
   const [analyzed, setAnalyzed] = useState(false);
   const [precioFinal, setPrecioFinal] = useState<number>(0);
@@ -731,6 +1181,12 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
   // FIC: Roll 1 — real data from the next available expiration in the option chain. (EN)
   // FIC: Roll 1 — datos reales de la siguiente expiración disponible en la cadena de opciones. (ES)
   const [roll1, setRoll1] = useState<Roll1Result>({ status: "idle" });
+  const [fechaInicio, setFechaInicio] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [fechaFin, setFechaFin] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 45);
+    return d.toISOString().split("T")[0];
+  });
 
   // FIC: Wire module-level refs so suggestCallFromChain can access current state setters. (EN)
   // FIC: Conecta los refs de módulo para que suggestCallFromChain acceda a los setters actuales. (ES)
@@ -943,6 +1399,20 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
     }
     roll1Rows.push({ label: "Crédito estimado",   value: money(roll1.creditoEstimado ?? 0) });
   }
+
+  const dteEntrada = Math.max(1, Math.round(
+    (new Date(fechaFin).getTime() - new Date(fechaInicio).getTime()) / 86400000
+  ));
+
+  const simRows = buildDaySim(
+    params.csp.currentPrice,
+    params.csp.strikePut,
+    params.csp.primaPut,
+    params.csp.contratos,
+    precioFinal,
+    fechaInicio,
+    fechaFin,
+  );
 
   const handleAnalyze = () => {
     setAnalyzed(true);
@@ -1230,7 +1700,26 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
         {/* ── Sección de evaluación Wheel */}
         <div style={sectionStyle}>
           <div style={sectionTitleStyle}>EVALUAR RESULTADO</div>
-          <div style={{ display: "grid", gap: "var(--space-sm)", gridTemplateColumns: "1fr 1fr" }}>
+          <div style={{ display: "grid", gap: "var(--space-sm)", gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
+            <div>
+              <label style={labelStyle}>Fecha de inicio (hoy)</label>
+              <input
+                style={inputStyle}
+                type="date"
+                value={fechaInicio}
+                onChange={(e) => setFechaInicio(e.target.value)}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Fecha de fin (vencimiento) · DTE: {dteEntrada}d</label>
+              <input
+                style={inputStyle}
+                type="date"
+                value={fechaFin}
+                min={fechaInicio}
+                onChange={(e) => setFechaFin(e.target.value)}
+              />
+            </div>
             <div>
               <label style={labelStyle}>Precio final al vencimiento ($)</label>
               <input
@@ -1308,7 +1797,18 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
             expiration={selectedStrike?.expiration}
           />
 
-          {(() => {
+          <WheelRulesPanel
+            csp={params.csp}
+            cc={params.cc}
+            dteEntrada={dteEntrada}
+            fechaInicio={fechaInicio}
+          />
+        </div>
+
+        </div>
+
+        {/* ── WHEEL STAGES (ancho completo) */}
+        {(() => {
             const stage1Available = params.csp.strikePut > 0 && params.csp.primaPut >= 0 && params.csp.contratos > 0;
             const stage2Available = Boolean(evalResult) && precioFinal > 0 && params.cc.costoPromedio > 0;
             const stage3Available = params.cc.acciones > 0 && params.cc.strikeCall > 0 && params.cc.primaCall >= 0 && params.cc.contratos > 0;
@@ -1423,10 +1923,15 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
                 </div>
               </div>
             );
-          })()}
-        </div>
+        })()}
 
-        </div>
+        {/* ── Simulación día a día */}
+        {simRows.length > 0 && (
+          <WheelDaySimSection
+            rows={simRows}
+            primaTotal={params.csp.primaPut * params.csp.contratos * 100}
+          />
+        )}
 
         {/* ── Analizar button */}
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>

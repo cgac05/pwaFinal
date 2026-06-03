@@ -220,6 +220,82 @@ export class AvailabilitySloService {
       topErrorCodes
     };
   }
+
+  /**
+   * Exporta métricas en formato Prometheus text-based para integración con stacks de observabilidad.
+   * Cumple con especificación de formato texto de Prometheus.
+   *
+   * Exports metrics in Prometheus text-based format for observability stack integration.
+   * Complies with Prometheus text format specification.
+   */
+  exportPrometheusMetrics(year: number, month: number): string {
+    const dashboard = this.getDashboardForMonth(year, month);
+    const lines: string[] = [];
+
+    // Línea en blanco y comentarios de ayuda
+    lines.push("# HELP team03_availability_percent Disponibilidad mensual (%) por dependencia");
+    lines.push("# TYPE team03_availability_percent gauge");
+
+    for (const dep of dashboard.dependencies) {
+      lines.push(
+        `team03_availability_percent{dependency="${dep.dependency}",month="${pad2(month)}",year="${year}"} ${dep.availabilityPercent}`
+      );
+    }
+
+    lines.push("");
+    lines.push("# HELP team03_latency_p99_ms Latencia P99 en milisegundos");
+    lines.push("# TYPE team03_latency_p99_ms gauge");
+
+    for (const dep of dashboard.dependencies) {
+      lines.push(
+        `team03_latency_p99_ms{dependency="${dep.dependency}",month="${pad2(month)}",year="${year}"} ${dep.latency.p99Ms}`
+      );
+    }
+
+    lines.push("");
+    lines.push("# HELP team03_error_rate_percent Error rate mensual (%)");
+    lines.push("# TYPE team03_error_rate_percent gauge");
+
+    for (const dep of dashboard.dependencies) {
+      const errorRate =
+        dep.totalRequests === 0 ? 0 : Math.round((dep.failedRequests / dep.totalRequests) * 10000) / 100;
+      lines.push(
+        `team03_error_rate_percent{dependency="${dep.dependency}",month="${pad2(month)}",year="${year}"} ${errorRate}`
+      );
+    }
+
+    lines.push("");
+    lines.push("# HELP team03_slo_compliant SLO compliance (1=cumplido, 0=violado)");
+    lines.push("# TYPE team03_slo_compliant gauge");
+
+    for (const dep of dashboard.dependencies) {
+      lines.push(
+        `team03_slo_compliant{dependency="${dep.dependency}",month="${pad2(month)}",year="${year}"} ${dep.sloCompliant ? 1 : 0}`
+      );
+    }
+
+    lines.push("");
+    lines.push("# HELP team03_error_budget_remaining_percent Error budget restante (%)");
+    lines.push("# TYPE team03_error_budget_remaining_percent gauge");
+
+    for (const dep of dashboard.dependencies) {
+      lines.push(
+        `team03_error_budget_remaining_percent{dependency="${dep.dependency}",month="${pad2(month)}",year="${year}"} ${dep.errorBudgetRemainingPercent}`
+      );
+    }
+
+    lines.push("");
+    lines.push("# HELP team03_overall_availability_percent Disponibilidad general del sistema");
+    lines.push("# TYPE team03_overall_availability_percent gauge");
+    lines.push(`team03_overall_availability_percent{month="${pad2(month)}",year="${year}"} ${dashboard.overallAvailabilityPercent}`);
+
+    lines.push("");
+    lines.push("# HELP team03_sc005_compliant Cumplimiento de SC-005 (requisito >= 99.5%)");
+    lines.push("# TYPE team03_sc005_compliant gauge");
+    lines.push(`team03_sc005_compliant{month="${pad2(month)}",year="${year}"} ${dashboard.evidenceBoard.sc005Compliant ? 1 : 0}`);
+
+    return lines.join("\n");
+  }
 }
 
 /**

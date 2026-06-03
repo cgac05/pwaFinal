@@ -14,6 +14,7 @@ const CHIPS: ChipConfig[] = [
   { id: "institutional", label: "Institucional" },
   { id: "fundamental", label: "Fundamental" },
   { id: "news", label: "Noticias" },
+  { id: "news2", label: "Noticias 2" },
   { id: "ai", label: "IA" },
 ];
 

@@ -105,16 +105,11 @@ function calculateAtrTrailingStop(
 
     const close = candles[i].close;
     const longStop = close - multiplier * atrValue;
-    const shortStop = close + multiplier * atrValue;
 
-    if (stop === null) {
-      stop = longStop;
-      continue;
-    }
-
-    stop = close > stop
-      ? Math.max(stop, longStop)
-      : shortStop;
+    // Long-only ratcheting stop: solo sube, nunca baja.
+    // La versión anterior usaba lógica bidireccional (flip a short) que causaba
+    // que cualquier pullback dejara el stop permanentemente encima del precio.
+    stop = stop === null ? longStop : Math.max(stop, longStop);
   }
 
   return stop;

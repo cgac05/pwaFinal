@@ -36,9 +36,13 @@ interface GlobalChatDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   isInline?: boolean;
+  /** Legado — ya no inyecta como mensaje automático; solo inicializa el prefill si prefillInput no está. */
+  initialContext?: string | null;
+  /** P5 — Texto que se precarga en el input del chat sin enviarlo. El usuario presiona Enter. */
+  prefillInput?: string | null;
 }
 
-export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalChatDrawerProps) {
+export function GlobalChatDrawer({ isOpen, onClose, isInline = false, initialContext, prefillInput }: GlobalChatDrawerProps) {
   const { selectedInstrument, dashboardSnapshot } = useSignalStore() as any;
   const activeTicker = selectedInstrument?.symbol ?? dashboardSnapshot?.cards[0]?.instrument ?? "SPY";
 
@@ -54,6 +58,15 @@ export function GlobalChatDrawer({ isOpen, onClose, isInline = false }: GlobalCh
   const [showReports, setShowReports] = useState(false);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const injectedContextRef = useRef<string | null>(null);
+
+  // P5 — cuando llega un prefillInput nuevo, lo precarga en el input SIN enviarlo.
+  // El usuario ve el texto contextual y decide si enviar con Enter.
+  useEffect(() => {
+    if (!prefillInput || prefillInput === injectedContextRef.current) return;
+    injectedContextRef.current = prefillInput;
+    setInput(prefillInput);
+  }, [prefillInput]);
 
   // Fetch analyzed results from backend
   const loadEvaluationResults = useCallback(async () => {

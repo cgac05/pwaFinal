@@ -47,41 +47,6 @@ export class InvestmentAdvisor {
   }
 }
 
-export function buildInvestmentAdvice(input: {
-  symbol: string;
-  verdict: NewsOutlook;
-  confidence: number;
-  score?: number;
-  articles?: Array<{ title?: string; confidence?: number }>;
-}): {
-  symbol: string;
-  verdict: NewsOutlook;
-  confidence: number;
-  action: string;
-  summary: string;
-  riskNote: string;
-  checklist: string[];
-} {
-  const action = input.verdict === "BUY" ? "Considerar exposición alcista gradual" : input.verdict === "SELL" ? "Reducir exposición o cubrir riesgo" : "Mantener postura neutral y esperar confirmación";
-  const summary = `${input.symbol} presenta un veredicto ${input.verdict} con confianza ${(input.confidence * 100).toFixed(0)}%.`;
-  const riskNote = input.confidence < 0.5 ? "La confianza es moderada o baja; revisar noticias adicionales antes de actuar." : "La confianza es relativamente alta, pero sigue siendo un análisis explicativo.";
-  const checklist = [
-    "Verificar la noticia original y su fecha",
-    "Comparar con la tendencia técnica",
-    "Confirmar si el movimiento ya fue descontado por el mercado"
-  ];
-
-  return {
-    symbol: input.symbol,
-    verdict: input.verdict,
-    confidence: input.confidence,
-    action,
-    summary,
-    riskNote,
-    checklist
-  };
-}
-
 // FIC: Verdict mapping from the doc — low confidence holds, otherwise score-based.
 // FIC: Mapeo de veredicto del documento — baja confianza mantiene, si no se basa en el score.
 export function resolveVerdict(sentiment: SentimentResult): NewsOutlook {

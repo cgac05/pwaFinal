@@ -21,28 +21,6 @@ export function labelForScore(score: number): SentimentLabel {
   return "NEUTRAL";
 }
 
-const NEWS_BULLISH_TERMS = ["supera", "fuerte", "crece", "beat", "rally", "upgrade", "surge", "positivo"];
-const NEWS_BEARISH_TERMS = ["cae", "caida", "perdida", "miss", "downgrade", "warning", "presion", "negativo"];
-
-export function analyzeSentiment(text: string): { score: number; sentiment: "positive" | "neutral" | "negative"; confidence: number } {
-  const normalized = text.toLowerCase();
-  let bullish = 0;
-  let bearish = 0;
-  for (const term of NEWS_BULLISH_TERMS) if (normalized.includes(term)) bullish += 1;
-  for (const term of NEWS_BEARISH_TERMS) if (normalized.includes(term)) bearish += 1;
-  const total = bullish + bearish;
-  const score = total === 0 ? 0 : Number(((bullish - bearish) / total).toFixed(3));
-  const sentiment = score > 0.12 ? "positive" : score < -0.12 ? "negative" : "neutral";
-  const confidence = Number(Math.min(1, Math.max(0.2, total / 6)).toFixed(3));
-  return { score, sentiment, confidence };
-}
-
-export function sentimentToVerdict(score: number): "BUY" | "HOLD" | "SELL" {
-  if (score > 0.18) return "BUY";
-  if (score < -0.18) return "SELL";
-  return "HOLD";
-}
-
 // FIC: Bilingual lexicons for the deterministic fallback scorer.
 // FIC: Lexicos bilingues para el analizador determinista de respaldo.
 const BULLISH_TERMS = [
@@ -238,14 +216,39 @@ export class AnthropicNewsSentimentAnalyzer implements NewsSentimentAnalyzer {
 // FIC: Construye el prompt en español, solo-JSON, para el analisis de sentimiento.
 export function buildSentimentPrompt(symbol: string, digest: string): string {
   return [
-    `Eres un analista financiero experto. Analiza las siguientes noticias recientes sobre ${symbol}`,
-    "y determina el sentimiento de inversion.",
+    `Eres un analista financiero senior de Wall Street. Recibes titulares REALES sobre ${symbol}`,
+    `extraídos de Yahoo Finance, Finnhub y NewsAPI. Tu análisis debe tener profundidad de experto.`,
     "",
+    "═══ REGLAS ABSOLUTAS ═══",
+    "① PROHIBIDO inventar datos. Usa SOLO lo que aparece en los titulares siguientes.",
+    "② Identifica el AGENTE del evento (persona, empresa, regulador) y explica el mecanismo",
+    "  por el que ese evento ESPECÍFICO mueve el precio de " + symbol + ".",
+    "  Ejemplos de análisis válido:",
+    `  • "Elon Musk vendió $X B en acciones de Tesla → presión bajista directa en precio spot"`,
+    `  • "Trump anunció aranceles al 25% a chips → impacto alcista en AMD por relocalización"`,
+    `  • "La Fed mantuvo tasas → reduce coste de capital, favorece múltiplos altos en growth"`,
+    "③ En 'reasoning' DEBES mencionar explícitamente el agente/evento del titular más relevante",
+    `  y su cadena de causalidad hacia ${symbol}. NO uses frases genéricas como "señales positivas".`,
+    "④ 'confidence' alta (>0.7) solo si 2+ artículos distintos confirman la misma dirección.",
+    "⑤ Si los titulares no mencionan eventos específicos, di exactamente:",
+    `  "Sin eventos de alto impacto identificados para ${symbol} en el período analizado."`,
+    "",
+    "═══ TITULARES REALES ═══",
     digest,
+    "════════════════════════",
     "",
-    "Responde UNICAMENTE con JSON:",
-    '{ "score": <-1.0 a 1.0>, "label": "BULLISH|BEARISH|NEUTRAL", "confidence": <0.0 a 1.0>,',
-    '  "reasoning": "<2-3 oraciones>", "keyFactors": ["factor1", "factor2", "factor3"] }'
+    "Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto fuera del JSON:",
+    "{",
+    '  "score": <-1.0 a 1.0>,',
+    '  "label": "BULLISH|BEARISH|NEUTRAL",',
+    '  "confidence": <0.0 a 1.0>,',
+    `  "reasoning": "El score es [X] porque [Agente] [acción específica del titular] lo que implica [mecanismo de impacto] para ${symbol}. La confianza es [Y%] porque [N] de [total] fuentes confirman esta dirección.",`,
+    '  "keyFactors": [',
+    `    "[Cita textual del titular 1] → [Quién lo hace, qué implica para ${symbol} en las próximas semanas]",`,
+    `    "[Cita textual del titular 2] → [Mecanismo de impacto específico en ${symbol}]",`,
+    `    "[Cita textual del titular 3 o factor de riesgo] → [Proyección temporal]"`,
+    '  ]',
+    "}",
   ].join("\n");
 }
 

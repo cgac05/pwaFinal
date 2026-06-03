@@ -1,60 +1,99 @@
-import { useState } from "react";
-import type { NewsSourceInput } from "../../services/news/newsApi";
+/**
+ * src/features/news/SourceInput.tsx
+ * FIC: Componente para agregar nuevas fuentes financieras (dominios principales)
+ * El sistema automáticamente buscará noticias de la compañía en esos sitios
+ */
+
+import React, { useState } from 'react';
 
 interface SourceInputProps {
-  symbol: string;
-  onAdd: (source: NewsSourceInput) => void;
+  onAddSource: (url: string) => void;
+  loading: boolean;
 }
 
-export function SourceInput({ symbol, onAdd }: SourceInputProps) {
-  const [mode, setMode] = useState<"text" | "url">("text");
-  const [title, setTitle] = useState("");
-  const [value, setValue] = useState("");
+export const SourceInput: React.FC<SourceInputProps> = ({ onAddSource, loading }) => {
+  const [urlInput, setUrlInput] = useState<string>('');
+  const [error, setError] = useState<string>('');
 
-  const addSource = () => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
+  const handleAdd = () => {
+    const trimmed = urlInput.trim();
 
-    onAdd({
-      id: `manual-${Date.now()}`,
-      title: title.trim() || `${symbol} fuente manual`,
-      ...(mode === "url" ? { url: trimmed } : { text: trimmed }),
-      provider: mode === "url" ? "url" : "manual",
-      symbol
-    });
-    setTitle("");
-    setValue("");
+    // FIC: Validación de entrada
+    if (!trimmed) {
+      setError('El dominio no puede estar vacío');
+      return;
+    }
+
+    // FIC: Valida formato - puede ser dominio o URL completa
+    let normalizedUrl = trimmed;
+
+    // Si no tiene protocolo, asume https://
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      normalizedUrl = `https://${trimmed}`;
+    }
+
+    try {
+      const urlObj = new URL(normalizedUrl);
+      
+      // FIC: Extrae solo el dominio principal (host)
+      const domain = urlObj.hostname || '';
+
+      if (!domain) {
+        setError('Dominio inválido');
+        return;
+      }
+
+      // FIC: Todo OK, agrega la fuente
+      onAddSource(domain);
+      setUrlInput('');
+      setError('');
+    } catch {
+      setError('Formato de dominio inválido');
+      return;
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !loading) {
+      handleAdd();
+    }
   };
 
   return (
-    <div className="tnmt-source-input">
-      <div className="tnmt-source-input__header">
-        <div>
-          <h3>Agregar fuente TNMT</h3>
-          <p>Pega una URL o texto de noticia para analizar sentimiento, credibilidad y señal.</p>
-        </div>
-        <div className="tnmt-segmented">
-          <button type="button" className={mode === "text" ? "is-active" : ""} onClick={() => setMode("text")}>Texto</button>
-          <button type="button" className={mode === "url" ? "is-active" : ""} onClick={() => setMode("url")}>URL</button>
-        </div>
+    <div className="source-input-container">
+      <label htmlFor="url-input" className="nsa-label">
+        Agregar Fuente Financiera
+      </label>
+
+      <div className="source-input-wrapper">
+        <input
+          id="url-input"
+          type="text"
+          placeholder="nasdaq.com, investing.com, cnbc.com, etc."
+          value={urlInput}
+          onChange={(e) => {
+            setUrlInput(e.target.value);
+            setError('');
+          }}
+          onKeyPress={handleKeyPress}
+          disabled={loading}
+          className="source-url-input"
+        />
+        <button
+          onClick={handleAdd}
+          disabled={loading || !urlInput.trim()}
+          className="btn-add-source"
+          title="Agregar fuente"
+        >
+          +
+        </button>
       </div>
 
-      <input
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        placeholder="Título opcional"
-        className="tnmt-input"
-      />
-      <textarea
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder={mode === "url" ? "https://..." : "Pega aquí el contenido de la noticia..."}
-        className="tnmt-textarea"
-      />
-      <button type="button" className="tnmt-primary-button" onClick={addSource} disabled={!value.trim()}>
-        Agregar fuente
-      </button>
+      {error && <span className="source-input-error">{error}</span>}
+
+      <p className="source-input-hint">
+        💡 Solo dominio (ej: nasdaq.com) • El sistema buscará automáticamente noticias de tu compañía
+      </p>
     </div>
   );
-}
-
+};

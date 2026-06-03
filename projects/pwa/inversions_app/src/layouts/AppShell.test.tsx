@@ -1,7 +1,7 @@
 // FIC: AppShell layout tests — 4-zone render, panel collapse, tablet drawer behavior.
 // FIC: Tests del layout AppShell — renderizado 4 zonas, colapso de paneles, comportamiento Drawer en tablet.
 
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AppShell } from "./AppShell";
 
@@ -27,6 +27,11 @@ const props = {
 };
 
 describe("AppShell", () => {
+  beforeEach(() => {
+    mockStore.leftPanelCollapsed = false;
+    mockStore.chatPanelCollapsed = false;
+  });
+
   it("renderiza las 4 zonas correctamente", () => {
     render(<AppShell {...props} />);
     expect(screen.getByTestId("app-shell-activity-bar")).toBeDefined();
@@ -53,7 +58,17 @@ describe("AppShell", () => {
     render(<AppShell {...props} />);
     const panel = screen.getByTestId("app-shell-chat-panel");
     expect(panel.style.width).toBe("0px");
-    mockStore.chatPanelCollapsed = false;
+    expect(panel.style.transform).toBe("translateX(100%)");
+  });
+
+  it("panel de chat abierto se sobrepone sin quitar ancho al main", () => {
+    render(<AppShell {...props} />);
+    const panel = screen.getByTestId("app-shell-chat-panel");
+    const main = screen.getByTestId("app-shell-main");
+    expect(panel.style.position).toBe("absolute");
+    expect(panel.style.right).toBe("0px");
+    expect(main.style.flex).toBe("1 1 0%");
+    expect(main.style.width).toBe("0px");
   });
 
   it("el contenido principal se renderiza dentro de main", () => {

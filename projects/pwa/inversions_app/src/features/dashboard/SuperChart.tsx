@@ -540,7 +540,7 @@ export const SuperChart: React.FC<SuperChartProps> = ({
           );
         })}
       </div>
- 
+
       {/* ── Technical Analysis Panel ───────────────────────────────────────── */}
       <div
         style={{
@@ -567,7 +567,7 @@ export const SuperChart: React.FC<SuperChartProps> = ({
                 {techData ? `${techData.resistances?.length ?? 0}R / ${techData.supports?.length ?? 0}S` : "0R / 0S"}
               </span>
             </div>
-            
+
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <span style={{ color: "var(--color-text-muted)" }}>Ventana</span>
               <div style={{ display: "flex", gap: "4px" }}>

@@ -128,6 +128,15 @@ const ENVIRONMENT_REQUIREMENTS: EnvironmentRequirement[] = [
     example: "true",
   },
 
+  // FIC: AI analysis provider (Optional at startup, required for news analysis)
+  {
+    name: "ANTHROPIC_API_KEY",
+    required: false,
+    validator: (value) => value.length > 0,
+    description: "Anthropic API key (required for AI news source analysis)",
+    example: "sk-ant-...",
+  },
+
   // FIC: Broker integration (Optional, but required for execution features)
   {
     name: "IBKR_ACCOUNT_ID",
@@ -241,6 +250,13 @@ export function validateEnvironment(): ValidationResult {
     warnings.push({
       variable: "BROKER_CONFIG",
       reason: "No broker configuration detected. Broker execution will be unavailable. No se detectó configuración de broker. La ejecución del broker no estará disponible.",
+    });
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    warnings.push({
+      variable: "ANTHROPIC_API_KEY",
+      reason: "No Anthropic API key detected. AI news source analysis will be unavailable until ANTHROPIC_API_KEY is configured. No se detectó API key de Anthropic. El análisis IA de fuentes no estará disponible hasta configurar ANTHROPIC_API_KEY.",
     });
   }
 
