@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, Newspaper, Sparkles } from "lucide-react";
 import { getRelevantNews, type NewsCanonicalPayload, type NewsDateRange, type RelevantNewsItem } from "../../services/news/newsApi";
-import { NewsSourcesAnalyzer } from "../news/NewsSourcesAnalyzer";
+// NewsSourcesAnalyzer se controla exclusivamente desde MainDashboard
+// a través del chip "Noticias 2" + gate de simulación. No debe instanciarse aquí.
 
 type Props = {
   symbol: string;
@@ -186,9 +187,6 @@ export function NewsSection({ symbol, dateRange }: Props) {
         </div>
       )}
 
-      <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-md)" }}>
-        <NewsSourcesAnalyzer symbol={symbol} dateRange={dateRange} />
-      </div>
     </section>
   );
 }
