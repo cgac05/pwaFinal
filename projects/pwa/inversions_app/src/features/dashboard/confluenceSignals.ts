@@ -146,7 +146,13 @@ export function computeConfluenceSignals(
   active: IndicatorState,
 ): ConfluenceSignal[] {
   const enabled = (Object.keys(active) as SubCoreIndicador[]).filter((k) => active[k]);
-  if (candles.length === 0 || enabled.length < MIN_CONFLUENCE) return [];
+  if (candles.length === 0 || enabled.length === 0) return [];
+
+  // FIC: With a single indicator enabled, show its own signals (threshold 1); with 2+, require
+  // FIC: real confluence (>=2 agree) to avoid saturating the chart. (EN)
+  // FIC: Con un solo indicador prendido, muestra sus señales (umbral 1); con 2+, exige confluencia
+  // FIC: real (>=2 coinciden) para no saturar el gráfico. (ES)
+  const threshold = Math.min(MIN_CONFLUENCE, enabled.length);
 
   // Precompute each enabled indicator's per-candle directional state.
   const states = enabled.map((ind) => STATE_BUILDERS[ind](candles));
@@ -169,10 +175,10 @@ export function computeConfluenceSignals(
     // Confluence direction: the side with >=MIN_CONFLUENCE agreeing indicators and a clear majority.
     let dir: Dir = "neutral";
     let winners: IndicatorTrigger[] = [];
-    if (buys.length >= MIN_CONFLUENCE && buys.length > sells.length) {
+    if (buys.length >= threshold && buys.length > sells.length) {
       dir = "buy";
       winners = buys;
-    } else if (sells.length >= MIN_CONFLUENCE && sells.length > buys.length) {
+    } else if (sells.length >= threshold && sells.length > buys.length) {
       dir = "sell";
       winners = sells;
     }

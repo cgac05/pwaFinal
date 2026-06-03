@@ -361,7 +361,7 @@ export function MainDashboard() {
               height: 420,
               padding: "var(--space-md)",
             }}>
-              <OptionChainTableConnected onSelectStrike={handleStrikeSelect} />
+              <OptionChainTableConnected onSelectStrike={handleStrikeSelect} activeStrategy={activeSimulationStrategy} />
             </div>
           </div>
 

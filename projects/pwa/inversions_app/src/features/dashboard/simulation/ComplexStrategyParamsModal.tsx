@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { fetchOptionsChain, fetchExpirations, type StrikeSelection } from "../../../services/strategies/strategyApi";
+import { useStrategyLegsStore } from "../../../store/strategyLegs";
 
 // ─── Strategy metadata ────────────────────────────────────
 
@@ -222,6 +223,13 @@ export function ComplexStrategyParamsModal({ open, strategy, ticker, riskToleran
   const [loadingStrikes, setLoadingStrikes] = useState(false);
   const [lastAutoBaseStrike, setLastAutoBaseStrike] = useState(0);
 
+  // FIC: Punto 1 — legs picked from the option chain (right-click). When present for this strategy,
+  // FIC: they pre-fill the strikes instead of the auto-adjust default. (EN)
+  // FIC: Punto 1 — patas elegidas desde la cadena (clic derecho). Si existen para esta estrategia,
+  // FIC: precargan los strikes en vez del auto-ajuste por defecto. (ES)
+  const { strategy: legStrategy, legs: pendingLegs } = useStrategyLegsStore();
+  const hasPendingLegs = legStrategy === strategy && pendingLegs.some((l) => l.strike > 0);
+
   // ── Fetch expirations when ticker or range changes ──────────
   useEffect(() => {
     if (!open || !ticker || ticker.length < 2) return;
@@ -305,13 +313,26 @@ export function ComplexStrategyParamsModal({ open, strategy, ticker, riskToleran
   }, [strategy]);
 
   // Auto-fetch options chain when modal opens with a valid ticker and expiration
+  // FIC: Skip the auto-adjust when the user pre-selected legs from the chain (Punto 1). (EN)
   useEffect(() => {
-    if (open && ticker && ticker.length >= 2) {
+    if (open && ticker && ticker.length >= 2 && !hasPendingLegs) {
       handleAutoAdjustStrikes(ticker, form.expiracion || undefined);
     }
     // Only run on open, not on every form.expiracion change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, ticker]);
+
+  // FIC: Punto 1 — when the modal opens with legs picked from the chain, use them as the strikes. (EN)
+  // FIC: Punto 1 — al abrir el modal con patas elegidas desde la cadena, úsalas como strikes. (ES)
+  useEffect(() => {
+    if (open && hasPendingLegs) {
+      setForm((prev) => ({
+        ...prev,
+        strikes: pendingLegs.map((l) => ({ strike: l.strike, tipo: l.tipo, posicion: l.posicion })),
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, hasPendingLegs, pendingLegs]);
 
   const handleSave = useCallback(() => {
     onConfirm?.(form, strategy);

@@ -1,6 +1,7 @@
 // FIC: Option chain table — 3-column layout (calls | strike | puts), auto-updates on ticker change. (EN)
 import React, { useCallback, useEffect, useState } from "react";
 import { useSignalStore } from "../../store/signals";
+import { useStrategyLegsStore, isComplexLegStrategy } from "../../store/strategyLegs";
 import { SkeletonCard } from "../../components/ui/SkeletonCard";
 import {
   fetchOptionChain,
@@ -24,6 +25,11 @@ export interface OptionChainTableProps {
       estimatedRiskFreeRate?: number;
     }
   ) => void;
+  // FIC: Active strategy — when it's a complex multi-leg one (Iron Condor…), right-click a row to
+  // FIC: assign its strike to a leg. When absent/non-complex, the chain behaves exactly as before. (EN)
+  // FIC: Estrategia activa — si es compleja (Iron Condor…), clic derecho en una fila asigna su strike
+  // FIC: a una pata. Si no, la cadena se comporta igual que siempre. (ES)
+  activeStrategy?: string;
 }
 
 // ─── Cell helpers ─────────────────────────────────────────────────────────────
@@ -172,13 +178,33 @@ function PutCells({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function OptionChainTable({ symbol, onSelectStrike }: OptionChainTableProps) {
+export function OptionChainTable({ symbol, onSelectStrike, activeStrategy }: OptionChainTableProps) {
   const [expirations, setExpirations] = useState<string[]>([]);
   const [selectedExpiration, setSelectedExpiration] = useState<string>("");
   const [chain, setChain] = useState<OptionChainResponse | null>(null);
   const [loadingExp, setLoadingExp] = useState(false);
   const [loadingChain, setLoadingChain] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // FIC: Leg-picker (Punto 1) — active only for complex multi-leg strategies. (EN)
+  // FIC: Selector de patas (Punto 1) — activo solo para estrategias complejas multi-pata. (ES)
+  const { strategy: legStrategy, legs: pendingLegs, setLegsStrategy, assignLeg, clearLegs } = useStrategyLegsStore();
+  const legPickerActive = !!activeStrategy && isComplexLegStrategy(activeStrategy);
+  const [legMenu, setLegMenu] = useState<{ x: number; y: number; row: OptionChainRow } | null>(null);
+
+  // Keep the legs store pointed at the active complex strategy.
+  useEffect(() => {
+    if (legPickerActive && legStrategy !== activeStrategy) setLegsStrategy(activeStrategy!);
+  }, [legPickerActive, activeStrategy, legStrategy, setLegsStrategy]);
+
+  const handleRowContextMenu = useCallback(
+    (e: React.MouseEvent, row: OptionChainRow) => {
+      if (!legPickerActive) return; // not a complex strategy → leave default behavior untouched
+      e.preventDefault();
+      setLegMenu({ x: e.clientX, y: e.clientY, row });
+    },
+    [legPickerActive],
+  );
 
   // FIC: Load expirations whenever symbol changes. (EN)
   useEffect(() => {
@@ -396,6 +422,20 @@ export function OptionChainTable({ symbol, onSelectStrike }: OptionChainTablePro
 
   return (
     <div style={stickyContainer}>
+      {/* FIC: Leg-picker hint — visible only with a complex strategy active. (EN) */}
+      {legPickerActive && (
+        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-xs)" }}>
+          Clic derecho en una fila para asignar su strike a una pata de <strong style={{ color: "var(--color-text)" }}>{activeStrategy?.replace(/_/g, " ")}</strong>
+          {pendingLegs.some((l) => l.strike > 0) && (
+            <button
+              onClick={() => clearLegs()}
+              style={{ marginLeft: 8, fontSize: "0.6rem", padding: "1px 6px", background: "transparent", border: "1px solid var(--color-border)", borderRadius: "var(--radius-xs)", color: "var(--color-text-muted)", cursor: "pointer" }}
+            >
+              Limpiar patas
+            </button>
+          )}
+        </div>
+      )}
       <div style={stickyHeader}>{header}</div>
       <div style={scrollBody}>
         <table style={tableStyle}>
@@ -428,7 +468,11 @@ export function OptionChainTable({ symbol, onSelectStrike }: OptionChainTablePro
               const isAtm     = Math.abs(row.strike - underlyingPrice) / (underlyingPrice || 1) < 0.005;
 
               return (
-                <tr key={row.strike} style={{ transition: "background 0.1s" }}>
+                <tr
+                  key={row.strike}
+                  style={{ transition: "background 0.1s" }}
+                  onContextMenu={(e) => handleRowContextMenu(e, row)}
+                >
                   {/* Call cells — reverse order so Bid is closest to strike */}
                   <td
                     style={{ ...tdStyle, textAlign: "right", background: isCallItm ? "color-mix(in srgb, var(--color-buy) 8%, transparent)" : undefined }}
@@ -482,6 +526,77 @@ export function OptionChainTable({ symbol, onSelectStrike }: OptionChainTablePro
           </tbody>
         </table>
       </div>
+
+      {/* FIC: Right-click leg-assignment menu (Punto 1). (EN) */}
+      {legMenu && (
+        <>
+          <div
+            onClick={() => setLegMenu(null)}
+            onContextMenu={(e) => { e.preventDefault(); setLegMenu(null); }}
+            style={{ position: "fixed", inset: 0, zIndex: 2000 }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              left: Math.min(legMenu.x, window.innerWidth - 230),
+              top: Math.min(legMenu.y, window.innerHeight - 200),
+              zIndex: 2001,
+              minWidth: 210,
+              background: "var(--color-surface-raised)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-sm)",
+              boxShadow: "0 8px 28px rgba(0,0,0,0.6)",
+              padding: "4px",
+              fontSize: "var(--font-size-xs)",
+            }}
+          >
+            <div style={{ padding: "4px 8px", color: "var(--color-text-muted)", borderBottom: "1px solid var(--color-border-subtle)", marginBottom: 4 }}>
+              Asignar strike <strong style={{ color: "var(--color-text)" }}>{legMenu.row.strike}</strong> a:
+            </div>
+            {pendingLegs.map((leg, i) => {
+              const isCall = leg.tipo === "call";
+              return (
+                <button
+                  key={i}
+                  onClick={() => {
+                    const premium = isCall
+                      ? (midpoint(legMenu.row.callBid, legMenu.row.callAsk) || legMenu.row.callLastPrice)
+                      : (midpoint(legMenu.row.putBid, legMenu.row.putAsk) || legMenu.row.putLastPrice);
+                    assignLeg(i, legMenu.row.strike, premium);
+                    setLegMenu(null);
+                  }}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    width: "100%",
+                    gap: 8,
+                    padding: "6px 8px",
+                    background: "transparent",
+                    border: "none",
+                    borderRadius: "var(--radius-xs)",
+                    color: "var(--color-text)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <span>
+                    Pata {i + 1} ·{" "}
+                    <span style={{ color: isCall ? "var(--color-buy)" : "var(--color-sell)", fontWeight: 600 }}>
+                      {leg.tipo.toUpperCase()} {leg.posicion}
+                    </span>
+                  </span>
+                  {leg.strike > 0 && (
+                    <span style={{ color: "var(--color-text-muted)", fontSize: "0.6rem" }}>actual {leg.strike}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -490,10 +605,12 @@ export function OptionChainTable({ symbol, onSelectStrike }: OptionChainTablePro
 // FIC: Wrapper conectado — lee el ticker de useSignalStore. (ES)
 export function OptionChainTableConnected({
   onSelectStrike,
+  activeStrategy,
 }: {
   onSelectStrike?: OptionChainTableProps["onSelectStrike"];
+  activeStrategy?: string;
 }) {
   const { selectedInstrument } = useSignalStore();
   const symbol = selectedInstrument?.symbol ?? "";
-  return <OptionChainTable symbol={symbol} onSelectStrike={onSelectStrike} />;
+  return <OptionChainTable symbol={symbol} onSelectStrike={onSelectStrike} activeStrategy={activeStrategy} />;
 }

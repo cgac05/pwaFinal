@@ -613,6 +613,9 @@ export function SimulationControlPanel({
   // FIC: US-2 — los toggles de indicadores viven en el store compartido para que el gráfico
   // FIC: ("arriba") y este panel ("abajo") queden sincronizados en ambos sentidos, incluso al desactivar. (ES)
   const { indicators: indicadoresOn, toggleIndicator: toggleSub, setIndicator } = useIndicatorStore();
+  // FIC: Punto 3 — true once the user has run the simulation at least once; gates the auto-refresh. (EN)
+  // FIC: Punto 3 — true cuando el usuario ya corrió la simulación al menos una vez; habilita el auto-refresh. (ES)
+  const hasRunOnceRef = useRef(false);
   // FIC: US-8 — optional historical as-of date; empty means "use latest data". (EN)
   // FIC: US-8 — fecha historica opcional; vacio significa "usar datos mas recientes". (ES)
   const [fechaHistorica, setFechaHistorica] = useState<string>("");
@@ -744,6 +747,9 @@ export function SimulationControlPanel({
     setError(null);
     const activeCoreIds = ALL_CORES.filter((c) => coresOn[c]);
     onExecute?.(activeCoreIds);
+    // FIC: Mark that a manual run was initiated → enables auto-refresh on indicator toggles. (EN)
+    // FIC: Marca que se inició una corrida manual → habilita el auto-refresh al togglear indicadores. (ES)
+    hasRunOnceRef.current = true;
     try {
       const simPayload: SimulationRequestPayload = {
         ticket,
@@ -859,6 +865,40 @@ export function SimulationControlPanel({
       setLoading(false);
     }
   };
+
+  // FIC: Punto 3 — auto-refresh the confluence table when indicators are toggled (from the chart or
+  // FIC: this panel). Debounced; only after a manual run and with a valid (canonical) strategy, so we
+  // FIC: never hit the empty-strategy error nor spam the backend. Only refreshes the table (no modals
+  // FIC: nor strategy execution). (EN)
+  // FIC: Punto 3 — refresca la tabla de confluencia al togglear indicadores (desde el gráfico o este
+  // FIC: panel). Con debounce; solo tras una corrida manual y con estrategia válida (canónica), para no
+  // FIC: caer en el error de estrategia vacía ni spamear el backend. Solo refresca la tabla. (ES)
+  useEffect(() => {
+    if (!hasRunOnceRef.current) return;
+    if (!(CANONICAL_ESTRATEGIAS as readonly string[]).includes(estrategia)) return;
+    const id = setTimeout(async () => {
+      try {
+        const simPayload: SimulationRequestPayload = {
+          ticket,
+          rangoHistorico: preset,
+          rangoEstrategia: { from: estrategiaFrom, to: estrategiaTo },
+          temporalidad,
+          runtimeMode: "OFFLINE",
+          coresHabilitados: ALL_CORES.filter((c) => coresOn[c]),
+          indicadoresHabilitados: ALL_SUBCORES.filter((s) => indicadoresOn[s]),
+          estrategia,
+          toleranciaRiesgo: tolerancia,
+          soloCoincidencias: true,
+          ...(fechaHistorica ? { fechaHistorica } : {}),
+        };
+        onResult(await runSimulation(simPayload));
+      } catch {
+        // FIC: silent — the manual "Ejecutar Simulación" button surfaces any error. (EN)
+      }
+    }, 400);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indicadoresOn]);
 
   const periodDays = Math.max(
     0,
