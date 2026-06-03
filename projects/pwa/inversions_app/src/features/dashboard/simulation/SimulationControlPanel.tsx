@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   BarChart2, BookOpen, TrendingUp, Building2, Newspaper,
-  Cpu, Play, ChevronDown, Calendar, RotateCcw,
+  Cpu, Play, ChevronDown, Calendar, RotateCcw, Loader2,
 } from "lucide-react";
 import { getMarketQuotes } from "../../../services/signals/marketApi";
 import {
@@ -10,7 +10,6 @@ import {
   ALL_SUBCORES,
   CANONICAL_ESTRATEGIAS,
   type CoreId,
-  type SubCoreIndicador,
   type SimulationRequestPayload,
   type SimulationResponse,
 } from "../../../services/signals/confluenceTableApi";
@@ -23,11 +22,13 @@ import {
   type OptionStrategyAnalysis,
 } from "./OptionStrategyParamsModal";
 import { WheelParamsModal, type WheelModalParams } from "./WheelParamsModal";
+import { SpreadParamsModal, type SpreadModalParams } from "./SpreadParamsModal";
 import { ComplexStrategyParamsModal, type ComplexFormState } from "./ComplexStrategyParamsModal";
 import { executeStrategy } from "../../../services/strategies/strategyApi";
 import { buildComplexStrategyRows } from "../../../services/strategies/buildStrategyRows";
 import type { FromChainResponse } from "../../../services/strategies/strategyApi";
 import { useSignalStore } from "../../../store/signals";
+import { useIndicatorStore } from "../../../store/indicators";
 
 // ─── Panel CSS ─────────────────────────────────────────────────────────────────
 // Uses only real Revolut design-system tokens from tokens.css.
@@ -184,6 +185,8 @@ const PANEL_CSS = `
   .sim-exec:hover:not(:disabled) { background: var(--color-accent-hover); transform: translateY(-1px); }
   .sim-exec:active:not(:disabled) { transform: translateY(0); }
   .sim-exec:disabled { opacity: 0.6; cursor: not-allowed; }
+  .sim-exec__spinner { animation: sim-exec-spin 0.7s linear infinite; }
+  @keyframes sim-exec-spin { to { transform: rotate(360deg); } }
 `;
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
@@ -462,10 +465,12 @@ function ChipButton({
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
 const CORE_OPTION_STRATEGIES = new Set<string>(["LONG_CALL", "LONG_PUT", "SHORT_CALL", "SHORT_PUT"]);
+const SPREAD_STRATEGIES = new Set(["BULL_CALL_SPREAD", "BEAR_PUT_SPREAD", "BULL_PUT_SPREAD", "BEAR_CALL_SPREAD"]);
 const COMPLEX_STRATEGIES = new Set(["IRON_CONDOR", "IRON_BUTTERFLY", "BUTTERFLY_SPREAD", "CONDOR"]);
 const COVERAGE_STRATEGIES = new Set(["PROTECTIVE_PUT", "MARRIED_PUT", "COLLAR_PUT", "COVERED_STRADDLE"]);
 function isTermStrategy(e: string)     { return TERM_STRATEGIES.has(e); }
 function isCoverageStrategy(e: string) { return COVERAGE_STRATEGIES.has(e); }
+function isSpreadStrategy(e: string)   { return SPREAD_STRATEGIES.has(e); }
 function isCoreOptionStrategy(e: string): e is CoreOptionStrategy { return CORE_OPTION_STRATEGIES.has(e); }
 function isWheelStrategy(e: string)    { return e === "WHEEL"; }
 function isComplexStrategy(e: string)  { return COMPLEX_STRATEGIES.has(e); }
@@ -488,6 +493,16 @@ const DEFAULT_COVERAGE_PARAMS: CoverageModalParams = {
   currentPrice: 0,
   shares: 100,
   riskTolerancePct: 0.05,
+};
+
+
+const DEFAULT_SPREAD_PARAMS: SpreadModalParams = {
+  currentPrice: 0,
+  longStrike: 0,
+  longPremium: 0,
+  shortStrike: 0,
+  shortPremium: 0,
+  contracts: 1,
 };
 
 const DEFAULT_WHEEL_PARAMS: WheelModalParams = {
@@ -516,12 +531,22 @@ const PRESET_OPTIONS: SelectOption[]    = PRESETS.map((p) => ({ value: p, label:
 const TIMEFRAME_OPTIONS: SelectOption[] = TIMEFRAMES.map((t) => ({ value: t, label: t }));
 const OPTION_STRATEGY_LABELS = new Map(OPTION_STRATEGY_OPTIONS.map((strategy) => [strategy.value, strategy.label]));
 const EMPTY_STRATEGY_OPTION: SelectOption = { value: "", label: "Seleccionar estrategia…" };
+const SPREAD_STRATEGY_OPTIONS: SelectOption[] = [
+  { value: "BULL_CALL_SPREAD", label: "Debit Spread · Bull Call" },
+  { value: "BEAR_PUT_SPREAD", label: "Debit Spread · Bear Put" },
+  { value: "BULL_PUT_SPREAD", label: "Credit Spread · Bull Put" },
+  { value: "BEAR_CALL_SPREAD", label: "Credit Spread · Bear Call" },
+];
+
 const STRATEGY_OPTIONS: SelectOption[] = [
   EMPTY_STRATEGY_OPTION,
-  ...CANONICAL_ESTRATEGIAS.map((strategy) => ({
-    value: strategy,
-    label: OPTION_STRATEGY_LABELS.get(strategy as CoreOptionStrategy) ?? strategy.replace(/_/g, " "),
-  })),
+  ...CANONICAL_ESTRATEGIAS
+    .filter((strategy) => !SPREAD_STRATEGIES.has(strategy))
+    .map((strategy) => ({
+      value: strategy,
+      label: OPTION_STRATEGY_LABELS.get(strategy as CoreOptionStrategy) ?? strategy.replace(/_/g, " "),
+    })),
+  ...SPREAD_STRATEGY_OPTIONS,
 ];
 
 function isoToday(): string       { return new Date().toISOString().slice(0, 10); }
@@ -535,10 +560,6 @@ function isoPlusDays(n: number)   { return new Date(Date.now() + n * 86_400_000)
 // FIC: nunca se apaga al ejecutar la simulacion (evita apagarlo por error). (ES)
 const defaultCoresOn = (): Record<CoreId, boolean> =>
   ALL_CORES.reduce((acc, c) => ({ ...acc, [c]: c !== "A_INDICADORES" }), {} as Record<CoreId, boolean>);
-
-// FIC: Individual technical indicators start DISABLED; the user opts in (US-2). (EN)
-const defaultIndicadoresOn = (): Record<SubCoreIndicador, boolean> =>
-  ALL_SUBCORES.reduce((acc, s) => ({ ...acc, [s]: false }), {} as Record<SubCoreIndicador, boolean>);
 
 // ─── Section label style (shared) ─────────────────────────────────────────────
 const sectionLabelStyle: React.CSSProperties = {
@@ -561,6 +582,7 @@ interface Props {
   onCoverageParamsConfirmed?: (params: CoverageModalParams, kind: string) => void;
   onOptionStrategyCalculated?: (analysis: OptionStrategyAnalysis) => void;
   onWheelParamsConfirmed?: (params: WheelModalParams) => void;
+  onSpreadParamsConfirmed?: (params: SpreadModalParams, kind: string) => void;
   onTermResult?: (data: any) => void;
   onComplexResult?: (result: FromChainResponse, strategy: string, timeframe?: string) => void;
 }
@@ -574,6 +596,7 @@ export function SimulationControlPanel({
   onCoverageParamsConfirmed,
   onOptionStrategyCalculated,
   onWheelParamsConfirmed,
+  onSpreadParamsConfirmed,
   onTermResult,
   onComplexResult,
 }: Props) {
@@ -586,8 +609,11 @@ export function SimulationControlPanel({
   const [tolerancia, setTolerancia]       = useState<"BAJO" | "MEDIO" | "ALTO">("MEDIO");
   // FIC: A_INDICADORES core starts DISABLED at system start (initial state only). (EN)
   const [coresOn, setCoresOn]             = useState<Record<CoreId, boolean>>(defaultCoresOn);
-  // FIC: US-2 — technical indicators start DISABLED; the user opts in explicitly. (EN)
-  const [indicadoresOn, setIndicadoresOn] = useState<Record<SubCoreIndicador, boolean>>(defaultIndicadoresOn);
+  // FIC: US-2 — technical indicator toggles live in the shared store so the chart ("arriba") and
+  // FIC: this panel ("abajo") stay synchronized in both directions, including deactivation. (EN)
+  // FIC: US-2 — los toggles de indicadores viven en el store compartido para que el gráfico
+  // FIC: ("arriba") y este panel ("abajo") queden sincronizados en ambos sentidos, incluso al desactivar. (ES)
+  const { indicators: indicadoresOn, toggleIndicator: toggleSub, setIndicator } = useIndicatorStore();
   // FIC: US-8 — optional historical as-of date; empty means "use latest data". (EN)
   // FIC: US-8 — fecha historica opcional; vacio significa "usar datos mas recientes". (ES)
   const [fechaHistorica, setFechaHistorica] = useState<string>("");
@@ -600,7 +626,9 @@ export function SimulationControlPanel({
   const [optionParamsModalOpen, setOptionParamsModalOpen] = useState(false);
   const [optionParamsStrategy, setOptionParamsStrategy] = useState<CoreOptionStrategy>("LONG_CALL");
   const [wheelModalOpen, setWheelModalOpen] = useState(false);
+  const [spreadModalOpen, setSpreadModalOpen] = useState(false);
   const [complexModalOpen, setComplexModalOpen] = useState(false);
+  const [spreadParams, setSpreadParams] = useState<SpreadModalParams>(DEFAULT_SPREAD_PARAMS);
   const [complexParams, setComplexParams] = useState<ComplexFormState | null>(null);
   const [wheelParams, setWheelParams] = useState<WheelModalParams>({
     ...DEFAULT_WHEEL_PARAMS,
@@ -620,6 +648,16 @@ export function SimulationControlPanel({
       })
       .catch(() => { /* user can enter manually */ });
   }, [coverageModalOpen, ticket, coverageParams.currentPrice]);
+
+  useEffect(() => {
+    if (!spreadModalOpen || spreadParams.currentPrice > 0) return;
+    getMarketQuotes([ticket])
+      .then((data) => {
+        const q = data.quotes.find((qt) => qt.symbol === ticket.toUpperCase());
+        if (q && q.price > 0) setSpreadParams((prev) => ({ ...prev, currentPrice: q.price }));
+      })
+      .catch(() => { /* user can enter manually */ });
+  }, [spreadModalOpen, ticket, spreadParams.currentPrice]);
 
   useEffect(() => {
     if (!wheelModalOpen || wheelParams.csp.currentPrice > 0) return;
@@ -672,13 +710,14 @@ export function SimulationControlPanel({
       setCoverageModalOpen(true);
     } else if (isWheelStrategy(e)) {
       setWheelModalOpen(true);
+    } else if (isSpreadStrategy(e)) {
+      setSpreadModalOpen(true);
     } else if (isComplexStrategy(e)) {
       setComplexModalOpen(true);
     }
   };
 
   const toggleCore = (c: CoreId)          => setCoresOn((p) => ({ ...p, [c]: !p[c] }));
-  const toggleSub  = (s: SubCoreIndicador) => setIndicadoresOn((p) => ({ ...p, [s]: !p[s] }));
 
   // FIC: US-3 — full control-panel reset to defaults (also clears any prior results). (EN)
   // FIC: US-3 — reset completo del panel de control a defaults (limpia tambien resultados previos). (ES)
@@ -691,10 +730,13 @@ export function SimulationControlPanel({
     onStrategyChange?.("IRON_CONDOR");
     setTolerancia("MEDIO");
     setCoresOn(defaultCoresOn());
-    setIndicadoresOn(defaultIndicadoresOn());
+    // FIC: Reset shared indicator toggles to OFF (keeps chart "arriba" in sync). (EN)
+    // FIC: Restablece los toggles compartidos de indicadores a OFF (mantiene sincronía con el gráfico "arriba"). (ES)
+    ALL_SUBCORES.forEach((s) => setIndicator(s, false));
     setFechaHistorica("");
     setCoverageParams(DEFAULT_COVERAGE_PARAMS);
     setTermParams(DEFAULT_TERM_PARAMS);
+    setSpreadParams(DEFAULT_SPREAD_PARAMS);
     setError(null);
   };
 
@@ -1053,7 +1095,9 @@ export function SimulationControlPanel({
                 background: "rgba(255,255,255,0.18)",
                 flexShrink: 0,
               }}>
-                <Play size={11} fill="currentColor" strokeWidth={0} />
+                {loading
+                  ? <Loader2 size={13} strokeWidth={2.5} className="sim-exec__spinner" />
+                  : <Play size={11} fill="currentColor" strokeWidth={0} />}
               </span>
               {loading ? "Ejecutando…" : "Ejecutar Simulación"}
             </button>
@@ -1094,6 +1138,15 @@ export function SimulationControlPanel({
         onChange={setWheelParams}
         onClose={() => setWheelModalOpen(false)}
         onConfirm={(params) => onWheelParamsConfirmed?.(params)}
+      />
+      <SpreadParamsModal
+        open={spreadModalOpen}
+        estrategia={estrategia}
+        ticker={ticket}
+        params={spreadParams}
+        onChange={setSpreadParams}
+        onClose={() => setSpreadModalOpen(false)}
+        onConfirm={(params) => onSpreadParamsConfirmed?.(params, estrategia)}
       />
       <ComplexStrategyParamsModal
         open={complexModalOpen}

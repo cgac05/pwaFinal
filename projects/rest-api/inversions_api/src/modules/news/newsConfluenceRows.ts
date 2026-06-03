@@ -83,11 +83,21 @@ function buildRowFromArticle(
   computedAt: Date,
   aggregate: NewsImpactResponse
 ): ConfluenceSignalRow {
-  const tipoSenal = tipoSenalFromVerdict(article.verdict);
+  const canonicalRow = article.canonicalRow;
+  const tipoSenal = canonicalRow?.tipoSenal ?? tipoSenalFromVerdict(article.verdict);
   const estado = estadoFromArticle(article);
-  const score = Number(Math.max(-1, Math.min(1, article.sentimentScore)).toFixed(3));
-  const peso = Number(Math.max(0, Math.min(1, article.confidence * article.credibilityScore)).toFixed(3));
+  const direction = article.verdict === "BUY" ? 1 : article.verdict === "SELL" ? -1 : 0;
+  const score = canonicalRow?.score ?? Number(Math.max(-1, Math.min(1, direction * article.confidence * article.credibilityScore)).toFixed(3));
+  const peso = canonicalRow?.peso ?? Number(Math.max(0, Math.min(1, article.confidence * article.credibilityScore)).toFixed(3));
   const evidenceRef = article.url ?? `news:${article.id}`;
+  const metricas = canonicalRow?.observacion.metricas ?? {
+    SENTIMIENTO: score,
+    CONFIANZA: article.confidence,
+    CREDIBILIDAD: article.credibilityScore,
+    PESO_CALCULADO: peso,
+    CALCULO_PESO: `peso=${article.confidence.toFixed(3)}*${article.credibilityScore.toFixed(3)}=${peso.toFixed(3)}`,
+    PROVEEDOR: article.provider
+  };
 
   return {
     ticket: input.ticket,
@@ -108,15 +118,10 @@ function buildRowFromArticle(
     ia_revisada: false,
     delta_vs_anterior: deltaForArticle(input.previousRows, article, tipoSenal),
     observacion: {
-      objetivo: article.title,
-      senal: article.summary || `${article.verdict} convertido a ${tipoSenal} con confianza ${(article.confidence * 100).toFixed(0)}%.`,
-      explicacion: article.rationale || `${article.verdict} convertido a ${tipoSenal} con confianza ${(article.confidence * 100).toFixed(0)}%.`,
-      metricas: {
-        SENTIMIENTO: article.sentimentScore,
-        CONFIANZA: article.confidence,
-        CREDIBILIDAD: article.credibilityScore,
-        PROVEEDOR: article.provider
-      }
+      objetivo: canonicalRow?.observacion.objetivo ?? article.title,
+      senal: canonicalRow?.observacion.senal ?? (article.summary || `${article.verdict} convertido a ${tipoSenal} con confianza ${(article.confidence * 100).toFixed(0)}%.`),
+      explicacion: canonicalRow?.observacion.explicacion ?? (article.rationale || `${article.verdict} convertido a ${tipoSenal} con confianza ${(article.confidence * 100).toFixed(0)}%.`),
+      metricas
     },
     algorithm_version: ALGORITHM_VERSION,
     computed_at: computedAt.toISOString(),

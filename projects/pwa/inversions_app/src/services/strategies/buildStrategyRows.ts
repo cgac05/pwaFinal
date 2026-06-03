@@ -99,7 +99,7 @@ export function buildComplexStrategyRows(
   const sharpe        = Number(simulation.ratio_sharpe ?? 0);
 
   const bePoints: number[] = Array.isArray(profile.break_even_points)
-    ? (profile.break_even_points as number[])
+    ? (profile.break_even_points as (number | null)[]).filter((bp): bp is number => bp != null)
     : [];
 
   const estrategiaLabel = strategy.replace(/_/g, " ");

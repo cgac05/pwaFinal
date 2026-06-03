@@ -11,10 +11,13 @@ import {
 import type { CoverageModalParams } from "./CoverageParamsModal";
 import type { OptionStrategyAnalysis } from "./OptionStrategyParamsModal";
 import type { WheelModalParams } from "./WheelParamsModal";
+import type { SpreadModalParams } from "./SpreadParamsModal";
 import type { FromChainResponse } from "../../../services/strategies/strategyApi";
 
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
 const CORE_OPTION_STRATEGIES = new Set(["LONG_CALL", "LONG_PUT", "SHORT_CALL", "SHORT_PUT"]);
+const SPREAD_STRATEGIES = new Set(["BULL_CALL_SPREAD", "BEAR_PUT_SPREAD", "BULL_PUT_SPREAD", "BEAR_CALL_SPREAD"]);
+const DEBIT_SPREADS = new Set(["BULL_CALL_SPREAD", "BEAR_PUT_SPREAD"]);
 const COMPLEX_STRATEGIES = new Set(["IRON_CONDOR", "IRON_BUTTERFLY", "BUTTERFLY_SPREAD", "CONDOR"]);
 const COVERAGE_STRATEGIES = new Set(["PROTECTIVE_PUT", "MARRIED_PUT", "COLLAR_PUT", "COVERED_STRADDLE"]);
 
@@ -35,6 +38,7 @@ interface Props {
   ticker: string;
   activeStrategy: string;
   coverageRequest?: { params: CoverageModalParams; kind: string } | null;
+  spreadRequest?: { params: SpreadModalParams; kind: string } | null;
   optionStrategyAnalysis?: OptionStrategyAnalysis | null;
   wheelSummary?: WheelModalParams | null;
   termResult?: any | null;
@@ -45,7 +49,7 @@ function money(value: number | "Ilimitado"): string {
   return value === "Ilimitado" ? "Ilimitado" : `$${value.toFixed(2)}`;
 }
 
-export function SimulatorStrategySection({ ticker, activeStrategy, coverageRequest, optionStrategyAnalysis, wheelSummary, termResult, complexResult }: Props) {
+export function SimulatorStrategySection({ ticker, activeStrategy, coverageRequest, spreadRequest, optionStrategyAnalysis, wheelSummary, termResult, complexResult }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<CoverageAnalyzeResponse | null>(null);
@@ -105,10 +109,11 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
   const hasCoreOptionAnalysis = isCoreOptionStrategy && optionStrategyAnalysis?.strategy === activeStrategy;
   const isWheelStrategy = activeStrategy === "WHEEL";
   const isComplexStrategy = COMPLEX_STRATEGIES.has(activeStrategy);
+  const isSpreadStrategy = SPREAD_STRATEGIES.has(activeStrategy);
 
   const cardStyle: React.CSSProperties = {
     padding: "var(--space-lg)",
-    opacity: (!isCoverageStrategy && !isTermStrategy && !isCoreOptionStrategy && !isWheelStrategy && !isComplexStrategy) ? 0.5 : 1,
+    opacity: (!isCoverageStrategy && !isTermStrategy && !isCoreOptionStrategy && !isWheelStrategy && !isComplexStrategy && !isSpreadStrategy) ? 0.5 : 1,
   };
 
   const mutedText: React.CSSProperties = {
@@ -326,7 +331,7 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
         const payoffCurve = profile?.payoff_curve ?? [];
         const griegas = profile?.griegas;
         const escenarios = simulation?.escenarios;
-        const bePoints: number[] = Array.isArray(profile?.break_even_points) ? profile.break_even_points : [];
+        const bePoints: number[] = Array.isArray(profile?.break_even_points) ? profile.break_even_points.filter((bp: number | null): bp is number => bp != null) : [];
 
         // Calculate DTE
         let dte = "—";
@@ -543,7 +548,7 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
       })()}
 
       {/* Unknown strategies */}
-      {!isCoverageStrategy && !isTermStrategy && !isCoreOptionStrategy && !isWheelStrategy && !isComplexStrategy && (
+      {!isCoverageStrategy && !isTermStrategy && !isCoreOptionStrategy && !isWheelStrategy && !isComplexStrategy && !isSpreadStrategy && (
         <p style={mutedText}>
           El análisis de {sectionTitle} está en construcción y estará disponible próximamente.
         </p>
@@ -601,6 +606,64 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
               <PayoffChart points={optionStrategyAnalysis.payoffPoints} breakEvenPrice={optionStrategyAnalysis.result.breakeven} height={220} />
             </div>
           )}
+        </>
+      )}
+
+
+      {/* Debit/Credit spreads */}
+      {isSpreadStrategy && (
+        <>
+          {(!spreadRequest || spreadRequest.kind !== activeStrategy) && (
+            <p style={mutedText}>
+              Configura los strikes y primas para analizar {sectionTitle}. Debit Spread incluye Bull Call/Bear Put; Credit Spread incluye Bull Put/Bear Call.
+            </p>
+          )}
+          {spreadRequest && spreadRequest.kind === activeStrategy && (() => {
+            const p = spreadRequest.params;
+            const isDebit = DEBIT_SPREADS.has(activeStrategy);
+            const width = Math.abs(p.shortStrike - p.longStrike);
+            const net = isDebit ? p.longPremium - p.shortPremium : p.shortPremium - p.longPremium;
+            const multiplier = Math.max(1, p.contracts || 1) * 100;
+            const maxProfit = isDebit ? (width - net) * multiplier : net * multiplier;
+            const maxLoss = isDebit ? net * multiplier : (width - net) * multiplier;
+            const breakEven =
+              activeStrategy === "BULL_CALL_SPREAD" ? p.longStrike + net :
+              activeStrategy === "BEAR_PUT_SPREAD" ? p.longStrike - net :
+              activeStrategy === "BULL_PUT_SPREAD" ? p.shortStrike - net :
+              p.shortStrike + net;
+            const direction = activeStrategy === "BULL_CALL_SPREAD" || activeStrategy === "BULL_PUT_SPREAD" ? "Alcista" : "Bajista";
+            const family = isDebit ? "Debit Spread" : "Credit Spread";
+            const rows: Array<{ label: string; value: string; color?: string }> = [
+              { label: "Familia", value: family, color: "var(--color-accent)" },
+              { label: "Sesgo", value: direction, color: direction === "Alcista" ? "var(--color-buy)" : "var(--color-sell)" },
+              { label: isDebit ? "Débito neto" : "Crédito neto", value: net > 0 ? `$${net.toFixed(2)}` : "Revisar primas" },
+              { label: "Ancho spread", value: width > 0 ? `$${width.toFixed(2)}` : "—" },
+              { label: "Max profit", value: maxProfit > 0 ? `$${maxProfit.toFixed(2)}` : "—", color: "var(--color-buy)" },
+              { label: "Max loss", value: maxLoss > 0 ? `$${maxLoss.toFixed(2)}` : "—", color: "var(--color-sell)" },
+              { label: "Break-even", value: breakEven > 0 ? `$${breakEven.toFixed(2)}` : "—" },
+              { label: "Contratos", value: String(Math.max(1, p.contracts || 1)) },
+            ];
+
+            return (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "var(--space-md)" }}>
+                {rows.map((r) => (
+                  <div key={r.label} style={{
+                    background: "var(--color-surface)",
+                    borderRadius: "var(--radius-sm)",
+                    padding: "var(--space-sm) var(--space-md)",
+                    border: "1px solid var(--color-border-subtle)",
+                  }}>
+                    <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "2px" }}>
+                      {r.label}
+                    </div>
+                    <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 700, color: r.color ?? "var(--color-text)" }}>
+                      {r.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </>
       )}
 

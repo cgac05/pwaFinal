@@ -90,6 +90,36 @@ export interface NewsSourceInput {
   symbol?: string;
 }
 
+
+export interface NewsCanonicalObservation {
+  objetivo: string;
+  senal: string;
+  explicacion: string;
+  metricas: Record<string, number | string>;
+}
+
+export interface NewsCanonicalRow {
+  core: "A_NOTICIAS";
+  subCore?: string;
+  tipoSenal: "CALL" | "PUT" | "HOLD";
+  score: number;
+  peso: number;
+  observacion: NewsCanonicalObservation;
+  canonicalOutput: string;
+}
+
+export interface NewsCanonicalPayload {
+  version: "canonical-output-v1";
+  core: "A_NOTICIAS";
+  symbol: string;
+  generatedAt: string;
+  standard: string;
+  aggregate: NewsCanonicalRow;
+  rows: NewsCanonicalRow[];
+  output: string;
+  outputs: string[];
+}
+
 export interface AnalyzedNewsSource {
   id: string;
   title: string;
@@ -106,6 +136,8 @@ export interface AnalyzedNewsSource {
   keywords: string[];
   verdict: NewsVerdict;
   rationale: string;
+  canonicalRow?: NewsCanonicalRow;
+  canonicalOutput?: string;
 }
 
 export interface NewsProviderStatus {
@@ -132,6 +164,7 @@ export interface NewsAnalysisAggregate {
   sellCount: number;
   sources: AnalyzedNewsSource[];
   highlights: string[];
+  canonical: NewsCanonicalPayload;
 }
 
 export interface NewsQueryParams {
@@ -167,4 +200,5 @@ export interface NewsImpactResponse {
     confidence: number;
     rationale: string;
   }>;
+  canonical: NewsCanonicalPayload;
 }

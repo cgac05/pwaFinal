@@ -79,13 +79,13 @@ export function NewsSourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect
     }
   };
 
-  const analyzeManual = async () => {
-    if (!canAnalyzeManual) return;
+  const analyzeManual = async (nextSources = sources) => {
+    if (nextSources.length === 0) return;
     const controller = new AbortController();
     setLoading(true);
     setError(null);
     try {
-      const result = await analyzeNewsSources(activeSymbol, sources, controller.signal);
+      const result = await analyzeNewsSources(activeSymbol, nextSources, controller.signal);
       setManualAnalysis(result);
     } catch (err) {
       setError((err as Error).message);
@@ -98,6 +98,12 @@ export function NewsSourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect
     setSelectedArticle(article);
     setShowModal(true);
     onArticleSelect?.(article);
+  };
+
+  const handleAddSource = (source: NewsSourceInput) => {
+    const nextSources = [...sources, source];
+    setSources(nextSources);
+    void analyzeManual(nextSources);
   };
 
   useEffect(() => {
@@ -149,7 +155,7 @@ export function NewsSourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect
         <button type="button" className="tnmt-primary-button" onClick={loadTickerNews} disabled={loading}>
           Cargar noticias reales del ticker
         </button>
-        <button type="button" onClick={analyzeManual} disabled={!canAnalyzeManual || loading}>
+        <button type="button" onClick={() => void analyzeManual()} disabled={!canAnalyzeManual || loading}>
           <ShieldCheck size={16} /> Analizar fuentes pegadas
         </button>
       </div>
@@ -158,7 +164,7 @@ export function NewsSourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect
 
       <div className="tnmt-news-grid">
         <div className="tnmt-news-column">
-          <SourceInput symbol={activeSymbol} onAdd={(source) => setSources((current) => [...current, source])} />
+          <SourceInput symbol={activeSymbol} onAdd={handleAddSource} />
           <SourceList
             sources={sources}
             onRemove={(id) => setSources((current) => current.filter((source) => (source.id ?? source.url ?? source.title) !== id))}

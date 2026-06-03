@@ -112,7 +112,19 @@ export class DeterministicNewsSentimentAnalyzer implements NewsSentimentAnalyzer
 
     const total = pos + neg;
     const score = total === 0 ? 0 : Number(((pos - neg) / total).toFixed(3));
-    const confidence = Number(Math.min(1, total / Math.max(1, articles.length)).toFixed(3));
+    const articlesWithEvidence = articles.filter((a) => {
+      const text = `${a.headline} ${a.summary}`.toLowerCase();
+      return BULLISH_TERMS.some((term) => text.includes(term)) || BEARISH_TERMS.some((term) => text.includes(term));
+    }).length;
+    const evidenceCoverage = articles.length === 0 ? 0 : articlesWithEvidence / articles.length;
+    const signalDensity = Math.min(1, total / Math.max(1, articles.length * 4));
+    const textCoverage = Math.min(1, articles.reduce((sum, a) => sum + `${a.headline} ${a.summary}`.length, 0) / Math.max(1, articles.length * 420));
+    const confidence = Number(
+      Math.min(
+        0.95,
+        Math.max(0.05, 0.18 + evidenceCoverage * 0.38 + signalDensity * 0.32 + textCoverage * 0.12)
+      ).toFixed(3)
+    );
     const label = labelForScore(score);
 
     return {
@@ -121,7 +133,8 @@ export class DeterministicNewsSentimentAnalyzer implements NewsSentimentAnalyzer
       confidence,
       reasoning:
         `Analisis determinista de ${articles.length} titulares de ${symbol}: ` +
-        `${pos} señales alcistas y ${neg} bajistas.`,
+        `${pos} señales alcistas y ${neg} bajistas. ` +
+        `Confianza calculada con cobertura=${evidenceCoverage.toFixed(2)}, densidad=${signalDensity.toFixed(2)} y texto=${textCoverage.toFixed(2)}.`,
       keyFactors: Array.from(factors).slice(0, 3),
       degraded: true
     };

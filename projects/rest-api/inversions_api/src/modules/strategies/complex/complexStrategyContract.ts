@@ -391,7 +391,9 @@ export function findBreakEvens(payoffCurve: PayoffPoint[]): number[] {
     // FIC: Check if P&L crosses zero between these two points
     if ((prev.pnl <= 0 && curr.pnl >= 0) || (prev.pnl >= 0 && curr.pnl <= 0)) {
       // FIC: Linear interpolation to find exact zero-crossing
-      const fraction = Math.abs(prev.pnl) / (Math.abs(prev.pnl) + Math.abs(curr.pnl));
+      const denom = Math.abs(prev.pnl) + Math.abs(curr.pnl);
+      if (denom === 0) continue;
+      const fraction = Math.abs(prev.pnl) / denom;
       const bePrice = prev.precio_subyacente + fraction * (curr.precio_subyacente - prev.precio_subyacente);
       breakEvens.push(Math.round(bePrice * 100) / 100);
     }

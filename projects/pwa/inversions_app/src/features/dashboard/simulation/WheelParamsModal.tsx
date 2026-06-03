@@ -10,6 +10,11 @@ import { useSignalStore } from "../../../store/signals";
 // FIC: Reuse existing option chain service — no new endpoints created. (EN)
 // FIC: Reutiliza el servicio de cadena de opciones existente — no se crean endpoints nuevos. (ES)
 import { fetchOptionChain, fetchExpirations } from "../../../services/options/optionChainApi";
+import {
+  fetchWheelEligibility,
+  type WheelEligibilityCriterion,
+  type WheelEligibilityResult,
+} from "../../../services/strategies/wheelEligibilityApi";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +38,19 @@ export interface WheelCcParams {
 export interface WheelModalParams {
   csp: WheelCspParams;
   cc: WheelCcParams;
+}
+
+// FIC: Result of Roll 1 lookup — fetched from real option chain, no backend changes. (EN)
+// FIC: Resultado de la búsqueda del Roll 1 — obtenido de la cadena de opciones real, sin cambios backend. (ES)
+interface Roll1Result {
+  status: "idle" | "loading" | "found" | "not_found";
+  currentExpiration?: string;
+  nextExpiration?: string;
+  strikeCallCurrent?: number;
+  strikeCallSuggested?: number;
+  prima?: number;
+  delta?: number | null;
+  creditoEstimado?: number;
 }
 
 // FIC: Result of Wheel outcome simulation — computed locally, no backend. (EN)
@@ -128,12 +146,27 @@ const panelStyle: React.CSSProperties = {
   background: "var(--color-surface)",
   borderRadius: "var(--radius-md)",
   padding: "var(--space-lg)",
-  width: "min(680px, 96vw)",
+  width: "min(1120px, 96vw)",
+  boxSizing: "border-box",
   border: "1px solid rgba(255,255,255,0.08)",
   boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
   display: "flex",
   flexDirection: "column",
   gap: "var(--space-lg)",
+};
+
+const modalColumnsStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "var(--space-lg)",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))",
+  alignItems: "start",
+};
+
+const modalColumnStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "var(--space-lg)",
+  minWidth: 0,
 };
 
 const sectionStyle: React.CSSProperties = {
@@ -205,45 +238,403 @@ const resultValueStyle: React.CSSProperties = {
   color: "var(--color-text)",
 };
 
+const stageGridStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "var(--space-sm)",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+};
+
+const stageCardStyle: React.CSSProperties = {
+  background: "var(--color-surface)",
+  borderRadius: "var(--radius-sm)",
+  padding: "var(--space-sm)",
+  border: "1px solid var(--color-border-subtle)",
+};
+
+const unavailableStageStyle: React.CSSProperties = {
+  color: "var(--color-text-muted)",
+  fontSize: "var(--font-size-xs)",
+  fontStyle: "italic",
+  lineHeight: 1.4,
+};
+
+// ─── Operational Recommendation ──────────────────────────────────────────────
+
+// FIC: WheelOperationalRecommendation — purely presentational, no new calculations,
+// no backend calls, no predictions. Reads existing eligibility + params data. (EN)
+// FIC: WheelOperationalRecommendation — puramente presentacional, sin nuevos cálculos,
+// sin llamadas backend, sin predicciones. Lee datos existentes de eligibility + params. (ES)
+function WheelOperationalRecommendation({
+  eligibility,
+  eligibilityLoading,
+  csp,
+  cc,
+  expiration,
+}: {
+  eligibility: WheelEligibilityResult | null;
+  eligibilityLoading: boolean;
+  csp: WheelCspParams;
+  cc: WheelCcParams;
+  expiration: string | undefined;
+}) {
+  if (eligibilityLoading) {
+    return (
+      <div style={{
+        background: "var(--color-surface-raised)",
+        borderRadius: "var(--radius-sm)",
+        padding: "var(--space-md)",
+        border: "1px solid var(--color-border-subtle)",
+        fontSize: "var(--font-size-xs)",
+        color: "var(--color-text-muted)",
+        fontStyle: "italic",
+      }}>
+        Evaluando elegibilidad para recomendación operativa…
+      </div>
+    );
+  }
+
+  if (!eligibility) return null;
+
+  const eligible = eligibility.eligible;
+  const passedCriteria = eligibility.criteria.filter((c) => c.status === "pass");
+  const failedCriteria = eligibility.criteria.filter((c) => c.status === "fail");
+
+  const hasPut  = csp.strikePut > 0 && csp.primaPut >= 0;
+  const hasCall = cc.strikeCall > 0 && cc.primaCall >= 0;
+
+  const borderColor = eligible ? "var(--color-buy)" : "var(--color-warning)";
+  const headerBg    = eligible ? "rgba(34,197,94,0.08)" : "rgba(251,191,36,0.08)";
+  const icon        = eligible ? "✅" : "⚠️";
+  const headline    = eligible
+    ? "Momento adecuado para iniciar Wheel."
+    : "No se recomienda iniciar Wheel actualmente.";
+  const action      = eligible
+    ? "Acción recomendada: Vender Cash Secured Put."
+    : "Acción recomendada: Esperar una mejor configuración técnica.";
+
+  const money = (v: number) => `$${v.toFixed(2)}`;
+
+  const rowStyle: React.CSSProperties = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    fontSize: "var(--font-size-xs)",
+    padding: "2px 0",
+  };
+
+  const mutedLabel: React.CSSProperties = {
+    color: "var(--color-text-muted)",
+  };
+
+  const boldValue: React.CSSProperties = {
+    fontWeight: 600,
+    color: "var(--color-text)",
+    fontVariantNumeric: "tabular-nums",
+  };
+
+  const subTitleStyle: React.CSSProperties = {
+    fontSize: "var(--font-size-xs)",
+    fontWeight: 700,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.06em",
+    color: "var(--color-text-muted)",
+    marginBottom: "4px",
+  };
+
+  return (
+    <div style={{
+      background: "var(--color-surface-raised)",
+      borderRadius: "var(--radius-sm)",
+      border: `1px solid ${borderColor}`,
+      overflow: "hidden",
+    }}>
+      {/* Header */}
+      <div style={{
+        background: headerBg,
+        padding: "var(--space-sm) var(--space-md)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "2px",
+        borderBottom: `1px solid ${borderColor}`,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)" }}>
+          <span style={{ fontSize: "0.85rem", lineHeight: 1 }}>{icon}</span>
+          <span style={{
+            fontSize: "var(--font-size-xs)",
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            color: eligible ? "var(--color-buy)" : "var(--color-warning)",
+          }}>
+            RECOMENDACIÓN OPERATIVA
+          </span>
+        </div>
+        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text)", fontWeight: 600 }}>
+          {headline}
+        </div>
+        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+          {action}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={{ padding: "var(--space-sm) var(--space-md)", display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+
+        {/* Vencimiento */}
+        <div>
+          <div style={subTitleStyle}>Vencimiento</div>
+          <div style={rowStyle}>
+            <span style={mutedLabel}>Fecha seleccionada</span>
+            <span style={boldValue}>{expiration ?? "—"}</span>
+          </div>
+        </div>
+
+        {/* Contrato PUT (solo si hay datos) */}
+        {eligible && (
+          <div>
+            <div style={subTitleStyle}>Contrato PUT</div>
+            <div style={rowStyle}>
+              <span style={mutedLabel}>Strike</span>
+              <span style={boldValue}>{hasPut ? money(csp.strikePut) : "—"}</span>
+            </div>
+            <div style={rowStyle}>
+              <span style={mutedLabel}>Prima</span>
+              <span style={boldValue}>{hasPut ? `${money(csp.primaPut)} / acción` : "—"}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Criterios: favorables o fallidos */}
+        <div>
+          <div style={subTitleStyle}>
+            {eligible ? "Motivos favorables" : "Criterios fallidos"}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+            {eligible
+              ? passedCriteria.length > 0
+                ? passedCriteria.map((c) => (
+                    <div key={c.id} style={{ display: "flex", alignItems: "flex-start", gap: "6px", fontSize: "var(--font-size-xs)" }}>
+                      <span style={{ color: "var(--color-buy)", flexShrink: 0, marginTop: "1px" }}>✓</span>
+                      <span style={{ color: "var(--color-text)" }}>{c.label}</span>
+                    </div>
+                  ))
+                : <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontStyle: "italic" }}>Sin criterios disponibles.</span>
+              : failedCriteria.length > 0
+                ? failedCriteria.map((c) => (
+                    <div key={c.id} style={{ display: "flex", alignItems: "flex-start", gap: "6px", fontSize: "var(--font-size-xs)" }}>
+                      <span style={{ color: "var(--color-warning)", flexShrink: 0, marginTop: "1px" }}>!</span>
+                      <span style={{ color: "var(--color-warning)" }}>{c.label}</span>
+                    </div>
+                  ))
+                : <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontStyle: "italic" }}>Sin criterios fallidos registrados.</span>
+            }
+          </div>
+        </div>
+
+        {/* Covered Call sugerido (solo si elegible y hay datos de CC) */}
+        {eligible && (
+          <div>
+            <div style={subTitleStyle}>Covered Call sugerido en caso de asignación</div>
+            {hasCall
+              ? (
+                <>
+                  <div style={rowStyle}>
+                    <span style={mutedLabel}>Strike</span>
+                    <span style={boldValue}>{money(cc.strikeCall)}</span>
+                  </div>
+                  <div style={rowStyle}>
+                    <span style={mutedLabel}>Prima</span>
+                    <span style={boldValue}>{`${money(cc.primaCall)} / acción`}</span>
+                  </div>
+                </>
+              )
+              : (
+                <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontStyle: "italic" }}>
+                  Selecciona un CALL desde el option chain para ver la sugerencia.
+                </span>
+              )
+            }
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 // FIC: These are module-level refs so suggestCallFromChain can write to state
 // without being declared inside the component (avoids stale closure issues). (EN)
 // FIC: Refs a nivel de módulo para que suggestCallFromChain pueda escribir estado
 // sin declararse dentro del componente (evita problemas de closure obsoleto). (ES)
+function WheelEligibilitySummary({
+  result,
+  loading,
+  error,
+}: {
+  result: WheelEligibilityResult | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  const statusColor = result?.eligible
+    ? "var(--color-buy)"
+    : result
+      ? "var(--color-warning)"
+      : "var(--color-text-muted)";
+  const title = loading
+    ? "Evaluando elegibilidad Wheel..."
+    : error
+      ? "Elegibilidad Wheel no disponible"
+      : result?.eligible
+        ? "Activo apto para Wheel"
+        : "Advertencia de elegibilidad Wheel";
+  const criteria = result?.criteria ?? [];
+
+  const markerFor = (criterion: WheelEligibilityCriterion) => {
+    if (criterion.status === "pass") return { text: "✓", color: "var(--color-buy)" };
+    if (criterion.status === "fail") return { text: "!", color: "var(--color-warning)" };
+    return { text: "⚠", color: "var(--color-warning)" };
+  };
+
+  return (
+    <div style={{
+      background: "var(--color-surface-raised)",
+      borderRadius: "var(--radius-sm)",
+      padding: "var(--space-md)",
+      border: `1px solid ${result && !result.eligible ? "var(--color-warning)" : "var(--color-border-subtle)"}`,
+      display: "flex",
+      flexDirection: "column",
+      gap: "var(--space-sm)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+        <span style={{ color: statusColor, fontSize: "1rem", lineHeight: 1 }}>●</span>
+        <span style={{ fontSize: "var(--font-size-sm)", fontWeight: 700, color: "var(--color-text)" }}>
+          {title}
+        </span>
+        {result && (
+          <span style={{
+            marginLeft: "auto",
+            fontSize: "var(--font-size-xs)",
+            color: "var(--color-text-muted)",
+            fontVariantNumeric: "tabular-nums",
+          }}>
+            {result.summary.passed}/{result.summary.total} criterios
+          </span>
+        )}
+      </div>
+
+      {loading && (
+        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+          Consultando filtros técnicos para el ticker actual.
+        </div>
+      )}
+
+      {error && (
+        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-warning)" }}>
+          {error}
+        </div>
+      )}
+
+      {criteria.length > 0 && (
+        <div style={{ display: "grid", gap: "6px" }}>
+          {criteria.map((criterion) => {
+            const marker = markerFor(criterion);
+            return (
+              <div
+                key={criterion.id}
+                title={criterion.details}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "var(--font-size-xs)",
+                  color: criterion.status === "fail" ? "var(--color-warning)" : "var(--color-text-muted)",
+                }}
+              >
+                <span style={{
+                  color: marker.color,
+                  width: 14,
+                  textAlign: "center",
+                  fontWeight: 800,
+                  flexShrink: 0,
+                }}>
+                  {marker.text}
+                </span>
+                <span style={{ color: criterion.status === "pass" ? "var(--color-text)" : undefined }}>
+                  {criterion.label}
+                </span>
+                {criterion.status === "unavailable" && (
+                  <span style={{ color: "var(--color-warning)", marginLeft: "auto" }}>no disponible</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 let _setSuggestionStatus: React.Dispatch<React.SetStateAction<"idle"|"loading"|"found"|"not_found">> | null = null;
 let _onChangeSetter: ((p: WheelModalParams) => void) | null = null;
 let _latestParams: WheelModalParams | null = null;
+// FIC: Monotonic counter — incremented on each call so stale async responses are discarded. (EN)
+// FIC: Contador monótono — incrementado en cada llamada para descartar respuestas asíncronas obsoletas. (ES)
+let _suggestCallVersion = 0;
 
-// FIC: Fetch option chain, find nearest OTM call above strikePut, autocomplete CC fields. (EN)
-// FIC: Obtiene la cadena de opciones, encuentra el call OTM más cercano sobre strikePut, autocompleta CC. (ES)
+// FIC: Fetch option chain for the PUT's own expiration, find best OTM call (delta ~0.30). (EN)
+// FIC: Obtiene la cadena de opciones de la expiración del PUT, encuentra el mejor call OTM (delta ~0.30). (ES)
+// FIC: expiration param avoids a redundant fetchExpirations round-trip and anchors to the correct date. (EN)
+// FIC: El parámetro expiration evita un round-trip innecesario a fetchExpirations y ancla la fecha correcta. (ES)
 async function suggestCallFromChain(
   params: WheelModalParams,
   strikePut: number,
-  ticker: string
+  ticker: string,
+  expiration?: string,
 ): Promise<void> {
   if (!_setSuggestionStatus || !_onChangeSetter) return;
+
+  // FIC: Capture version before any await — discard result if a newer call arrived. (EN)
+  // FIC: Captura la versión antes de cualquier await — descarta el resultado si llegó una llamada más reciente. (ES)
+  _suggestCallVersion += 1;
+  const myVersion = _suggestCallVersion;
+
   _setSuggestionStatus("loading");
   _latestParams = params;
 
   try {
-    // FIC: Fetch nearest expiration — same default as OptionChainTable. (EN)
-    const expData = await fetchExpirations(ticker);
-    const expiration = expData.expirations[0];
-    if (!expiration) { _setSuggestionStatus("not_found"); return; }
+    // FIC: Use provided expiration when available; fall back to nearest only if not supplied. (EN)
+    // FIC: Usa la expiración provista si está disponible; retrocede a la más cercana solo si no se proveyó. (ES)
+    let resolvedExpiration = expiration;
+    if (!resolvedExpiration) {
+      const expData = await fetchExpirations(ticker);
+      if (myVersion !== _suggestCallVersion) return; // stale — newer call already in flight
+      resolvedExpiration = expData.expirations[0];
+    }
+    if (!resolvedExpiration) { _setSuggestionStatus("not_found"); return; }
 
-    const chain = await fetchOptionChain(ticker, expiration);
+    const chain = await fetchOptionChain(ticker, resolvedExpiration);
+    if (myVersion !== _suggestCallVersion) return; // stale — discard
 
-    // FIC: Find nearest call >= strikePut with liquidity (callBid > 0). (EN)
-    // FIC: Encontrar el call más cercano >= strikePut con liquidez (callBid > 0). (ES)
-    const candidates = chain.rows
-      .filter((r) => r.strike > strikePut && r.callBid > 0)
+    // FIC: OTM filter — strike must exceed underlying price, not just PUT strike. (EN)
+    // FIC: Filtro OTM — el strike debe superar el precio del subyacente, no solo el strike del PUT. (ES)
+    // FIC: Then prefer delta closest to 0.30 (max 0.40); fallback to nearest OTM strike. (EN)
+    const otmCandidates = chain.rows
+      .filter((r) => r.strike > chain.underlyingPrice && r.callBid > 0);
+    const deltaCandidates = otmCandidates
+      .filter((r) => Number.isFinite(r.callDelta) && r.callDelta > 0 && r.callDelta <= 0.40)
+      .sort((a, b) => Math.abs(a.callDelta - 0.30) - Math.abs(b.callDelta - 0.30));
+    const fallbackCandidates = otmCandidates
       .sort((a, b) => a.strike - b.strike);
 
-    if (candidates.length === 0) { _setSuggestionStatus("not_found"); return; }
-
-    const best = candidates[0];
+    const best = deltaCandidates[0] ?? fallbackCandidates[0];
+    if (!best) { _setSuggestionStatus("not_found"); return; }
     const primaCall = parseFloat(((best.callBid + best.callAsk) / 2).toFixed(4));
+
+    // FIC: Final staleness check before writing state — guards against race on slow networks. (EN)
+    // FIC: Verificación final de obsolescencia antes de escribir estado — protege contra race en redes lentas. (ES)
+    if (myVersion !== _suggestCallVersion) return;
 
     // FIC: Use latest params snapshot to avoid stale closure overwriting user edits. (EN)
     const currentParams = _latestParams ?? params;
@@ -254,9 +645,74 @@ async function suggestCallFromChain(
     _setSuggestionStatus("found");
 
   } catch {
-    // FIC: Network failure — stay silent, allow manual input. (EN)
-    // FIC: Falla de red — permanecer silencioso, permitir captura manual. (ES)
-    _setSuggestionStatus("idle");
+    // FIC: Network failure or cancellation — stay silent, allow manual input. (EN)
+    // FIC: Falla de red o cancelación — permanecer silencioso, permitir captura manual. (ES)
+    if (myVersion === _suggestCallVersion) _setSuggestionStatus("idle");
+  }
+}
+
+// FIC: Fetch the next available expiration and find the best OTM call >= strikeFloor. (EN)
+// FIC: Obtiene la siguiente expiración disponible y busca el mejor call OTM >= strikeFloor. (ES)
+// Reuses fetchExpirations + fetchOptionChain — no new endpoints. (EN)
+// Reutiliza fetchExpirations + fetchOptionChain — sin nuevos endpoints. (ES)
+async function computeRoll1(
+  ticker: string,
+  currentExpiration: string,
+  strikeFloor: number,
+  contratos: number,
+): Promise<Roll1Result> {
+  try {
+    const expData = await fetchExpirations(ticker);
+    const exps = expData.expirations;
+    const currentIdx = exps.indexOf(currentExpiration);
+
+    // FIC: If currentExpiration not found in list, fall back to index 1 (second nearest). (EN)
+    // FIC: Si currentExpiration no está en la lista, usar índice 1 (segunda más cercana). (ES)
+    const nextIdx = currentIdx >= 0 ? currentIdx + 1 : 1;
+    const nextExpiration = nextIdx < exps.length ? exps[nextIdx] : undefined;
+
+    if (!nextExpiration) {
+      return { status: "not_found", currentExpiration };
+    }
+
+    const chain = await fetchOptionChain(ticker, nextExpiration);
+
+    // FIC: OTM calls at or above current strike with liquidity (callBid > 0). (EN)
+    // FIC: Calls OTM en o por encima del strike actual con liquidez (callBid > 0). (ES)
+    const otmCandidates = chain.rows
+      .filter((r) => r.strike > chain.underlyingPrice && r.callBid > 0);
+    const deltaCandidates = otmCandidates
+      .filter((r) => Number.isFinite(r.callDelta) && r.callDelta > 0 && r.callDelta <= 0.40)
+      .sort((a, b) => Math.abs(a.callDelta - 0.30) - Math.abs(b.callDelta - 0.30));
+    const fallbackCandidates = otmCandidates
+      .sort((a, b) => a.strike - b.strike);
+
+    const best = deltaCandidates[0] ?? fallbackCandidates[0];
+    if (!best) {
+      return { status: "not_found", currentExpiration, nextExpiration };
+    }
+
+    // FIC: Midpoint bid/ask — same logic as suggestCallFromChain. (EN)
+    // FIC: Punto medio bid/ask — misma lógica que suggestCallFromChain. (ES)
+    const prima = parseFloat(((best.callBid + best.callAsk) / 2).toFixed(4));
+    const delta = typeof best.callDelta === "number" && best.callDelta !== 0
+      ? best.callDelta
+      : null;
+
+    return {
+      status: "found",
+      currentExpiration,
+      nextExpiration,
+      strikeCallCurrent: strikeFloor,
+      strikeCallSuggested: best.strike,
+      prima,
+      delta,
+      creditoEstimado: parseFloat((prima * contratos * 100).toFixed(2)),
+    };
+  } catch {
+    // FIC: Network or parse failure — silently report not_found. (EN)
+    // FIC: Falla de red o parseo — reportar not_found silenciosamente. (ES)
+    return { status: "not_found", currentExpiration };
   }
 }
 
@@ -264,10 +720,17 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
   const [analyzed, setAnalyzed] = useState(false);
   const [precioFinal, setPrecioFinal] = useState<number>(0);
   const [evalResult, setEvalResult] = useState<WheelEvalResult | null>(null);
+  const [eligibility, setEligibility] = useState<WheelEligibilityResult | null>(null);
+  const [eligibilityLoading, setEligibilityLoading] = useState(false);
+  const [eligibilityError, setEligibilityError] = useState<string | null>(null);
   // FIC: Status of automatic call suggestion fetch triggered by PUT selection. (EN)
   // FIC: Estado de la búsqueda automática de call sugerido al seleccionar un PUT. (ES)
   const [callSuggestionStatus, setCallSuggestionStatus] =
     useState<"idle" | "loading" | "found" | "not_found">("idle");
+
+  // FIC: Roll 1 — real data from the next available expiration in the option chain. (EN)
+  // FIC: Roll 1 — datos reales de la siguiente expiración disponible en la cadena de opciones. (ES)
+  const [roll1, setRoll1] = useState<Roll1Result>({ status: "idle" });
 
   // FIC: Wire module-level refs so suggestCallFromChain can access current state setters. (EN)
   // FIC: Conecta los refs de módulo para que suggestCallFromChain acceda a los setters actuales. (ES)
@@ -279,6 +742,29 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
   // FIC: Track whether the modal was already open to distinguish "just opened" from "strike changed". (EN)
   // FIC: Rastrea si el modal ya estaba abierto para distinguir "recién abierto" de "strike cambió". (ES)
   const wasOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (!open || !ticker.trim()) return;
+    let cancelled = false;
+    setEligibilityLoading(true);
+    setEligibilityError(null);
+
+    fetchWheelEligibility(ticker)
+      .then((result) => {
+        if (cancelled) return;
+        setEligibility(result);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setEligibility(null);
+        setEligibilityError(err instanceof Error ? err.message : "wheel_eligibility_failed");
+      })
+      .finally(() => {
+        if (!cancelled) setEligibilityLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [open, ticker]);
 
   useEffect(() => {
     if (!open) {
@@ -318,7 +804,7 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
         fresh.csp.primaPut  = parseFloat(selectedStrike.premium.toFixed(4));
         // FIC: Also suggest a call when modal opens with a PUT already selected. (EN)
         // FIC: También sugerir un call cuando el modal abre con un PUT ya seleccionado. (ES)
-        void suggestCallFromChain(fresh, selectedStrike.strike, ticker);
+        void suggestCallFromChain(fresh, selectedStrike.strike, ticker, selectedStrike.expiration);
       } else if (selectedStrike?.type === "call") {
         fresh.cc.strikeCall = selectedStrike.strike;
         fresh.cc.primaCall  = parseFloat(selectedStrike.premium.toFixed(4));
@@ -358,9 +844,9 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
           csp: { ...params.csp, strikePut: selectedStrike.strike, primaPut: parseFloat(selectedStrike.premium.toFixed(4)) },
         };
         onChange(updatedParams);
-        // FIC: Trigger automatic call suggestion after PUT selection. (EN)
-        // FIC: Disparar sugerencia automática de call tras selección de PUT. (ES)
-        void suggestCallFromChain(updatedParams, selectedStrike.strike, ticker);
+        // FIC: Trigger automatic call suggestion after PUT selection — pass expiration to avoid redundant HTTP. (EN)
+        // FIC: Disparar sugerencia de call tras selección de PUT — pasa expiración para evitar HTTP redundante. (ES)
+        void suggestCallFromChain(updatedParams, selectedStrike.strike, ticker, selectedStrike.expiration);
       } else if (selectedStrike.type === "call") {
         // FIC: CALL selected — update CC only. CSP is left untouched. (EN)
         // FIC: CALL seleccionado — actualiza solo CC. CSP no se modifica. (ES)
@@ -404,6 +890,29 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, params.csp.strikePut, params.csp.primaPut]);
 
+  // FIC: Compute Roll 1 whenever strikeCall or expiration changes. (EN)
+  // FIC: Calcula el Roll 1 cuando cambia strikeCall o la expiración. (ES)
+  useEffect(() => {
+    if (!open || params.cc.strikeCall <= 0) {
+      setRoll1({ status: "idle" });
+      return;
+    }
+    const currentExpiration = selectedStrike?.expiration;
+    if (!currentExpiration) {
+      setRoll1({ status: "idle" });
+      return;
+    }
+
+    let cancelled = false;
+    setRoll1({ status: "loading", currentExpiration, strikeCallCurrent: params.cc.strikeCall });
+
+    computeRoll1(ticker, currentExpiration, params.cc.strikeCall, params.cc.contratos)
+      .then((result) => { if (!cancelled) setRoll1(result); });
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, params.cc.strikeCall, params.cc.contratos, selectedStrike?.expiration, ticker]);
+
   if (!open) return null;
 
   // FIC: Helpers to update nested CSP / CC params without touching the other section. (EN)
@@ -416,11 +925,44 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
 
   const cspResult = calcCsp(params.csp);
   const ccResult  = calcCc(params.cc);
+  const money = (value: number) => `$${value.toFixed(2)}`;
+  const pct = (value: number) => `${(value * 100).toFixed(2)}%`;
+  const unavailableText = "No disponible en la simulación actual";
+
+  // FIC: Build roll1 rows outside IIFE to avoid TSX parser issues with spreads in array literals. (EN)
+  // FIC: Construye filas del roll1 fuera del IIFE para evitar problemas del parser TSX con spreads. (ES)
+  const roll1Rows: {label: string; value: string}[] = [];
+  if (roll1.status === "found" && roll1.strikeCallSuggested !== undefined) {
+    roll1Rows.push({ label: "Vencimiento actual", value: roll1.currentExpiration ?? "—" });
+    roll1Rows.push({ label: "Nuevo vencimiento",  value: roll1.nextExpiration ?? "—" });
+    roll1Rows.push({ label: "Strike CALL actual", value: money(roll1.strikeCallCurrent ?? 0) });
+    roll1Rows.push({ label: "Strike sugerido",    value: money(roll1.strikeCallSuggested) });
+    roll1Rows.push({ label: "Prima estimada",     value: `${money(roll1.prima ?? 0)} / acción` });
+    if (roll1.delta != null) {
+      roll1Rows.push({ label: "Delta", value: roll1.delta.toFixed(2) });
+    }
+    roll1Rows.push({ label: "Crédito estimado",   value: money(roll1.creditoEstimado ?? 0) });
+  }
 
   const handleAnalyze = () => {
     setAnalyzed(true);
     onConfirm?.(params);
   };
+
+  const renderStageRows = (rows: Array<{ label: string; value: string }>) => (
+    <div>
+      {rows.map((row) => (
+        <div key={row.label} style={resultRowStyle}>
+          <span style={resultLabelStyle}>{row.label}</span>
+          <span style={resultValueStyle}>{row.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderUnavailableStage = () => (
+    <div style={unavailableStageStyle}>{unavailableText}</div>
+  );
 
   return (
     <div
@@ -446,6 +988,14 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
             ×
           </button>
         </div>
+
+        <div style={modalColumnsStyle}>
+          <div style={modalColumnStyle}>
+        <WheelEligibilitySummary
+          result={eligibility}
+          loading={eligibilityLoading}
+          error={eligibilityError}
+        />
 
         {/* ── Section 1: CASH SECURED PUT ────────────────────────────────────── */}
         <div style={sectionStyle}>
@@ -677,80 +1227,6 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
           )}
         </div>
 
-        {/* ── Simple Wheel status badge (placeholder until real state machine) ── */}
-        {analyzed && (() => {
-          // FIC: Simple visual classification — not a state machine. (EN)
-          // FIC: Clasificacion visual simple — no es una maquina de estados. (ES)
-          // Future states: CSP_ACTIVO, SHARES_ASSIGNED, CC_ACTIVO, SHARES_CALLED_AWAY
-          const hasCsp  = params.csp.strikePut > 0 && params.csp.primaPut >= 0;
-          const hasCc   = params.cc.strikeCall > 0 && params.cc.primaCall >= 0;
-          const status  = hasCc ? "CC_CONFIGURADO" : "CSP_CONFIGURADO";
-          const color   = hasCc ? "var(--color-buy)" : "var(--color-accent)";
-          const label   = hasCc ? "CC Configurado" : "CSP Configurado";
-          return (
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginTop: "var(--space-xs)" }}>
-              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Estado Wheel:</span>
-              <span style={{
-                fontSize: "var(--font-size-xs)", fontWeight: 700,
-                color, border: `1px solid ${color}`,
-                borderRadius: "var(--radius-xs)", padding: "2px 10px",
-                letterSpacing: "0.05em", textTransform: "uppercase",
-              }}>
-                {status}
-              </span>
-              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontStyle: "italic" }}>
-                {label}
-              </span>
-            </div>
-          );
-        })()}
-
-        {/* ── Wheel summary card ── */}
-        {analyzed && (() => {
-          const capitalComprometido = params.csp.strikePut * params.csp.contratos * 100;
-          const primaCsp = params.csp.primaPut * params.csp.contratos * 100;
-          const primaCc  = params.cc.primaCall * params.cc.contratos * 100;
-          const primaTotal = primaCsp + primaCc;
-          const breakevenWheel = params.csp.strikePut - params.csp.primaPut - params.cc.primaCall;
-          const retornoEstimado = capitalComprometido > 0 ? primaTotal / capitalComprometido : 0;
-          const rows: Array<{ label: string; value: string; highlight?: boolean }> = [
-            { label: "Capital comprometido",  value: capitalComprometido > 0 ? `$${capitalComprometido.toFixed(2)}` : "—" },
-            { label: "Prima CSP recibida",    value: primaCsp > 0 ? `$${primaCsp.toFixed(2)}` : "—", highlight: true },
-            { label: "Prima CC recibida",     value: primaCc  > 0 ? `$${primaCc.toFixed(2)}`  : "—", highlight: true },
-            { label: "Breakeven Wheel",       value: breakevenWheel > 0 ? `$${breakevenWheel.toFixed(2)}` : "—" },
-            { label: "Retorno estimado",      value: retornoEstimado > 0 ? `${(retornoEstimado * 100).toFixed(2)}%` : "—", highlight: true },
-          ];
-          return (
-            <div style={{
-              background: "var(--color-surface-raised)",
-              borderRadius: "var(--radius-sm)",
-              padding: "var(--space-md)",
-              border: "1px solid var(--color-border-subtle)",
-            }}>
-              <div style={{
-                fontSize: "var(--font-size-xs)", fontWeight: 700,
-                textTransform: "uppercase", letterSpacing: "0.08em",
-                color: "var(--color-accent)", marginBottom: "var(--space-sm)",
-              }}>
-                RESUMEN WHEEL
-              </div>
-              {rows.map((r) => (
-                <div key={r.label} style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  padding: "var(--space-xs) 0",
-                  borderBottom: "1px solid var(--color-border-subtle)",
-                  fontSize: "var(--font-size-sm)",
-                }}>
-                  <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>{r.label}</span>
-                  <span style={{ fontWeight: 600, color: r.highlight ? "var(--color-buy)" : "var(--color-text)" }}>
-                    {r.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-
         {/* ── Sección de evaluación Wheel */}
         <div style={sectionStyle}>
           <div style={sectionTitleStyle}>EVALUAR RESULTADO</div>
@@ -795,20 +1271,15 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
 
           {/* FIC: Evaluation results — shown after Evaluar Wheel is clicked. (EN) */}
           {evalResult && (() => {
-            const estadoCSPColor = evalResult.estadoCSP === "PUT_EXPIRA_SIN_VALOR"
-              ? "var(--color-buy)" : "var(--color-sell)";
-            const estadoCCColor = evalResult.estadoCC === "ACCIONES_VENDIDAS"
-              ? "var(--color-buy)" : evalResult.estadoCC === "CONSERVA_ACCIONES"
-              ? "var(--color-accent)" : "var(--color-text-muted)";
             const totalColor = evalResult.gananciaTotal >= 0 ? "var(--color-buy)" : "var(--color-sell)";
+            const estado = evalResult.estadoCC !== "N/A"
+              ? `${evalResult.estadoCSP.replace(/_/g, " ")} / ${evalResult.estadoCC.replace(/_/g, " ")}`
+              : evalResult.estadoCSP.replace(/_/g, " ");
 
             const evalRows: Array<{ label: string; value: string; color?: string }> = [
-              { label: "Estado CSP",    value: evalResult.estadoCSP.replace(/_/g, " "),  color: estadoCSPColor },
-              { label: "Estado CC",     value: evalResult.estadoCC.replace(/_/g, " "),   color: estadoCCColor },
-              { label: "Ganancia CSP",  value: `$${evalResult.gananciaCSP.toFixed(2)}`,  color: evalResult.gananciaCSP  >= 0 ? "var(--color-buy)" : "var(--color-sell)" },
-              { label: "Ganancia CC",   value: evalResult.estadoCC !== "N/A" ? `$${evalResult.gananciaCC.toFixed(2)}` : "—", color: evalResult.gananciaCC   >= 0 ? "var(--color-buy)" : "var(--color-sell)" },
-              { label: "Ganancia Total",value: `$${evalResult.gananciaTotal.toFixed(2)}`, color: totalColor },
-              { label: "ROI",           value: `${(evalResult.roi * 100).toFixed(2)}%`,  color: totalColor },
+              { label: "Estado", value: estado, color: totalColor },
+              { label: "Ganancia Total", value: `$${evalResult.gananciaTotal.toFixed(2)}`, color: totalColor },
+              { label: "ROI", value: `${(evalResult.roi * 100).toFixed(2)}%`, color: totalColor },
             ];
 
             return (
@@ -824,21 +1295,152 @@ export function WheelParamsModal({ open, ticker, params, onChange, onClose, onCo
               </div>
             );
           })()}
+
+        </div>
+          </div>
+          <div style={modalColumnStyle}>
+          {/* ── RECOMENDACIÓN OPERATIVA ─────────────────────────────────────── */}
+          <WheelOperationalRecommendation
+            eligibility={eligibility}
+            eligibilityLoading={eligibilityLoading}
+            csp={params.csp}
+            cc={params.cc}
+            expiration={selectedStrike?.expiration}
+          />
+
+          {(() => {
+            const stage1Available = params.csp.strikePut > 0 && params.csp.primaPut >= 0 && params.csp.contratos > 0;
+            const stage2Available = Boolean(evalResult) && precioFinal > 0 && params.cc.costoPromedio > 0;
+            const stage3Available = params.cc.acciones > 0 && params.cc.strikeCall > 0 && params.cc.primaCall >= 0 && params.cc.contratos > 0;
+            const primaPut  = cspResult.primaTotal;
+            const primaCall = ccResult.primaRecibida;
+            // FIC: creditoRoll1 comes exclusively from ETAPA 4 real data — no duplication. (EN)
+            // FIC: creditoRoll1 proviene exclusivamente de los datos reales de ETAPA 4 — sin duplicados. (ES)
+            const creditoRoll1   = roll1.status === "found" ? (roll1.creditoEstimado ?? 0) : 0;
+            const totalIngresos  = primaPut + primaCall + creditoRoll1;
+
+            // FIC: Build ETAPA 6 rows here to avoid spread inside JSX. (EN)
+            const etapa6Rows: {label: string; value: string}[] = [];
+            if (stage1Available || stage3Available) {
+              etapa6Rows.push({ label: 'Prima PUT recibida',  value: money(primaPut) });
+              etapa6Rows.push({ label: 'Prima CALL recibida', value: money(primaCall) });
+              if (roll1.status === 'found') {
+                etapa6Rows.push({ label: 'Crédito primer roll', value: money(creditoRoll1) });
+              }
+              etapa6Rows.push({ label: 'Total acumulado', value: money(totalIngresos) });
+            }
+
+            return (
+              <div style={sectionStyle}>
+                <div style={sectionTitleStyle}>WHEEL STAGES</div>
+                <div style={stageGridStyle}>
+                  <div style={stageCardStyle}>
+                    <div style={sectionTitleStyle}>ETAPA 1: Venta del PUT</div>
+                    {stage1Available
+                      ? renderStageRows([
+                          { label: "Ticker", value: params.csp.ticker || ticker.toUpperCase() },
+                          { label: "Strike PUT", value: money(params.csp.strikePut) },
+                          { label: "Prima PUT", value: money(params.csp.primaPut) },
+                          { label: "Contratos", value: String(params.csp.contratos) },
+                          { label: "Prima total", value: money(cspResult.primaTotal) },
+                          { label: "Capital comprometido", value: money(cspResult.capitalComprometido) },
+                          { label: "Breakeven", value: money(cspResult.breakeven) },
+                        ])
+                      : renderUnavailableStage()}
+                  </div>
+
+                  <div style={stageCardStyle}>
+                    <div style={sectionTitleStyle}>ETAPA 2: Asignación</div>
+                    {stage2Available && evalResult
+                      ? renderStageRows([
+                          { label: "Estado", value: evalResult.estadoCSP },
+                          { label: "Precio final utilizado", value: money(precioFinal) },
+                          { label: "Costo promedio estimado", value: money(params.cc.costoPromedio) },
+                        ])
+                      : renderUnavailableStage()}
+                  </div>
+
+                  <div style={stageCardStyle}>
+                    <div style={sectionTitleStyle}>ETAPA 3: Covered Call</div>
+                    {stage3Available
+                      ? renderStageRows([
+                          { label: "Acciones", value: String(params.cc.acciones) },
+                          { label: "Strike CALL", value: money(params.cc.strikeCall) },
+                          { label: "Prima CALL", value: money(params.cc.primaCall) },
+                          { label: "Prima recibida", value: money(ccResult.primaRecibida) },
+                          { label: "Breakeven", value: money(ccResult.breakeven) },
+                          { label: "Retorno estimado", value: pct(ccResult.retornoPct) },
+                        ])
+                      : renderUnavailableStage()}
+                  </div>
+
+                  <div style={stageCardStyle}>
+                    {/* FIC: ETAPA 4 — real roll data from next available expiration. (EN) */}
+                    {/* FIC: ETAPA 4 — datos reales de la siguiente expiración disponible. (ES) */}
+                    <div style={sectionTitleStyle}>ETAPA 4: PRIMER ROLL</div>
+                    {roll1.status === "idle" && renderUnavailableStage()}
+                    {roll1.status === "loading" && (
+                      <div style={{ ...unavailableStageStyle, fontStyle: "italic" }}>
+                        Consultando siguiente expiración…
+                      </div>
+                    )}
+                    {roll1.status === "not_found" && (
+                      <div style={unavailableStageStyle}>Roll no disponible</div>
+                    )}
+                    {roll1.status === "found" && roll1Rows.length > 0 && renderStageRows(roll1Rows)}
+                  </div>
+
+                  <div style={stageCardStyle}>
+                    {/* FIC: ETAPA 5 — mirrors ETAPA 4 roll data; no invented premiums. (EN) */}
+                    {/* FIC: ETAPA 5 — refleja los datos reales del roll de ETAPA 4; sin primas inventadas. (ES) */}
+                    <div style={sectionTitleStyle}>ETAPA 5: RESUMEN DEL ROLL</div>
+                    {roll1.status === "idle" && renderUnavailableStage()}
+                    {roll1.status === "loading" && (
+                      <div style={{ ...unavailableStageStyle, fontStyle: "italic" }}>
+                        Consultando siguiente expiración…
+                      </div>
+                    )}
+                    {roll1.status === "not_found" && (
+                      <div style={unavailableStageStyle}>Roll no disponible</div>
+                    )}
+                    {roll1.status === "found" && roll1.strikeCallSuggested !== undefined && renderStageRows([
+                      { label: "Vencimiento actual",  value: roll1.currentExpiration ?? "—" },
+                      { label: "Nuevo vencimiento",   value: roll1.nextExpiration ?? "—" },
+                      { label: "Strike CALL actual",  value: money(roll1.strikeCallCurrent ?? 0) },
+                      { label: 'Strike sugerido',     value: money(roll1.strikeCallSuggested ?? 0) },
+                      { label: 'Prima estimada',      value: `${money(roll1.prima ?? 0)} / acción` },
+                      { label: 'Crédito estimado',    value: money(roll1.creditoEstimado ?? 0) },
+                    ])}
+                  </div>
+
+                  <div style={stageCardStyle}>
+                    {/* FIC: ETAPA 6 — solo primas reales: PUT + CALL + Roll 1 si existe. (ES) */}
+                    <div style={sectionTitleStyle}>ETAPA 6: RESUMEN DE INGRESOS</div>
+                    {stage1Available || stage3Available
+                      ? renderStageRows(etapa6Rows)
+                      : renderUnavailableStage()}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+
         </div>
 
         {/* ── Analizar button */}
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button
             onClick={handleAnalyze}
             style={{
-              background: "var(--color-accent)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "var(--radius-sm)",
-              padding: "0.5rem 1.75rem",
-              cursor: "pointer",
-              fontWeight: "var(--font-weight-bold)" as React.CSSProperties["fontWeight"],
-              fontSize: "var(--font-size-sm)",
+              background: 'var(--color-accent)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              padding: '0.5rem 1.75rem',
+              cursor: 'pointer',
+              fontWeight: 'var(--font-weight-bold)' as React.CSSProperties['fontWeight'],
+              fontSize: 'var(--font-size-sm)',
             }}
           >
             Analizar Wheel

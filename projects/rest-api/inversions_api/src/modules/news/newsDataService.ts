@@ -134,13 +134,24 @@ function providerStatus(result: ProviderResult): NewsProviderStatus {
   };
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function isRelevantToSymbol(source: NewsSourceInput, symbol: string): boolean {
-  const haystack = `${source.symbol ?? ""} ${source.title ?? ""} ${source.text ?? ""} ${source.url ?? ""}`.toLowerCase();
+  // TEAM-06 v12: NO usamos source.symbol para validar relevancia.
+  // Muchos proveedores devuelven titulares generales aunque el feed haya sido consultado con el ticker.
+  // Si aceptamos source.symbol, cualquier noticia general se cuela y parece dato estatico/repetido.
+  const title = source.title ?? "";
+  const text = source.text ?? "";
+  const url = source.url ?? "";
+  const haystack = `${title} ${text} ${url}`.toLowerCase();
   const safeSymbol = symbol.toUpperCase();
   const company = COMPANY_NAMES[safeSymbol]?.toLowerCase();
   const aliases = SYMBOL_ALIASES[safeSymbol] ?? [];
 
-  if (new RegExp(`\\b${safeSymbol.toLowerCase()}\\b`, "i").test(haystack)) return true;
+  const symbolRegex = new RegExp(`\\b${escapeRegExp(safeSymbol.toLowerCase())}\\b`, "i");
+  if (symbolRegex.test(haystack)) return true;
   if (company && haystack.includes(company)) return true;
   return aliases.some((alias) => haystack.includes(alias.toLowerCase()));
 }

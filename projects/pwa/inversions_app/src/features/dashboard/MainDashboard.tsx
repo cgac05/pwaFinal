@@ -16,6 +16,7 @@ import { NewsSection } from "./NewsSection";
 import type { CoverageModalParams } from "./simulation/CoverageParamsModal";
 import type { OptionStrategyAnalysis } from "./simulation/OptionStrategyParamsModal";
 import type { WheelModalParams } from "./simulation/WheelParamsModal";
+import type { SpreadModalParams } from "./simulation/SpreadParamsModal";
 import { TechnicalAnalysisExtendedSection } from "./TechnicalAnalysisExtendedSection";
 import { AppShell } from "../../layouts/AppShell";
 import { ActivityBar } from "../../components/ui/ActivityBar";
@@ -33,7 +34,6 @@ import type { FundamentalAnalysisResponse } from "../../services/fundamental/fun
 import { formatCurrency } from "../../utils/format";
 import { Tooltip } from "../../components/ui/Tooltip";
 import { ReportePDFTemplate } from "./ReportePDFTemplate";
-
 // FIC: US-5 — compact buy/sell/hold counter chip shown above the confluence table. (EN)
 // FIC: US-5 — chip compacto de conteo compra/venta/hold mostrado sobre la tabla. (ES)
 function SignalMetricChip({ label, value, color }: { label: string; value: number; color: string }) {
@@ -70,7 +70,7 @@ export function MainDashboard() {
   const [simulationMetrics, setSimulationMetrics] = useState<SignalMetrics | null>(null);
   const [institutionalCoreWasActive, setInstitutionalCoreWasActive] = useState(false);
   const [, setNewsDateRange] = useState<string | undefined>(undefined);
-  const [, setSpreadRequest] = useState<unknown>(null);
+  const [spreadRequest, setSpreadRequest] = useState<{ params: SpreadModalParams; kind: string } | null>(null);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [selectedStrikeData, setSelectedStrikeData] = useState<{
     strike: number; type: "call" | "put"; premium: number; iv: number;
@@ -136,6 +136,11 @@ export function MainDashboard() {
 
   const handleCoverageConfirmed = useCallback(
     (params: CoverageModalParams, kind: string) => setCoverageRequest({ params, kind }),
+    []
+  );
+
+  const handleSpreadConfirmed = useCallback(
+    (params: SpreadModalParams, kind: string) => setSpreadRequest({ params, kind }),
     []
   );
 
@@ -497,6 +502,7 @@ export function MainDashboard() {
         onExecute={handleSimulationExecute}
         onStrategyChange={setActiveSimulationStrategy}
         onCoverageParamsConfirmed={handleCoverageConfirmed}
+        onSpreadParamsConfirmed={handleSpreadConfirmed}
         onOptionStrategyCalculated={handleOptionStrategyCalculated}
         onWheelParamsConfirmed={handleWheelConfirmed}
         onTermResult={handleTermResult}
@@ -693,6 +699,7 @@ export function MainDashboard() {
           ticker={selectedSymbol}
           activeStrategy={activeSimulationStrategy}
           coverageRequest={coverageRequest}
+          spreadRequest={spreadRequest}
           optionStrategyAnalysis={optionStrategyAnalysis}
           wheelSummary={wheelSummary}
           termResult={termResult}
@@ -707,7 +714,7 @@ export function MainDashboard() {
         autoRunKey={fundamentalAutoRunKey}
         onAnalysisComplete={setFundamentalAnalysis}
       />
-      <NewsSection symbol={selectedSymbol} dateRange={undefined} />
+<NewsSection symbol={selectedSymbol} />
     </div>
   );
 

@@ -105,7 +105,7 @@ export function NoticiasDetailModal({ isOpen, onClose, ticker, signalRow, active
               <div style={subCard}>
                 <div style={subTitle}>Veredicto NLP</div>
                 {dataRow("Señal de NLP", signalRow.tipoSenal, signalRow.tipoSenal === "CALL" ? "var(--color-buy)" : signalRow.tipoSenal === "PUT" ? "var(--color-sell)" : undefined)}
-                {dataRow("Impacto de Sentimiento", Number(met.SENTIMIENTO ?? 0).toFixed(2), strengthColor(Number(met.SENTIMIENTO ?? 0)))}
+                {dataRow("Impacto de Sentimiento", signalRow.score.toFixed(3), strengthColor(signalRow.score))}
                 {dataRow("Tendencia", signalRow.tendencia)}
               </div>
 

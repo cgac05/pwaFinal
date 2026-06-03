@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, Newspaper, Sparkles } from "lucide-react";
-import { getRelevantNews, type NewsDateRange, type RelevantNewsItem } from "../../services/news/newsApi";
+import { getRelevantNews, type NewsCanonicalPayload, type NewsDateRange, type RelevantNewsItem } from "../../services/news/newsApi";
 import { NewsSourcesAnalyzer } from "../news/NewsSourcesAnalyzer";
 
 type Props = {
@@ -98,6 +98,7 @@ export function NewsSection({ symbol, dateRange }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState<string>("demo");
+  const [canonical, setCanonical] = useState<NewsCanonicalPayload | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -110,11 +111,13 @@ export function NewsSection({ symbol, dateRange }: Props) {
         if (!active) return;
         setItems(response.items);
         setSource(response.source);
+        setCanonical(response.canonical ?? null);
       })
       .catch((fetchError: unknown) => {
         if (!active) return;
         setError(fetchError instanceof Error ? fetchError.message : "No se pudieron cargar las noticias.");
         setItems([]);
+        setCanonical(null);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -134,7 +137,7 @@ export function NewsSection({ symbol, dateRange }: Props) {
             <h2 style={{ margin: 0, fontSize: "var(--font-size-lg)" }}>Noticias relevantes</h2>
           </div>
           <p style={{ margin: "0.4rem 0 0", color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
-            Últimos titulares vinculados a {symbol.toUpperCase()}.
+            Últimos titulares vinculados a {symbol.toUpperCase()} con salida canónica para el core de IA.
           </p>
         </div>
         <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-pill)", padding: "2px 10px" }}>
@@ -158,6 +161,21 @@ export function NewsSection({ symbol, dateRange }: Props) {
         <p style={{ margin: 0, color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
           No se encontraron noticias para este ticker en el archivo local.
         </p>
+      )}
+
+      {!loading && !error && canonical && (
+        <div style={{ display: "grid", gap: "0.65rem", padding: "var(--space-md)", border: "1px solid rgba(73, 79, 223, 0.45)", borderRadius: "var(--radius-md)", background: "rgba(73, 79, 223, 0.08)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-sm)", flexWrap: "wrap" }}>
+            <strong style={{ color: "var(--color-text)", fontSize: "var(--font-size-sm)", letterSpacing: "0.04em", textTransform: "uppercase" }}>Salida canónica estándar A_NOTICIAS</strong>
+            <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>{canonical.version}</span>
+          </div>
+          <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+            <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>Tipo: <strong style={{ color: "var(--color-text)" }}>{canonical.aggregate.tipoSenal}</strong></span>
+            <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>Score: <strong style={{ color: "var(--color-text)" }}>{canonical.aggregate.score.toFixed(3)}</strong></span>
+            <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>Filas: <strong style={{ color: "var(--color-text)" }}>{canonical.rows.length}</strong></span>
+          </div>
+          <pre style={{ margin: 0, padding: "0.75rem", borderRadius: "var(--radius-sm)", background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)", fontSize: "0.72rem", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: 160, overflowY: "auto" }}>{canonical.output}</pre>
+        </div>
       )}
 
       {!loading && !error && items.length > 0 && (

@@ -17,12 +17,17 @@ export interface ActiveIndicators {
   rsi: boolean;
   macd: boolean;
   bb: boolean;
+  // FIC: EMA overlay (pane 0) and ADX sub-pane added to mirror the 5 simulation indicators. (EN)
+  // FIC: EMA superpuesta (panel 0) y ADX (sub-panel) agregados para reflejar los 5 indicadores. (ES)
+  ema: boolean;
+  adx: boolean;
 }
 
 const STRETCH_MAIN = 5;
 const STRETCH_VOLUME = 1;
 const STRETCH_RSI = 0.8;
 const STRETCH_MACD = 1;
+const STRETCH_ADX = 0.8;
 const STRETCH_HIDDEN = 0.001;
 
 function getCSSVar(name: string) {
@@ -58,6 +63,9 @@ export function useChartInit(
   const bbUpperRef = useRef<ISeriesApi<any> | null>(null);
   const bbMiddleRef = useRef<ISeriesApi<any> | null>(null);
   const bbLowerRef = useRef<ISeriesApi<any> | null>(null);
+  const emaSeriesRef = useRef<ISeriesApi<any> | null>(null);
+  const adxSeriesRef = useRef<ISeriesApi<any> | null>(null);
+  const adxPaneRef = useRef<IPaneApi<any> | null>(null);
 
   // Written by SuperChart after each data load; read by the crosshair handler
   const candlesDataRef = useRef<OHLCVData[]>([]);
@@ -132,6 +140,14 @@ export function useChartInit(
     bbUpperRef.current = bbUpper;
     bbMiddleRef.current = bbMiddle;
     bbLowerRef.current = bbLower;
+
+    // EMA overlay (pane 0)
+    const emaSeries = chart.addSeries(
+      LineSeries,
+      { color: "#ff9800", lineWidth: 2 as const, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false },
+      0,
+    );
+    emaSeriesRef.current = emaSeries;
 
     // Pane 1 — volume
     const volumePane = chart.addPane();
@@ -215,17 +231,45 @@ export function useChartInit(
     macdSignalRef.current = macdSignal;
     macdHistRef.current = macdHist;
 
+    // Pane 4 — ADX
+    const adxPane = chart.addPane();
+    adxPane.setStretchFactor(STRETCH_ADX);
+    adxPaneRef.current = adxPane;
+    const adxSeries = chart.addSeries(
+      LineSeries,
+      {
+        color: "#26c6da",
+        lineWidth: 2 as const,
+        lastValueVisible: false,
+        priceLineVisible: false,
+        crosshairMarkerVisible: true,
+      },
+      4,
+    );
+    // ADX trend-strength threshold (25 = trending vs ranging).
+    adxSeries.createPriceLine({
+      price: 25,
+      color: "#ec7e00",
+      lineStyle: LineStyle.Dashed,
+      lineWidth: 1,
+      axisLabelVisible: false,
+    });
+    adxSeriesRef.current = adxSeries;
+
     // Apply initial indicator visibility (snapshot at chart creation)
     const initActive = activeIndicatorsRef.current;
     [bbUpper, bbMiddle, bbLower].forEach(s =>
       s.applyOptions({ visible: initActive.bb }),
     );
+    emaSeries.applyOptions({ visible: initActive.ema });
     rsiSeries.applyOptions({ visible: initActive.rsi });
     rsiPane.setStretchFactor(initActive.rsi ? STRETCH_RSI : STRETCH_HIDDEN);
     [macdLine, macdSignal, macdHist].forEach(s =>
       s.applyOptions({ visible: initActive.macd }),
     );
     macdPane.setStretchFactor(initActive.macd ? STRETCH_MACD : STRETCH_HIDDEN);
+    adxSeries.applyOptions({ visible: initActive.adx });
+    adxPane.setStretchFactor(initActive.adx ? STRETCH_ADX : STRETCH_HIDDEN);
 
     // Crosshair → legend
     chart.subscribeCrosshairMove(param => {
@@ -316,6 +360,9 @@ export function useChartInit(
       bbUpperRef.current = null;
       bbMiddleRef.current = null;
       bbLowerRef.current = null;
+      emaSeriesRef.current = null;
+      adxSeriesRef.current = null;
+      adxPaneRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol]);
@@ -339,6 +386,13 @@ export function useChartInit(
     macdPaneRef.current?.setStretchFactor(
       activeIndicators.macd ? STRETCH_MACD : STRETCH_HIDDEN,
     );
+
+    emaSeriesRef.current?.applyOptions({ visible: activeIndicators.ema });
+
+    adxSeriesRef.current?.applyOptions({ visible: activeIndicators.adx });
+    adxPaneRef.current?.setStretchFactor(
+      activeIndicators.adx ? STRETCH_ADX : STRETCH_HIDDEN,
+    );
   }, [activeIndicators]);
 
   return {
@@ -352,6 +406,8 @@ export function useChartInit(
     bbUpperRef,
     bbMiddleRef,
     bbLowerRef,
+    emaSeriesRef,
+    adxSeriesRef,
     candlesDataRef,
     legendData,
     setLegendData,

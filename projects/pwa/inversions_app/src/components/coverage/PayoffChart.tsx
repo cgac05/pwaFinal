@@ -56,6 +56,9 @@ export const PayoffChart: React.FC<PayoffChartProps> = ({
         vertLines: { color: theme.gridLine },
         horzLines: { color: theme.gridLine },
       },
+      localization: {
+        timeFormatter: (time: number) => `$${(time - TIME_BASE).toFixed(0)}`,
+      },
       timeScale: {
         // FIC: tickMarkFormatter converts the internal time back to a readable price. (EN)
         // FIC: tickMarkFormatter convierte el tiempo interno de vuelta a un precio legible. (ES)

@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createSeriesMarkers, LineSeries, LineStyle } from "lightweight-charts";
 import { useSignalStore } from "../../store/signals";
+import { useIndicatorStore } from "../../store/indicators";
+import type { SubCoreIndicador } from "../../services/signals/confluenceTableApi";
 import { getAuthHeaders } from "../../services/signals/signalApi";
 import { Badge } from "../../components/ui/Badge";
 import { ChartLegend } from "./ChartLegend";
@@ -9,7 +11,10 @@ import {
   calcRSI,
   calcMACD,
   calcBollingerBands,
+  calcEMA,
+  calcADX,
 } from "../../utils/indicators";
+import { computeConfluenceSignals, type ConfluenceSignal } from "./confluenceSignals";
 
 interface OHLC {
   time: string;
@@ -18,15 +23,6 @@ interface OHLC {
   low: number;
   close: number;
   volume?: number;
-}
-
-interface SignalMark {
-  time: string;
-  position: "aboveBar" | "belowBar";
-  color: string;
-  shape: "circle" | "square" | "arrowUp" | "arrowDown";
-  text: string;
-  signal: any;
 }
 
 interface SuperChartProps {
@@ -41,14 +37,20 @@ function getCSSVar(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+// FIC: Toggle buttons shown above the chart — keyed by the 5 canonical indicators of the
+// FIC: shared store so they stay in sync with the simulation panel ("abajo"). (EN)
+// FIC: Botones de toggle sobre el gráfico — indexados por los 5 indicadores canónicos del
+// FIC: store compartido para mantenerse sincronizados con el panel de simulación ("abajo"). (ES)
 const INDICATOR_META: {
-  key: keyof ActiveIndicators;
+  key: SubCoreIndicador;
   label: string;
   color: string;
 }[] = [
-  { key: "rsi", label: "RSI", color: "#7b61ff" },
-  { key: "macd", label: "MACD", color: "#2196f3" },
-  { key: "bb", label: "BB", color: "#f5c518" },
+  { key: "RSI", label: "RSI", color: "#7b61ff" },
+  { key: "MACD", label: "MACD", color: "#2196f3" },
+  { key: "EMA", label: "EMA", color: "#ff9800" },
+  { key: "ADX", label: "ADX", color: "#26c6da" },
+  { key: "BB", label: "BB", color: "#f5c518" },
 ];
 
 // ── SuperChart ──────────────────────────────────────────────────────────────
@@ -61,7 +63,11 @@ export const SuperChart: React.FC<SuperChartProps> = ({
   onSelectSignal,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const signalMarkersRef = useRef<Map<string, SignalMark>>(new Map());
+  // FIC: Markers plugin handle (created once) + lookup of signal-by-time for the hover tooltip. (EN)
+  // FIC: Handle del plugin de marcadores (creado una vez) + índice de señal-por-tiempo para el tooltip. (ES)
+  const markersApiRef = useRef<ReturnType<typeof createSeriesMarkers> | null>(null);
+  const markersSeriesRef = useRef<any>(null);
+  const signalByTimeRef = useRef<Map<number, ConfluenceSignal>>(new Map());
   const bullishSeriesRef = useRef<any>(null);
   const bearishSeriesRef = useRef<any>(null);
   const supportResistanceLinesRef = useRef<any[]>([]);
@@ -70,8 +76,10 @@ export const SuperChart: React.FC<SuperChartProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [candles, setCandles] = useState<OHLC[]>([]);
-  const [signals, setSignals] = useState<SignalMark[]>([]);
   const [dataSource, setDataSource] = useState<"tradier" | "yahoo" | "mock" | null>(null);
+  // FIC: Hover tooltip for confluence flags — position + the signal under the crosshair. (EN)
+  // FIC: Tooltip al hover para las banderas de confluencia — posición + la señal bajo el cursor. (ES)
+  const [signalTooltip, setSignalTooltip] = useState<{ x: number; y: number; signal: ConfluenceSignal } | null>(null);
 
   const [srWindow, setSrWindow] = useState<number>(20);
   const [trendWindow, setTrendWindow] = useState<number>(5);
@@ -79,15 +87,18 @@ export const SuperChart: React.FC<SuperChartProps> = ({
   const [mostrarBajistas, setMostrarBajistas] = useState<boolean>(false);
   const [techData, setTechData] = useState<any>(null);
 
-  const [activeIndicators, setActiveIndicators] = useState<ActiveIndicators>(() => {
-    try {
-      const saved = localStorage.getItem("superchart_indicators");
-      if (saved) return JSON.parse(saved) as ActiveIndicators;
-    } catch {
-      // ignore
-    }
-    return { rsi: true, macd: false, bb: false };
-  });
+  // FIC: Indicator toggles read from the shared store; map the 5 canonical indicators to the
+  // FIC: chart series flags. Toggling here also updates the simulation panel ("abajo"). (EN)
+  // FIC: Los toggles vienen del store compartido; mapea los 5 indicadores canónicos a las banderas
+  // FIC: de series del gráfico. Activar aquí también actualiza el panel de simulación ("abajo"). (ES)
+  const { indicators, toggleIndicator: toggleStoreIndicator } = useIndicatorStore();
+  const activeIndicators: ActiveIndicators = {
+    rsi: indicators.RSI,
+    macd: indicators.MACD,
+    bb: indicators.BB,
+    ema: indicators.EMA,
+    adx: indicators.ADX,
+  };
 
   const { selectedSignal } = useSignalStore();
 
@@ -102,22 +113,12 @@ export const SuperChart: React.FC<SuperChartProps> = ({
     bbUpperRef,
     bbMiddleRef,
     bbLowerRef,
+    emaSeriesRef,
+    adxSeriesRef,
     candlesDataRef,
     legendData,
     setLegendData,
   } = useChartInit(containerRef, symbol, timeframe, activeIndicators);
-
-  const toggleIndicator = (key: keyof ActiveIndicators) => {
-    setActiveIndicators(prev => {
-      const next = { ...prev, [key]: !prev[key] };
-      try {
-        localStorage.setItem("superchart_indicators", JSON.stringify(next));
-      } catch {
-        // ignore
-      }
-      return next;
-    });
-  };
 
   // ── Load OHLC + populate all series ──────────────────────────────────────
   useEffect(() => {
@@ -209,6 +210,12 @@ export const SuperChart: React.FC<SuperChartProps> = ({
           bbData.map(d => ({ time: d.time, value: d.lower })) as any,
         );
 
+        // EMA overlay
+        emaSeriesRef.current?.setData(calcEMA(filtered) as any);
+
+        // ADX sub-pane
+        adxSeriesRef.current?.setData(calcADX(filtered) as any);
+
         chartRef.current!.timeScale().fitContent();
       } catch (err) {
         setError((err as Error).message);
@@ -258,13 +265,15 @@ export const SuperChart: React.FC<SuperChartProps> = ({
 
           if (data.supports) {
             data.supports.forEach((level: any) => {
+              // FIC: Keep the S/R line but drop the right-axis label + title to declutter the price axis. (EN)
+              // FIC: Mantener la línea S/R pero quitar la etiqueta del eje derecho + título para no saturar el eje de precio. (ES)
               const priceLine = candleSeries.createPriceLine({
                 price: level.price,
                 color: "rgba(0,168,126,0.6)",
                 lineStyle: LineStyle.Dashed,
                 lineWidth: 2,
-                axisLabelVisible: true,
-                title: `S(${level.touches})`,
+                axisLabelVisible: false,
+                title: "",
               });
               supportResistanceLinesRef.current.push(priceLine);
             });
@@ -272,13 +281,15 @@ export const SuperChart: React.FC<SuperChartProps> = ({
 
           if (data.resistances) {
             data.resistances.forEach((level: any) => {
+              // FIC: Keep the S/R line but drop the right-axis label + title to declutter the price axis. (EN)
+              // FIC: Mantener la línea S/R pero quitar la etiqueta del eje derecho + título para no saturar el eje de precio. (ES)
               const priceLine = candleSeries.createPriceLine({
                 price: level.price,
                 color: "rgba(226,59,74,0.6)",
                 lineStyle: LineStyle.Dashed,
                 lineWidth: 2,
-                axisLabelVisible: true,
-                title: `R(${level.touches})`,
+                axisLabelVisible: false,
+                title: "",
               });
               supportResistanceLinesRef.current.push(priceLine);
             });
@@ -375,53 +386,90 @@ export const SuperChart: React.FC<SuperChartProps> = ({
     };
   }, [symbol]);
 
-  // ── Load signal markers ───────────────────────────────────────────────────
+  // ── Confluence flags computed per-candle from the active indicators ────────
+  // FIC: Draw COMPRA/VENDE flags only where >=2 ENABLED indicators agree (onset of each episode),
+  // FIC: highlight that candle, and index the signal by time for the hover tooltip. (EN)
+  // FIC: Dibuja banderas COMPRA/VENDE solo donde >=2 indicadores ACTIVOS coinciden (inicio de cada
+  // FIC: episodio), resalta esa vela e indexa la señal por tiempo para el tooltip al hover. (ES)
   useEffect(() => {
-    if (!symbol || !candleSeriesRef.current) return;
+    const series = candleSeriesRef.current;
+    if (!series) return;
 
-    const loadSignals = async () => {
-      try {
-        const response = await fetch(
-          `/api/signals/confluence?symbol=${symbol}`,
-          { headers: getAuthHeaders() },
-        );
-        if (!response.ok) throw new Error("Failed to load signals");
+    const buy = getCSSVar("--color-buy") || "#00a87e";
+    const sell = getCSSVar("--color-sell") || "#e23b4a";
+    const buyBright = "#1fe6a6";
+    const sellBright = "#ff5b6b";
 
-        const data = await response.json();
-        const buy = getCSSVar("--color-buy") || "#00a87e";
-        const sell = getCSSVar("--color-sell") || "#e23b4a";
+    const ohlcv = candles.map(c => ({
+      time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume,
+    }));
+    const signals = computeConfluenceSignals(ohlcv, indicators);
 
-        const marks: SignalMark[] = (data.signals || []).map((sig: any) => ({
-          time: sig.timestamp,
-          position: sig.direction === "buy" ? "belowBar" : "aboveBar",
-          color: sig.direction === "buy" ? buy : sell,
-          shape: sig.direction === "buy" ? "arrowUp" : "arrowDown",
-          text: `${sig.confidence.toFixed(2)}`,
-          signal: sig,
-        }));
+    // Index by time for the tooltip + group highlight times by direction.
+    const byTime = new Map<number, ConfluenceSignal>();
+    for (const s of signals) byTime.set(s.time, s);
+    signalByTimeRef.current = byTime;
 
-        setSignals(marks);
-        createSeriesMarkers(candleSeriesRef.current as any, marks as any);
-        marks.forEach(m => signalMarkersRef.current.set(m.time, m));
-      } catch (err) {
-        console.error("Signal load error:", err);
+    // Repaint candle data, intensifying the border/wick of confirmation candles.
+    series.setData(
+      candles.map(c => {
+        const sig = byTime.get(Number(c.time));
+        if (!sig) return { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close } as any;
+        const bright = sig.direction === "buy" ? buyBright : sellBright;
+        return {
+          time: c.time, open: c.open, high: c.high, low: c.low, close: c.close,
+          borderColor: bright, wickColor: bright,
+        } as any;
+      }) as any,
+    );
+
+    // Build markers: "COMPRA · RSI+MACD" below the bar / "VENDE · …" above the bar.
+    const marks = signals.map(s => ({
+      time: s.time as unknown as string,
+      position: s.direction === "buy" ? "belowBar" : "aboveBar",
+      color: s.direction === "buy" ? buy : sell,
+      shape: s.direction === "buy" ? "arrowUp" : "arrowDown",
+      text: `${s.direction === "buy" ? "COMPRA" : "VENDE"} · ${s.indicators.join("+")}`,
+    }));
+
+    // Reuse the markers plugin while the series is the same; recreate if the chart was rebuilt.
+    if (markersApiRef.current && markersSeriesRef.current === series) {
+      markersApiRef.current.setMarkers(marks as any);
+    } else {
+      markersApiRef.current = createSeriesMarkers(series as any, marks as any);
+      markersSeriesRef.current = series;
+    }
+  }, [candles, indicators]);
+
+  // ── Hover tooltip over confluence flags ────────────────────────────────────
+  // FIC: On crosshair move, if the bar under the cursor has a confluence signal, show a tooltip
+  // FIC: explaining which indicators/conditions triggered it. (EN)
+  // FIC: Al mover el crosshair, si la vela bajo el cursor tiene señal de confluencia, muestra un
+  // FIC: tooltip explicando qué indicadores/condiciones la dispararon. (ES)
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+
+    const handler = (param: any) => {
+      const time = param?.time as number | undefined;
+      const point = param?.point as { x: number; y: number } | undefined;
+      if (time == null || !point) {
+        setSignalTooltip(null);
+        return;
       }
+      const sig = signalByTimeRef.current.get(Number(time));
+      if (!sig) {
+        setSignalTooltip(null);
+        return;
+      }
+      setSignalTooltip({ x: point.x, y: point.y, signal: sig });
     };
 
-    loadSignals();
+    chart.subscribeCrosshairMove(handler);
+    return () => {
+      chart.unsubscribeCrosshairMove(handler);
+    };
   }, [symbol]);
-
-  // ── Highlight selected signal ─────────────────────────────────────────────
-  useEffect(() => {
-    if (!selectedSignal || !candleSeriesRef.current) return;
-
-    const highlighted = signals.map(m =>
-      m.signal?.id === selectedSignal?.id
-        ? { ...m, color: getCSSVar("--color-warning") || "#ec7e00", shape: "square" as const }
-        : m,
-    );
-    createSeriesMarkers(candleSeriesRef.current as any, highlighted as any);
-  }, [selectedSignal, signals]);
 
   // ── Error state ───────────────────────────────────────────────────────────
   if (error) {
@@ -469,11 +517,11 @@ export const SuperChart: React.FC<SuperChartProps> = ({
         }}
       >
         {INDICATOR_META.map(({ key, label, color }) => {
-          const active = activeIndicators[key];
+          const active = indicators[key];
           return (
             <button
               key={key}
-              onClick={() => toggleIndicator(key)}
+              onClick={() => toggleStoreIndicator(key)}
               style={{
                 padding: "2px 10px",
                 fontSize: "var(--font-size-xs)",
@@ -678,6 +726,54 @@ export const SuperChart: React.FC<SuperChartProps> = ({
           ref={containerRef}
           style={{ width: "100%", height: "100%", minHeight: 340 }}
         />
+
+        {/* ── Confluence signal tooltip (hover over a COMPRA/VENDE flag) ──────── */}
+        {signalTooltip && (() => {
+          const { x, y, signal } = signalTooltip;
+          const isBuy = signal.direction === "buy";
+          const accent = isBuy ? "var(--color-buy)" : "var(--color-sell)";
+          // Keep the tooltip inside the chart area (flip to the left near the right edge).
+          const width = containerRef.current?.clientWidth ?? 0;
+          const flipX = width > 0 && x > width - 240;
+          return (
+            <div
+              style={{
+                position: "absolute",
+                left: flipX ? undefined : x + 14,
+                right: flipX ? Math.max(8, width - x + 14) : undefined,
+                top: Math.max(8, y - 10),
+                zIndex: 20,
+                pointerEvents: "none",
+                maxWidth: 240,
+                background: "var(--color-surface-raised)",
+                border: `1px solid ${accent}`,
+                borderRadius: "var(--radius-sm)",
+                padding: "8px 10px",
+                boxShadow: "0 6px 20px rgba(0,0,0,0.55)",
+                fontSize: "var(--font-size-xs)",
+                color: "var(--color-text)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+                <strong style={{ color: accent, letterSpacing: "0.04em" }}>
+                  {isBuy ? "▲ COMPRA" : "▼ VENDE"}
+                </strong>
+                <span style={{ color: "var(--color-text-muted)" }}>{signal.dateLabel}</span>
+              </div>
+              <div style={{ color: "var(--color-text-muted)", marginBottom: 4 }}>
+                {signal.indicators.length} indicadores coinciden · ${signal.price.toFixed(2)}
+              </div>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 3 }}>
+                {signal.triggers.map((t) => (
+                  <li key={t.indicator} style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
+                    <span style={{ color: accent, fontWeight: 600, minWidth: 38 }}>{t.indicator}</span>
+                    <span style={{ color: "var(--color-text-muted)" }}>{t.detail}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })()}
       </div>
 
       {/* ── Status bar ────────────────────────────────────────────────────── */}
