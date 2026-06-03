@@ -144,9 +144,9 @@ export const NewsSourcesAnalyzer: React.FC<NewsSourcesAnalyzerProps> = ({
       const body: Record<string, unknown> = {
         company: sym,
         urls: activeSources.map(s => s.url),
+        // No se pasa dateRange al fetch: Yahoo Finance RSS no soporta filtrado
+        // por fecha y restringirlo causaba 0 artículos al usar el rango de estrategia.
       };
-      if (dateRange?.from) body.from = dateRange.from;
-      if (dateRange?.to)   body.to   = dateRange.to;
 
       const res = await fetch('/api/news/analyze-sources', {
         method: 'POST',
@@ -184,7 +184,10 @@ export const NewsSourcesAnalyzer: React.FC<NewsSourcesAnalyzerProps> = ({
   // Punto 3 — limpiar todas las fuentes seleccionadas
   const clearSources = () => setSelectedIds([]);
 
-  const vm    = state.result ? V[state.result.verdict] : null;
+  // Fallback para veredictos inesperados (NEUTRAL, undefined, etc.)
+  const vm    = state.result
+    ? (V[state.result.verdict as keyof typeof V] ?? V['HOLD'])
+    : null;
   const other = (watchlistSymbols ?? []).filter(s => s !== selectedSymbol);
 
   // ─── Render ─────────────────────────────────────────────────────────────────
