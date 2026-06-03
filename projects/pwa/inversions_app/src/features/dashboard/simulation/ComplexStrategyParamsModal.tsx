@@ -431,7 +431,7 @@ export function ComplexStrategyParamsModal({ open, strategy, ticker, riskToleran
                     ) : (
                       availableExpirations.map((exp) => (
                         <option key={exp} value={exp}>
-                          {exp} · {new Date(exp).toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+                          {exp} · {new Date(exp + 'T12:00:00').toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
                         </option>
                       ))
                     )}

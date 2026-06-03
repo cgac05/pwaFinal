@@ -243,6 +243,7 @@ export function buildComplexStrategyRows(
       ...baseRow,
       core: STRATEGY_CORE,
       subCore,
+      precio: strike,  // ← muestra el strike en la columna precio de la tabla de confluencia
       tipoSenal: legTipo,
       tendencia: legTendencia,
       score: Number(legScore.toFixed(4)),
