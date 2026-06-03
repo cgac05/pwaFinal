@@ -719,7 +719,17 @@ export function SimulationControlPanel({
     }
   };
 
-  const toggleCore = (c: CoreId)          => setCoresOn((p) => ({ ...p, [c]: !p[c] }));
+  const toggleCore = (c: CoreId) => {
+    setCoresOn((p) => {
+      const next = { ...p, [c]: !p[c] };
+      // Mutex: si A_NOTICIAS se activa, desactiva Noticias 2 automáticamente
+      if (c === "A_NOTICIAS" && next["A_NOTICIAS"]) {
+        setNoticias2On(false);
+        onNoticias2Change?.(false);
+      }
+      return next;
+    });
+  };
 
   // FIC: US-3 — full control-panel reset to defaults (also clears any prior results). (EN)
   // FIC: US-3 — reset completo del panel de control a defaults (limpia tambien resultados previos). (ES)
@@ -1028,16 +1038,20 @@ export function SimulationControlPanel({
                   />
                 );
               })}
-              {/* Noticias 2 — analizador propio de fuentes, independiente del core A_NOTICIAS */}
+              {/* Noticias 2 — mutex con A_NOTICIAS: solo uno activo a la vez */}
               <ChipButton
                 active={noticias2On}
                 onClick={() => {
                   const next = !noticias2On;
                   setNoticias2On(next);
                   onNoticias2Change?.(next);
+                  // Si se activa Noticias 2, desactiva A_NOTICIAS automáticamente
+                  if (next && coresOn["A_NOTICIAS"]) {
+                    setCoresOn((p) => ({ ...p, A_NOTICIAS: false }));
+                  }
                 }}
                 label="Noticias 2"
-                tooltip="Análisis de fuentes de noticias personalizadas con recomendación BUY/SELL/HOLD (TEAM-02)"
+                tooltip="Análisis de fuentes de noticias personalizadas (TEAM-02). Mutuamente exclusivo con Noticias."
               />
             </div>
           </div>

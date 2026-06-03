@@ -139,6 +139,7 @@ export const NewsSourcesAnalyzer: React.FC<NewsSourcesAnalyzerProps> = ({
     abortRef.current?.abort();
     abortRef.current = new AbortController();
     setState({ loading: true, error: null, result: null, analyzedSymbol: sym });
+    let analysisResult: NewsAnalysisResult | null = null;
     try {
       const body: Record<string, unknown> = {
         company: sym,
@@ -157,15 +158,16 @@ export const NewsSourcesAnalyzer: React.FC<NewsSourcesAnalyzerProps> = ({
         const e = await res.json().catch(() => ({}));
         throw new Error(e.error ?? `Error ${res.status}`);
       }
-      // El backend ya aplica el filtro estricto + fallback.
-      // El frontend solo usa lo que llega.
-      const data: NewsAnalysisResult = await res.json();
-      setState({ loading: false, error: null, result: data, analyzedSymbol: sym });
-      setHasAnalyzed(true); // Bug 3 — primer análisis completado → botón pasa a "Re-analizar"
-      onResult?.(data);
+      analysisResult = await res.json() as NewsAnalysisResult;
+      setState({ loading: false, error: null, result: analysisResult, analyzedSymbol: sym });
+      setHasAnalyzed(true);
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
       setState(prev => ({ ...prev, loading: false, error: (err as Error).message }));
+    }
+    // onResult va FUERA del try: si el callback del padre lanza no afecta al componente
+    if (analysisResult) {
+      try { onResult?.(analysisResult); } catch { /* padre puede fallar sin romper el componente */ }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSources, dateRange, onResult, selectedIds]);
