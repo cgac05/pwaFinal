@@ -277,16 +277,11 @@ Responde ÚNICAMENTE usando el siguiente formato de texto (SIN JSON, SIN markdow
 
 DECISION: [CALL o PUT o HOLD]
 CONFIANZA: [Un número decimal de 0.00 a 1.00 indicando tu nivel de certeza]
-TOP_SENALES:
-- #1: [Primera señal más importante]
-- #2: [Segunda señal]
-- #3: [Tercera señal]
-[... hasta 10 señales máximo si aplican]
 JUSTIFICACION: 
 [Explica tu decisión con:
 1. Un resumen general de tu veredicto (1-2 líneas).
-2. Un desglose detallado CORE por CORE (Técnico, Fundamental, Institucional, Noticias, Estrategia, IA, etc.) explicando cómo cada uno influyó en la decisión final. Cita valores numéricos específicos de las señales identificadas.
-3. No omitas ninguna fila recibida; si aparece A_ESTRATEGIA o cualquier otra fila de estrategia, inclúyela explícitamente en el razonamiento.
+2. Un desglose por CORE (Técnico, Fundamental, Institucional, Noticias, Estrategia, etc.) resumiendo cómo influyó en la decisión final. No relates fila por fila; sintetiza el impacto agregado de cada core.
+3. Si la tabla incluye una estrategia específica (A_ESTRATEGIA), debes indicar si las condiciones actuales la hacen viable o no.
 4. Si elegiste HOLD, explica brevemente por qué esperar es la mejor opción en este momento.
 5. Identifica y lista de forma explícita las salidas/señales más relevantes (máximo 10) al final de tu justificación. Debes usar exactamente el siguiente formato en líneas individuales para cada una de las señales relevantes:
 SALIDAS RELEVANTES (Máximo 10):

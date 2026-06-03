@@ -91,7 +91,7 @@ REGLAS DE RESPUESTA OBLIGATORIAS:
       id: 'res_seed_1',
       ticker: 'SPY',
       decision: 'SÍ',
-      justification: 'Los scores de opciones (85/100) y de financiamiento (65/100) confirman un canal de volatilidad comprimido. La baja volatilidad implícita relativa a la volatilidad histórica apoya la estructura de Iron Condor permitiendo recolectar prima con bajo riesgo de ruptura de strikes externos.',
+      justification: 'Los scores de opciones (85/100) y de financiamiento (65/100) confirman un canal de volatilidad comprimido. La baja volatilidad implícita relativa a la volatilidad histórica apoya la estructura de Iron Condor permitiendo recolectar prima con bajo riesgo de ruptura de strikes externos.\n\nSALIDAS RELEVANTES (Máximo 10):\n* CORE: A_TECNICO | INDICADOR: EMA50 | SEÑAL: CALL | SCORE: 0.80 | DETALLE: Rebote dinámico alcista en EMA de 50 periodos\n* CORE: A_OPCIONES | INDICADOR: IV Rank | SEÑAL: PUT | SCORE: -0.65 | DETALLE: Contracción de volatilidad esperada\n* CORE: A_INSTITUCIONAL | INDICADOR: Dark Pools | SEÑAL: HOLD | SCORE: 0.10 | DETALLE: Flujo mixto sin direccionalidad clara',
       date: new Date(Date.now() - 3600000 * 2).toISOString(), // 2 hours ago
       scores: 'Score Financiero: 65/100\nScore Técnico: 42/100\nScore Noticias: 30/100\nScore Opciones: 85/100',
       chatHistory: [
@@ -103,7 +103,7 @@ REGLAS DE RESPUESTA OBLIGATORIAS:
       id: 'res_seed_2',
       ticker: 'AAPL',
       decision: 'NO',
-      justification: 'El Score Técnico (82/100) muestra un impulso direccional de sobrecompra muy elevado y el Score de Noticias (75/100) advierte sobre un inminente anuncio de producto con alto impacto. Esto viola la premisa de estabilidad requerida para un Butterfly spread en el strike central actual, elevando drásticamente el riesgo de pérdidas por cola.',
+      justification: 'El Score Técnico (82/100) muestra un impulso direccional de sobrecompra muy elevado y el Score de Noticias (75/100) advierte sobre un inminente anuncio de producto con alto impacto. Esto viola la premisa de estabilidad requerida para un Butterfly spread en el strike central actual, elevando drásticamente el riesgo de pérdidas por cola.\n\nSALIDAS RELEVANTES (Máximo 10):\n* CORE: A_TECNICO | INDICADOR: RSI | SEÑAL: PUT | SCORE: -0.90 | DETALLE: Divergencia bajista extrema\n* CORE: A_NOTICIAS | INDICADOR: Sentimiento | SEÑAL: PUT | SCORE: -0.75 | DETALLE: Alerta de downgrade inminente\n* CORE: A_FUNDAMENTAL | INDICADOR: PE Ratio | SEÑAL: HOLD | SCORE: -0.15 | DETALLE: Valuación por encima de la media histórica',
       date: new Date(Date.now() - 3600000 * 5).toISOString(), // 5 hours ago
       scores: 'Score Financiero: 55/100\nScore Técnico: 82/100\nScore Noticias: 75/100\nScore Opciones: 40/100',
       chatHistory: []

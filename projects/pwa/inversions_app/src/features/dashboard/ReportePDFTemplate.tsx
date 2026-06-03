@@ -1,5 +1,6 @@
 import React from "react";
 import type { ConfluenceSignalRow } from "../../services/signals/confluenceTableApi";
+import { buildSvgDonutChart, buildSvgBarChart, parseRelevantSignals, cleanExplanation } from "./ObservationsTab";
 
 interface Props {
   ticker: string;
@@ -29,8 +30,15 @@ export function ReportePDFTemplate({
   // Find the AI core row for main justification if available
   const aiRow = rows.find((r) => r.core === "A_IA");
   const aiDecision = aiRow ? aiRow.tipoSenal : (verdict?.verdict || "HOLD");
-  const aiJustification = aiRow?.observacion?.explicacion || aiRow?.resumen_analisis || "No se ha generado justificación de IA para esta corrida.";
+  const rawExplanation = aiRow?.observacion?.explicacion || aiRow?.resumen_analisis || "";
+  const aiJustification = cleanExplanation(rawExplanation) || "No se ha generado justificación de IA para esta corrida.";
   const confidenceScore = aiRow ? aiRow.score : (verdict?.score || 0);
+
+  const signals = parseRelevantSignals(rawExplanation);
+  
+  // Make SVGs responsive by removing hardcoded width/height
+  const donutChartHtml = buildSvgDonutChart(signals).replace(/width="\d+"/i, 'width="100%"').replace(/height="\d+"/i, 'height="100%"');
+  const barChartHtml = buildSvgBarChart(signals).replace(/width="\d+"/i, 'width="100%"').replace(/height="\d+"/i, 'height="100%"');
 
   // Take top 10 signals
   const topSignals = rows.slice(0, 10);
@@ -188,7 +196,7 @@ export function ReportePDFTemplate({
       >
         <div>
           {/* Header bar P2 */}
-          <div className="flex justify-between items-center border-b border-slate-200 pb-2 mb-6">
+          <div className="flex justify-between items-center border-b border-slate-200 pb-2 mb-4">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               INVERSIONS | Reporte Técnico de Confluencia
             </span>
@@ -196,6 +204,20 @@ export function ReportePDFTemplate({
               Ticker: {ticker}
             </span>
           </div>
+
+          {/* Gráficos de Señales */}
+          {signals.length > 0 && (
+            <div className="mb-4 grid grid-cols-2 gap-4">
+              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50 flex flex-col items-center">
+                <span className="text-[9px] uppercase text-slate-500 font-bold tracking-wider mb-1 block text-center">Distribución de Veredictos</span>
+                <div dangerouslySetInnerHTML={{ __html: donutChartHtml }} style={{ width: '100%', maxHeight: '160px', display: 'flex', justifyContent: 'center' }} />
+              </div>
+              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50 flex flex-col items-center">
+                <span className="text-[9px] uppercase text-slate-500 font-bold tracking-wider mb-1 block text-center">Fuerza Confluence (Score de Indicadores)</span>
+                <div dangerouslySetInnerHTML={{ __html: barChartHtml }} style={{ width: '100%', maxHeight: '160px', display: 'flex', justifyContent: 'center' }} />
+              </div>
+            </div>
+          )}
 
           {/* 4. Las 10 Señales Ejecutivas (Top 10 Signals) */}
           <div className="mb-6">

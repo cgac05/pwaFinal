@@ -29,6 +29,38 @@ function buildDeterministicFallback(assessment: VolatilityAssessment): string {
   return buildLocalFallbackNarrative(assessment);
 }
 
+// Helper to call Claude API directly
+async function callClaude(prompt: string): Promise<string | undefined> {
+  const apiKey = process.env.CLAUDE_API_KEY ?? process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return undefined;
+  try {
+    const model = process.env.CLAUDE_MODEL ?? "claude-haiku-4-5-20251001";
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 2048,
+        messages: [{ role: "user", content: prompt }]
+      }),
+      signal: AbortSignal.timeout(Number(process.env.CLAUDE_TIMEOUT_MS ?? 15000))
+    });
+    if (!res.ok) {
+      console.warn("Claude API failed with status:", res.status);
+      return undefined;
+    }
+    const payload = (await res.json()) as { content?: Array<{ type: string; text: string }> };
+    return payload?.content?.find((b) => b.type === "text")?.text?.trim();
+  } catch (err) {
+    console.error("Error calling Claude:", err);
+    return undefined;
+  }
+}
+
 // Helper to simulate follow-up chat replies when Gemini is not enabled
 function simulateFollowUpChat(result: {
   ticker: string;
@@ -228,8 +260,10 @@ router.post('/results/:id/chat', async (req: Request, res: Response) => {
     const financialKeywords = [
       'reporte', 'volatilidad', 'iron condor', 'viabilidad', 
       'decision', 'canal', 'strike', 'prima', 'historico', 'implicita', 
-      'ticker', 'analiz', 'analisis', 'por que', 'score', 'opcion', 
-      'comprar', 'vender', 'resumen', 'detalle', 'simulaci', 'grafic', 'explica'
+      'ticker', 'analiz', 'analisis', 'analsis', 'por que', 'porque', 'score', 'opcion', 
+      'comprar', 'vender', 'resumen', 'detalle', 'simulaci', 'grafic', 'explica', 'tecnico', 'fundamental',
+      'profundiza', 'institucional', 'estrategia', 'riesgo', 'cobertura', 'mercado', 'tendencia', 'precio',
+      'evaluad', 'evaluacion', 'duda', 'consulta', 'ayuda', 'importante', 'relevante', 'funciona'
     ];
     const isStrategyEvaluation = STRATEGY_EVALUATION_PATTERN.test(cleanMsg);
     const hasKeyword = financialKeywords.some((word) => cleanMsg.includes(word)) || isStrategyEvaluation;
@@ -248,26 +282,11 @@ router.post('/results/:id/chat', async (req: Request, res: Response) => {
     const geminiService = getGeminiService();
 
     if (!geminiService.isEnabled()) {
-      // Si no hay API Key en el .env, usamos el simulador realista para que el profesor vea el chat funcionando sin configurar claves
-      replyText = simulateFollowUpChat({
-        ticker: result.ticker,
-        decision: result.decision,
-        question: message,
-        recommendedStrategy: result.recommendedStrategy,
-        popEstimate: result.popEstimate,
-        riskLevel: result.riskLevel,
-        warnings: result.warnings,
-        analysisSummary: result.analysisSummary,
-      });
-    } else {
-      try {
-        const response = await geminiService.generateAgentResponse({
-          role: 'analyzer',
-          userPrompt: contextPrompt
-        });
-        replyText = response.text || '';
-      } catch (err: any) {
-        console.warn('Error nativo de Google GenAI en mini-chat, activando fallback interactivo:', err);
+      // Si no hay API Key en el .env, probamos Claude primero, luego simulador
+      const claudeReply = await callClaude(contextPrompt);
+      if (claudeReply) {
+        replyText = claudeReply;
+      } else {
         replyText = simulateFollowUpChat({
           ticker: result.ticker,
           decision: result.decision,
@@ -278,6 +297,31 @@ router.post('/results/:id/chat', async (req: Request, res: Response) => {
           warnings: result.warnings,
           analysisSummary: result.analysisSummary,
         });
+      }
+    } else {
+      try {
+        const response = await geminiService.generateAgentResponse({
+          role: 'analyzer',
+          userPrompt: contextPrompt
+        });
+        replyText = response.text || '';
+      } catch (err: any) {
+        console.warn('Error nativo de Google GenAI en mini-chat, activando Claude/Fallback:', err);
+        const claudeReply = await callClaude(contextPrompt);
+        if (claudeReply) {
+          replyText = claudeReply;
+        } else {
+          replyText = simulateFollowUpChat({
+            ticker: result.ticker,
+            decision: result.decision,
+            question: message,
+            recommendedStrategy: result.recommendedStrategy,
+            popEstimate: result.popEstimate,
+            riskLevel: result.riskLevel,
+            warnings: result.warnings,
+            analysisSummary: result.analysisSummary,
+          });
+        }
       }
     }
 
@@ -331,8 +375,10 @@ router.post('/global-chat', async (req: Request, res: Response) => {
     const financialKeywords = [
       'reporte', 'volatilidad', 'iron condor', 'viabilidad', 
       'decision', 'canal', 'strike', 'prima', 'historico', 'implicita', 
-      'ticker', 'analiz', 'analisis', 'por que', 'score', 'opcion', 
-      'comprar', 'vender', 'resumen', 'detalle', 'simulaci', 'grafic', 'explica'
+      'ticker', 'analiz', 'analisis', 'analsis', 'por que', 'porque', 'score', 'opcion', 
+      'comprar', 'vender', 'resumen', 'detalle', 'simulaci', 'grafic', 'explica', 'tecnico', 'fundamental',
+      'profundiza', 'institucional', 'estrategia', 'riesgo', 'cobertura', 'mercado', 'tendencia', 'precio',
+      'evaluad', 'evaluacion', 'duda', 'consulta', 'ayuda', 'importante', 'relevante', 'funciona'
     ];
     const isStrategyEvaluation = STRATEGY_EVALUATION_PATTERN.test(cleanMsg);
     const hasKeyword = financialKeywords.some((word) => cleanMsg.includes(word)) || isStrategyEvaluation;
@@ -391,11 +437,11 @@ REGLAS OBLIGATORIAS:
     }
 
     const contextPrompt = `Eres un analista financiero cuantitativo y desarrollador senior con 24 años de experiencia.
-A continuación se presenta el historial de resultados de tus análisis de volatilidad realizados (estos datos corresponden a los reportes que el usuario analiza y puede exportar como PDFs en la interfaz en la pestaña /ai/evaluacion-tabla).
+A continuación se presenta el historial de resultados de tus análisis de volatilidad realizados (estos datos corresponden a los reportes que el usuario analiza y puede exportar como PDFs en la interfaz).
 El usuario te hará preguntas sobre este historial o temas relacionados en el Chat IA Coberturas. Tu misión es responder con un tono experto, profesional y en español.
-Para optimizar el uso de tokens y la velocidad de response, apóyate exclusivamente en este contexto resumido de reportes y responde directamente sin rodeos.
+Por favor, responde de forma completa y detallada, asegurándote de terminar todas tus oraciones.
 
-HISTORIAL DE EVALUACIÓN DE VOLATILIDAD (DATOS DE LOS REPORTES/PDFs):
+HISTORIAL DE EVALUACIÓN DE VOLATILIDAD:
 ${resultsContext}
 
 PREGUNTA DEL USUARIO:
@@ -406,22 +452,38 @@ ${message}`;
     const geminiService = getGeminiService();
 
     if (!geminiService.isEnabled()) {
-      replyText = simulateGlobalChat(message, results);
-      usedModel = modelType === 'primary' ? 'Gemma 4 31B (Simulado)' : 'Gemma 4 26B (Simulado Fallback)';
+      const claudeReply = await callClaude(systemInstruction + "\n\n" + contextPrompt);
+      if (claudeReply) {
+        replyText = claudeReply;
+        usedModel = "Claude (Fallback)";
+      } else {
+        replyText = simulateGlobalChat(message, results);
+        usedModel = modelType === 'primary' ? 'Gemma 4 31B (Simulado)' : 'Gemma 4 26B (Simulado Fallback)';
+      }
     } else {
       try {
         const response = await geminiService.generateSimpleResponse(
           contextPrompt,
           modelType,
           systemInstruction,
-          { temperature: 0.1, topP: 0.85, maxOutputTokens: 600 }
+          { temperature: 0.2, topP: 0.9, maxOutputTokens: 2048 }
         );
         replyText = response.text || '';
         usedModel = response.model;
+        console.log("Gemini Global Chat Response Length:", replyText.length);
+        console.log("Gemini Global Chat Response:", replyText);
+        replyText = response.text || '';
+        usedModel = response.model;
       } catch (err: any) {
-        console.warn('Error en generateSimpleResponse, activando fallback interactivo:', err);
-        replyText = simulateGlobalChat(message, results);
-        usedModel = `${modelType === 'primary' ? 'Gemma 4 31B' : 'Gemma 4 26B'} (Simulado por Error)`;
+        console.warn('Error en generateSimpleResponse, activando Claude/Fallback:', err);
+        const claudeReply = await callClaude(systemInstruction + "\n\n" + contextPrompt);
+        if (claudeReply) {
+          replyText = claudeReply;
+          usedModel = "Claude (Fallback)";
+        } else {
+          replyText = simulateGlobalChat(message, results);
+          usedModel = `${modelType === 'primary' ? 'Gemma 4 31B' : 'Gemma 4 26B'} (Simulado por Error)`;
+        }
       }
     }
 

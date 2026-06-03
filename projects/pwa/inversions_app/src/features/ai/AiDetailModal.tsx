@@ -56,6 +56,8 @@ const strengthBar = (value: number, colorType: "buy" | "sell" | "neutral" = "buy
 export function AiDetailModal({ isOpen, onClose, ticker, signalRow, activeStrategy, precalculatedRows, onAiRetry }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("resumen");
 
+  const [isRetrying, setIsRetrying] = useState(false);
+
   if (!signalRow) return null;
 
   const subtitle = `Estado: ${signalRow.estado} · Resuelto: ${new Date(signalRow.computed_at).toLocaleTimeString()}`;
@@ -143,8 +145,11 @@ export function AiDetailModal({ isOpen, onClose, ticker, signalRow, activeStrate
               <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
                 <button
                   className="btn-primary"
+                  disabled={isRetrying}
+                  style={isRetrying ? { opacity: 0.7, cursor: "wait", position: "relative", overflow: "hidden" } : {}}
                   onClick={async () => {
                     if (!precalculatedRows) return;
+                    setIsRetrying(true);
                     try {
                       const res = await fetch("/api/simulation/retry-ai", {
                         method: "POST",
@@ -157,11 +162,23 @@ export function AiDetailModal({ isOpen, onClose, ticker, signalRow, activeStrate
                     } catch (err) {
                       console.error("retry-ai failed", err);
                       alert("Fallo al reintentar la IA. Revisa la consola.");
+                    } finally {
+                      setIsRetrying(false);
                     }
                   }}
                 >
-                  Reintentar IA
+                  {isRetrying ? (
+                    <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span className="spinner-small" style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTop: "2px solid white", borderRadius: "50%", animation: "spin 1s linear infinite", display: "inline-block" }}></span>
+                      Conectando...
+                    </span>
+                  ) : (
+                    "Reintentar IA"
+                  )}
                 </button>
+                <style>{`
+                  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                `}</style>
               </div>
             )}
           </div>

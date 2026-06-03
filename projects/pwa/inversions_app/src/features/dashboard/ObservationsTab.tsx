@@ -17,18 +17,28 @@ interface RelevantSignal {
   detail: string;
 }
 
-function parseRelevantSignals(explanation: string): RelevantSignal[] {
+export function parseRelevantSignals(explanation: string): RelevantSignal[] {
   if (!explanation) return [];
   const lines = explanation.split("\n");
   const signals: RelevantSignal[] = [];
   
   for (const line of lines) {
-    if (line.includes("CORE:") && line.includes("INDICADOR:") && line.includes("SEÑAL:") && line.includes("SCORE:")) {
-      const core = line.match(/CORE:\s*([^|]+)/i)?.[1]?.trim() || "";
-      const indicator = line.match(/INDICADOR:\s*([^|]+)/i)?.[1]?.trim() || "";
-      const senal = line.match(/SEÑAL:\s*([^|]+)/i)?.[1]?.trim() || "";
-      const scoreRaw = line.match(/SCORE:\s*([^|]+)/i)?.[1]?.trim() || "0";
-      const detail = line.match(/DETALLE:\s*(.+)/i)?.[1]?.trim() || "";
+    const upperLine = line.toUpperCase();
+    if (upperLine.includes("CORE:") && upperLine.includes("INDICADOR:") && (upperLine.includes("SEÑAL:") || upperLine.includes("SENAL:")) && upperLine.includes("SCORE:")) {
+      const coreMatch = line.match(/CORE:\s*([^|]+)/i);
+      const indicatorMatch = line.match(/INDICADOR:\s*([^|]+)/i);
+      const senalMatch = line.match(/SE[ÑN]AL:\s*([^|]+)/i);
+      const scoreMatch = line.match(/SCORE:\s*([^|]+)/i);
+      const detailMatch = line.match(/DETALLE:\s*(.+)/i);
+
+      let core = coreMatch?.[1]?.trim() || "";
+      // Remover asteriscos o viñetas iniciales que Gemini pueda haber dejado
+      core = core.replace(/^[*-\s]+/, "").trim();
+      
+      const indicator = indicatorMatch?.[1]?.trim() || "";
+      const senal = senalMatch?.[1]?.trim() || "";
+      const scoreRaw = scoreMatch?.[1]?.trim() || "0";
+      const detail = detailMatch?.[1]?.trim() || "";
       
       const score = parseFloat(scoreRaw);
       if (core && indicator) {
@@ -39,7 +49,7 @@ function parseRelevantSignals(explanation: string): RelevantSignal[] {
   return signals.slice(0, 10);
 }
 
-function cleanExplanation(explanation: string): string {
+export function cleanExplanation(explanation: string): string {
   if (!explanation) return "";
   const index = explanation.toUpperCase().indexOf("SALIDAS RELEVANTES");
   if (index !== -1) {
@@ -48,7 +58,7 @@ function cleanExplanation(explanation: string): string {
   return explanation;
 }
 
-function buildSvgBarChart(signals: RelevantSignal[]): string {
+export function buildSvgBarChart(signals: RelevantSignal[]): string {
   if (signals.length === 0) return "";
   
   const width = 680;
@@ -104,7 +114,7 @@ function buildSvgBarChart(signals: RelevantSignal[]): string {
   return svgContent;
 }
 
-function buildSvgDonutChart(signals: RelevantSignal[]): string {
+export function buildSvgDonutChart(signals: RelevantSignal[]): string {
   let callCount = 0;
   let putCount = 0;
   let holdCount = 0;

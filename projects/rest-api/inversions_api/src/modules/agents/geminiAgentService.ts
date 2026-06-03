@@ -119,7 +119,7 @@ export class GeminiAgentService {
       const config: any = {
         temperature: generationConfig?.temperature ?? 0.2,
         topP: generationConfig?.topP ?? 0.9,
-        maxOutputTokens: generationConfig?.maxOutputTokens ?? 4096,
+        maxOutputTokens: generationConfig?.maxOutputTokens ?? 8192,
         abortSignal: controller.signal
       };
 
