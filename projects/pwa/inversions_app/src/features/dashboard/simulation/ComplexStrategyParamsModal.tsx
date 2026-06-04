@@ -5,7 +5,8 @@
 //      "Ejecutar Simulación" in the main dashboard.
 
 import React, { useState, useEffect, useCallback } from "react";
-import { fetchOptionsChain, fetchExpirations, type StrikeSelection } from "../../../services/strategies/strategyApi";
+import { fetchOptionChain, fetchExpirations as fetchDashboardExpirations } from "../../../services/options/optionChainApi";
+import type { StrikeSelection } from "../../../services/strategies/strategyApi";
 import { useStrategyLegsStore } from "../../../store/strategyLegs";
 
 // ─── Strategy metadata ────────────────────────────────────
@@ -124,6 +125,7 @@ interface Props {
   strategy: string;
   ticker: string;
   riskTolerance?: string;
+  autoFill?: boolean;
   onClose: () => void;
   onConfirm?: (params: ComplexFormState, strategy: string) => void;
 }
@@ -199,7 +201,7 @@ const sectionTitleStyle: React.CSSProperties = {
 
 // ─── Main component ───────────────────────────────────────
 
-export function ComplexStrategyParamsModal({ open, strategy, ticker, riskTolerance = "medio", onClose, onConfirm }: Props) {
+export function ComplexStrategyParamsModal({ open, strategy, ticker, riskTolerance = "medio", autoFill = false, onClose, onConfirm }: Props) {
   const preset = STRATEGY_PRESETS[strategy] ?? STRATEGY_PRESETS.IRON_CONDOR;
   const legs = preset.legs;
 
@@ -238,10 +240,10 @@ export function ComplexStrategyParamsModal({ open, strategy, ticker, riskToleran
     setLoadingExpirations(true);
     setExpirationsError(null);
 
-    fetchExpirations(ticker, rangoMeses)
+    fetchDashboardExpirations(ticker)
       .then((res) => {
         if (!cancelled) {
-          setAvailableExpirations(sampleExpirations(res.expiraciones, rangoMeses));
+          setAvailableExpirations(sampleExpirations(res.expirations, rangoMeses));
           setLoadingExpirations(false);
         }
       })
@@ -288,16 +290,17 @@ export function ComplexStrategyParamsModal({ open, strategy, ticker, riskToleran
     }));
   }, []);
 
-  const handleAutoAdjustStrikes = useCallback(async (tickerToFetch: string, expiration?: string) => {
+  const handleAutoAdjustStrikes = useCallback(async (tickerToFetch: string, expiration: string) => {
     if (!tickerToFetch || tickerToFetch.length < 2) return;
     setLoadingStrikes(true);
     setStrikesError(null);
     try {
-      const chain = await fetchOptionsChain(tickerToFetch, expiration);
-      if (chain && chain.total_contratos > 0) {
-        const midStrike = Math.round(
-          (chain.resumen.call_strike_min + chain.resumen.call_strike_max) / 2
-        );
+      const chain = await fetchOptionChain(tickerToFetch, expiration ?? "");
+      if (chain && chain.rows.length > 0) {
+        const strikes = chain.rows.map((r) => r.strike);
+        const minStrike = Math.min(...strikes);
+        const maxStrike = Math.max(...strikes);
+        const midStrike = Math.round((minStrike + maxStrike) / 2);
         const roundedBase = Math.round(midStrike / 5) * 5;
         setLastAutoBaseStrike(roundedBase);
         setForm((prev) => ({
@@ -312,12 +315,20 @@ export function ComplexStrategyParamsModal({ open, strategy, ticker, riskToleran
     }
   }, [strategy]);
 
-  // FIC: Strikes are manually editable from the moment the modal opens — we do NOT auto-fetch them
-  // FIC: from the chain on open. The user can type them, press "Ajustar" to pull from the chain on
-  // FIC: demand, or pre-fill via right-click on the chain (Punto 1). (EN)
-  // FIC: Los strikes son editables a mano desde que abre el modal — NO se auto-traen de la cadena al
-  // FIC: abrir. El usuario los teclea, usa "Ajustar" para traerlos a demanda, o los precarga con clic
-  // FIC: derecho en la cadena (Punto 1). (ES)
+  // FIC: Auto-fill mode — when enabled, auto-select first expiration and fetch strikes on open. (EN)
+  // FIC: Modo auto-fill — cuando está activado, auto-selecciona primer vencimiento y obtiene strikes. (ES)
+  useEffect(() => {
+    if (!open || !autoFill || hasPendingLegs) return;
+    if (!ticker || ticker.length < 2) return;
+    if (availableExpirations.length === 0) return;
+
+    const exp = form.expiracion || availableExpirations[0];
+    if (!form.expiracion) {
+      updateForm("expiracion", exp);
+    }
+    handleAutoAdjustStrikes(ticker, exp);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoFill, ticker, availableExpirations]);
 
   // FIC: Punto 1 — when the modal opens with legs picked from the chain, use them as the strikes. (EN)
   // FIC: Punto 1 — al abrir el modal con patas elegidas desde la cadena, úsalas como strikes. (ES)
@@ -449,36 +460,23 @@ export function ComplexStrategyParamsModal({ open, strategy, ticker, riskToleran
                     ) : (
                       availableExpirations.map((exp) => (
                         <option key={exp} value={exp}>
-                          {exp} · {new Date(exp).toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+                          {exp} · {new Date(exp + 'T12:00:00').toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
                         </option>
                       ))
                     )}
                   </select>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-sm)" }}>
-                  <div>
-                    <label style={labelStyle}>Tipo Ala</label>
-                    <select
-                      style={inputStyle}
-                      value={form.tipo_ala}
-                      onChange={(e) => updateForm("tipo_ala", e.target.value)}
-                    >
-                      <option value="short">Short</option>
-                      <option value="wide">Wide</option>
-                      <option value="broken">Broken</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Estilo Opción</label>
-                    <select
-                      style={inputStyle}
-                      value={form.estilo_opcion}
-                      onChange={(e) => updateForm("estilo_opcion", e.target.value)}
-                    >
-                      <option value="americana">Americana</option>
-                      <option value="europea">Europea</option>
-                    </select>
-                  </div>
+                <div>
+                  <label style={labelStyle}>Tipo Ala</label>
+                  <select
+                    style={inputStyle}
+                    value={form.tipo_ala}
+                    onChange={(e) => updateForm("tipo_ala", e.target.value)}
+                  >
+                    <option value="short">Short</option>
+                    <option value="wide">Wide</option>
+                    <option value="broken">Broken</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -487,7 +485,7 @@ export function ComplexStrategyParamsModal({ open, strategy, ticker, riskToleran
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={sectionTitleStyle}>Patas ({legs})</div>
                 <button
-                  onClick={() => handleAutoAdjustStrikes(ticker)}
+                  onClick={() => handleAutoAdjustStrikes(ticker, form.expiracion || availableExpirations[0] || "")}
                   disabled={!ticker || loadingStrikes}
                   style={{
                     fontSize: "0.6rem",

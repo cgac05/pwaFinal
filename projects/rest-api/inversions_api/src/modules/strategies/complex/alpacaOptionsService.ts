@@ -307,19 +307,42 @@ export class AlpacaOptionsService {
   /**
    * FIC: Fetch option contracts within a date range from Alpaca /v2/options/contracts.
    * FIC: Obtiene contratos de opciones en un rango de fechas desde Alpaca /v2/options/contracts.
+   *
+   * Handles pagination (next_page_token) to ensure all contracts within the range are returned.
+   * FIC: Maneja paginación (next_page_token) para asegurar que se devuelvan todos los contratos
+   * dentro del rango.
    */
   private async fetchContractsInRange(
     ticker: string,
     startDate: string,
     endDate: string
   ): Promise<AlpacaOptionContract[]> {
-    const url = `${this.paperApiBase}/v2/options/contracts?` +
-      `underlying_symbols=${ticker}&status=active&limit=250` +
-      `&expiration_date_gte=${startDate}&expiration_date_lte=${endDate}`;
+    const allContracts: AlpacaOptionContract[] = [];
+    let pageToken: string | null = null;
+    let pages = 0;
+    const MAX_PAGES = 50;
 
-    const response = await this.get(url);
-    const data = (await response.json()) as AlpacaContractsResponse;
-    return data.option_contracts ?? [];
+    do {
+      let url = `${this.paperApiBase}/v2/options/contracts?` +
+        `underlying_symbols=${ticker}&status=active&limit=250` +
+        `&expiration_date_gte=${startDate}&expiration_date_lte=${endDate}`;
+
+      if (pageToken) {
+        url += `&page_token=${encodeURIComponent(pageToken)}`;
+      }
+
+      const response = await this.get(url);
+      const data = (await response.json()) as AlpacaContractsResponse;
+
+      if (data.option_contracts && data.option_contracts.length > 0) {
+        allContracts.push(...data.option_contracts);
+      }
+
+      pageToken = data.next_page_token ?? null;
+      pages++;
+    } while (pageToken !== null && pages < MAX_PAGES);
+
+    return allContracts;
   }
 
   /**

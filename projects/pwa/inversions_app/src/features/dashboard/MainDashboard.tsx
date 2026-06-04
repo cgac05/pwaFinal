@@ -36,6 +36,7 @@ import { formatCurrency } from "../../utils/format";
 import { Tooltip } from "../../components/ui/Tooltip";
 import { ReportePDFTemplate } from "./ReportePDFTemplate";
 import { getAuthHeaders } from "../../services/signals/signalApi";
+import type { NewsDateRange } from "../../services/news/newsApi";
 // FIC: US-5 — compact buy/sell/hold counter chip shown above the confluence table. (EN)
 // FIC: US-5 — chip compacto de conteo compra/venta/hold mostrado sobre la tabla. (ES)
 function SignalMetricChip({ label, value, color }: { label: string; value: number; color: string }) {
@@ -71,7 +72,7 @@ export function MainDashboard() {
   const [strategyError, setStrategyError] = useState<string | null>(null);
   const [simulationMetrics, setSimulationMetrics] = useState<SignalMetrics | null>(null);
   const [institutionalCoreWasActive, setInstitutionalCoreWasActive] = useState(false);
-  const [, setNewsDateRange] = useState<string | undefined>(undefined);
+  const [newsDateRange, setNewsDateRange] = useState<NewsDateRange | undefined>(undefined);
   const [spreadRequest, setSpreadRequest] = useState<{ params: SpreadModalParams; kind: string } | null>(null);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [selectedStrikeData, setSelectedStrikeData] = useState<{
@@ -81,10 +82,13 @@ export function MainDashboard() {
   const [activeChartTab, setActiveChartTab] = useState<"chart" | "chain">("chart");
   const [pdfChartImg, setPdfChartImg] = useState<string | undefined>(undefined);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [chainFocusKey, setChainFocusKey] = useState(0);
+  const chainRef = useRef<HTMLDivElement>(null);
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
   const [noticias2Active, setNoticias2Active] = useState(false);
-  // Bug 1 — el módulo solo existe en el DOM después de que el usuario ejecutó la simulación
+
   const [simulationHasRun, setSimulationHasRun] = useState(false);
+  const [noticiasCoreWasActive, setNoticiasCoreWasActive] = useState(false);
   const [noticias2DateRange, setNoticias2DateRange] = useState<{ from?: string; to?: string } | undefined>();
   const [noticias2Result, setNoticias2Result] = useState<NewsAnalysisResult | null>(null);
   const [noticias2ChatContext, setNoticias2ChatContext] = useState<string | null>(null);
@@ -133,6 +137,7 @@ export function MainDashboard() {
       // oculta el módulo y borra toda la data para que el usuario parta de cero
       setNoticias2Active(false);
       setSimulationHasRun(false);
+      setNoticiasCoreWasActive(false);
       setNoticias2Result(null);
       setNoticias2ChatContext(null);
       setNoticias2DateRange(undefined);
@@ -142,7 +147,6 @@ export function MainDashboard() {
   const handleSimulationResult = useCallback((result: SimulationResponse) => {
     setSimulationRows(result.table);
     setSimulationVerdict(result.verdict);
-    // Bug 1 — la simulación se ejecutó: habilita la visibilidad de Noticias 2
     setSimulationHasRun(true);
     // Req 2: captura el rango de fechas para pasarlo a NewsSourcesAnalyzer
     if (result.inputs_echo?.rangoEstrategia) {
@@ -181,6 +185,10 @@ export function MainDashboard() {
     (params: SpreadModalParams, kind: string) => setSpreadRequest({ params, kind }),
     []
   );
+
+  const handleStrategyDateRangeChange = useCallback((range: NewsDateRange) => {
+    setNewsDateRange(range);
+  }, []);
 
   const handleOptionStrategyCalculated = useCallback((analysis: OptionStrategyAnalysis) => {
     setOptionStrategyAnalysis(analysis);
@@ -243,6 +251,8 @@ export function MainDashboard() {
   const handleSimulationExecute = useCallback((activeCoreIds: CoreId[]) => {
     const institutionalActive = activeCoreIds.includes("A_INSTITUCIONAL");
     setInstitutionalCoreWasActive(institutionalActive);
+    // Registra si A_NOTICIAS y Noticias2 estaban activos al ejecutar la simulación
+    setNoticiasCoreWasActive(activeCoreIds.includes("A_NOTICIAS"));
 
     if (activeCoreIds.includes("A_FUNDAMENTAL")) {
       setFundamentalAutoRunKey((key) => key + 1);
@@ -512,13 +522,23 @@ export function MainDashboard() {
             </div>
 
             {/* Chain tab */}
-            <div style={{
+            <div ref={chainRef} style={{
               display: activeChartTab === "chain" ? "flex" : "none",
               flexDirection: "column",
               height: 420,
               padding: "var(--space-md)",
+              transition: "box-shadow 0.3s ease",
+              borderRadius: "var(--radius-sm)",
+              boxShadow: chainFocusKey > 0 && activeChartTab === "chain"
+                ? "0 0 0 2px var(--color-accent), 0 0 20px rgba(0,168,126,0.25)"
+                : undefined,
             }}>
-              <OptionChainTableConnected onSelectStrike={handleStrikeSelect} activeStrategy={activeSimulationStrategy} />
+              <OptionChainTableConnected
+                onSelectStrike={handleStrikeSelect}
+                activeStrategy={activeSimulationStrategy}
+                highlighted={chainFocusKey > 0}
+                focusKey={chainFocusKey}
+              />
             </div>
           </div>
 
@@ -546,7 +566,14 @@ export function MainDashboard() {
         onTermResult={handleTermResult}
         onClear={handleClearTable}
         onComplexResult={handleComplexResult}
+        onManualModeChange={() => setChainFocusKey(0)}
+        onChainFocus={() => {
+          setActiveChartTab("chain");
+          setChainFocusKey((k) => k + 1);
+          setTimeout(() => chainRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 100);
+        }}
         onNoticias2Change={(v) => setNoticias2Active(v)}
+        onStrategyDateRangeChange={handleStrategyDateRangeChange}
       />
 
       {/* ── Strategy error (from buildComplexStrategyRows validation) */}
@@ -774,10 +801,12 @@ export function MainDashboard() {
         autoRunKey={fundamentalAutoRunKey}
         onAnalysisComplete={setFundamentalAnalysis}
       />
-      {/* NewsSection del equipo de Noticias (otro equipo — coexiste con Noticias 2) */}
-      <NewsSection symbol={selectedSymbol} />
+      {/* NewsSection: solo aparece cuando el core A_NOTICIAS estaba activo en la simulación */}
+      {noticiasCoreWasActive && simulationHasRun && (
+        <NewsSection symbol={selectedSymbol} dateRange={newsDateRange} />
+      )}
 
-      {/* Bug 1: el módulo Noticias 2 NO existe en el DOM hasta que la simulación se haya ejecutado */}
+      {/* Noticias 2: solo aparece cuando la simulación corrió CON el chip Noticias 2 activo */}
       {noticias2Active && simulationHasRun && (
         <NewsSourcesAnalyzer
           selectedSymbol={selectedSymbol}
@@ -788,7 +817,7 @@ export function MainDashboard() {
             const LABELS: Record<string, string> = { BUY: 'COMPRAR', SELL: 'VENDER', HOLD: 'ESPERAR' };
             const topPoint = r.keyPoints?.[0] ?? r.reasoning?.slice(0, 120) ?? 'análisis de noticias recientes';
             const prefill = `Las noticias recientes sugieren [${LABELS[r.verdict] ?? r.verdict}] ${r.company} ` +
-              `(score ${r.score.toFixed(2)}, confianza ${(r.confidence * 100).toFixed(0)}%) ` +
+              `(score ${(r.score ?? 0).toFixed(2)}, confianza ${((r.confidence ?? 0) * 100).toFixed(0)}%) ` +
               `debido a: "${topPoint}". ¿Qué indicadores técnicos actuales respaldan o contradicen esta decisión?`;
             setNoticias2ChatContext(prefill);
           }}

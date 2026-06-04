@@ -46,6 +46,10 @@ export function isComplexLegStrategy(strategy: string): boolean {
   return strategy in COMPLEX_LEG_PATTERNS;
 }
 
+export function isVariantStrategy(strategy: string): boolean {
+  return strategy === "BUTTERFLY_SPREAD" || strategy === "CONDOR";
+}
+
 function patternFor(strategy: string): StrategyLeg[] {
   const pattern = COMPLEX_LEG_PATTERNS[strategy] ?? [];
   return pattern.map((p) => ({ ...p, strike: 0, premium: 0 }));
@@ -54,9 +58,10 @@ function patternFor(strategy: string): StrategyLeg[] {
 interface StrategyLegsState {
   strategy: string;
   legs: StrategyLeg[];
+  expiracion: string;
 }
 
-let state: StrategyLegsState = { strategy: "", legs: [] };
+let state: StrategyLegsState = { strategy: "", legs: [], expiracion: "" };
 
 const listeners = new Set<() => void>();
 function emit() {
@@ -74,7 +79,7 @@ function getSnapshot(): StrategyLegsState {
 // FIC: Apunta el store a una estrategia; reinicia los slots a ese patrón (strikes vacíos). (ES)
 export function setLegsStrategy(strategy: string): void {
   if (state.strategy === strategy) return;
-  state = { strategy, legs: patternFor(strategy) };
+  state = { strategy, legs: patternFor(strategy), expiracion: "" };
   emit();
 }
 
@@ -89,8 +94,21 @@ export function assignLeg(index: number, strike: number, premium: number): void 
   emit();
 }
 
+export function setStrategyVariant(variant: "call" | "put"): void {
+  state = {
+    ...state,
+    legs: state.legs.map((l) => ({ ...l, tipo: variant, strike: 0, premium: 0 })),
+  };
+  emit();
+}
+
+export function setChainExpiration(expiration: string): void {
+  state = { ...state, expiracion: expiration };
+  emit();
+}
+
 export function clearLegs(): void {
-  state = { strategy: state.strategy, legs: patternFor(state.strategy) };
+  state = { strategy: state.strategy, legs: patternFor(state.strategy), expiracion: "" };
   emit();
 }
 
@@ -100,5 +118,5 @@ export function getLegsSnapshot(): StrategyLegsState {
 
 export function useStrategyLegsStore() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  return { ...snapshot, setLegsStrategy, assignLeg, clearLegs };
+  return { ...snapshot, setLegsStrategy, assignLeg, clearLegs, setChainExpiration, setStrategyVariant };
 }

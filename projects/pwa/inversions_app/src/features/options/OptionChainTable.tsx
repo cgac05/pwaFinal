@@ -1,7 +1,7 @@
 // FIC: Option chain table — 3-column layout (calls | strike | puts), auto-updates on ticker change. (EN)
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSignalStore } from "../../store/signals";
-import { useStrategyLegsStore, isComplexLegStrategy } from "../../store/strategyLegs";
+import { useStrategyLegsStore, isComplexLegStrategy, isVariantStrategy } from "../../store/strategyLegs";
 import { SkeletonCard } from "../../components/ui/SkeletonCard";
 import {
   fetchOptionChain,
@@ -30,6 +30,10 @@ export interface OptionChainTableProps {
   // FIC: Estrategia activa — si es compleja (Iron Condor…), clic derecho en una fila asigna su strike
   // FIC: a una pata. Si no, la cadena se comporta igual que siempre. (ES)
   activeStrategy?: string;
+  // FIC: Manual leg-picking mode — highlight the chain and auto-scroll. (EN)
+  // FIC: Modo manual de selección de patas — resalta la cadena y auto-scroll. (ES)
+  highlighted?: boolean;
+  focusKey?: number;
 }
 
 // ─── Cell helpers ─────────────────────────────────────────────────────────────
@@ -178,7 +182,8 @@ function PutCells({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function OptionChainTable({ symbol, onSelectStrike, activeStrategy }: OptionChainTableProps) {
+export function OptionChainTable({ symbol, onSelectStrike, activeStrategy, highlighted, focusKey }: OptionChainTableProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [expirations, setExpirations] = useState<string[]>([]);
   const [selectedExpiration, setSelectedExpiration] = useState<string>("");
   const [chain, setChain] = useState<OptionChainResponse | null>(null);
@@ -186,9 +191,17 @@ export function OptionChainTable({ symbol, onSelectStrike, activeStrategy }: Opt
   const [loadingChain, setLoadingChain] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // FIC: Auto-scroll into view when focusKey changes (manual leg-picking mode). (EN)
+  // FIC: Auto-scroll a la vista cuando cambia focusKey (modo manual de selección de patas). (ES)
+  useEffect(() => {
+    if (highlighted && focusKey && focusKey > 0 && containerRef.current) {
+      containerRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [focusKey, highlighted]);
+
   // FIC: Leg-picker (Punto 1) — active only for complex multi-leg strategies. (EN)
   // FIC: Selector de patas (Punto 1) — activo solo para estrategias complejas multi-pata. (ES)
-  const { strategy: legStrategy, legs: pendingLegs, setLegsStrategy, assignLeg, clearLegs } = useStrategyLegsStore();
+  const { strategy: legStrategy, legs: pendingLegs, setLegsStrategy, assignLeg, clearLegs, setChainExpiration, setStrategyVariant } = useStrategyLegsStore();
   const legPickerActive = !!activeStrategy && isComplexLegStrategy(activeStrategy);
   const [legMenu, setLegMenu] = useState<{ x: number; y: number; row: OptionChainRow } | null>(null);
 
@@ -196,6 +209,14 @@ export function OptionChainTable({ symbol, onSelectStrike, activeStrategy }: Opt
   useEffect(() => {
     if (legPickerActive && legStrategy !== activeStrategy) setLegsStrategy(activeStrategy!);
   }, [legPickerActive, activeStrategy, legStrategy, setLegsStrategy]);
+
+  // FIC: Sync the selected expiration to the legs store when in leg-picker mode. (EN)
+  // FIC: Sincroniza la expiración seleccionada al store de patas en modo selector. (ES)
+  useEffect(() => {
+    if (legPickerActive && selectedExpiration) {
+      setChainExpiration(selectedExpiration);
+    }
+  }, [legPickerActive, selectedExpiration, setChainExpiration]);
 
   const handleRowContextMenu = useCallback(
     (e: React.MouseEvent, row: OptionChainRow) => {
@@ -421,11 +442,31 @@ export function OptionChainTable({ symbol, onSelectStrike, activeStrategy }: Opt
   // ─── Table ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={stickyContainer}>
+    <div ref={containerRef} style={{
+      ...stickyContainer,
+      ...(highlighted ? {
+        borderRadius: "var(--radius-sm)",
+        boxShadow: "0 0 0 2px var(--color-accent), 0 0 20px rgba(0,168,126,0.25)",
+        padding: "var(--space-xs)",
+        transition: "box-shadow 0.3s ease",
+      } : {}),
+    }}>
       {/* FIC: Leg-picker hint — visible only with a complex strategy active. (EN) */}
       {legPickerActive && (
         <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-xs)" }}>
-          Clic derecho en una fila para asignar su strike a una pata de <strong style={{ color: "var(--color-text)" }}>{activeStrategy?.replace(/_/g, " ")}</strong>
+          <span>
+            Clic derecho en una fila para asignar su strike a una pata de <strong style={{ color: "var(--color-text)" }}>{activeStrategy?.replace(/_/g, " ")}</strong>
+          </span>
+          {isVariantStrategy(activeStrategy ?? "") && pendingLegs.length > 0 && (
+            <span style={{ marginLeft: 8 }}>
+              <button
+                onClick={() => setStrategyVariant(pendingLegs[0]?.tipo === "call" ? "put" : "call")}
+                style={{ fontSize: "0.6rem", padding: "1px 6px", background: "transparent", border: "1px solid var(--color-border)", borderRadius: "var(--radius-xs)", color: "var(--color-text-muted)", cursor: "pointer" }}
+              >
+                Cambiar a {pendingLegs[0]?.tipo === "call" ? "Puts" : "Calls"}
+              </button>
+            </span>
+          )}
           {pendingLegs.some((l) => l.strike > 0) && (
             <button
               onClick={() => clearLegs()}
@@ -606,11 +647,15 @@ export function OptionChainTable({ symbol, onSelectStrike, activeStrategy }: Opt
 export function OptionChainTableConnected({
   onSelectStrike,
   activeStrategy,
+  highlighted,
+  focusKey,
 }: {
   onSelectStrike?: OptionChainTableProps["onSelectStrike"];
   activeStrategy?: string;
+  highlighted?: boolean;
+  focusKey?: number;
 }) {
   const { selectedInstrument } = useSignalStore();
   const symbol = selectedInstrument?.symbol ?? "";
-  return <OptionChainTable symbol={symbol} onSelectStrike={onSelectStrike} activeStrategy={activeStrategy} />;
+  return <OptionChainTable symbol={symbol} onSelectStrike={onSelectStrike} activeStrategy={activeStrategy} highlighted={highlighted} focusKey={focusKey} />;
 }

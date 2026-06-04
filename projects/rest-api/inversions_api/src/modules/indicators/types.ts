@@ -145,7 +145,20 @@ export type MetricKey =
   // FIC: A_NOTICIAS engine metrics (TEAM-06).
   | "CONFIANZA"
   | "CREDIBILIDAD"
-  | "PROVEEDOR";
+  | "PROVEEDOR"
+  | "CONFIANZA"
+  | "CREDIBILIDAD"
+  | "PROVEEDOR"
+  // FIC: A_NOTICIAS extended metrics (TEAM-06).
+  | "TICKER"
+  | "TITULAR"
+  | "RESUMEN_NOTICIA"
+  | "TEXTO_ANALIZADO_IA"
+  | "VEREDICTO"
+  | "FECHA_NOTICIA"
+  | "FUENTE_URL"
+  | "PESO_CALCULADO"
+  | "CALCULO_PESO";
 
 // FIC: Observacion estructurada que reemplaza el texto libre de la confluencia v1.
 // FIC: Replaces the free-form metadata bag with a typed observation (FR-020).

@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Noticias 2 — Funcionamiento Completo · InversionsPWA</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 13px; line-height: 1.65;
+    color: #1a1a2e; background: #fff;
+    padding: 48px 56px; max-width: 960px; margin: 0 auto;
+  }
+
+  /* ── Header ── */
+  .header {
+    border-bottom: 3px solid #4f46e5;
+    padding-bottom: 20px; margin-bottom: 36px;
+    display: flex; align-items: flex-start; justify-content: space-between;
+  }
+  .header h1 { font-size: 24px; font-weight: 800; color: #4f46e5; margin-bottom: 4px; }
+  .header p  { font-size: 12px; color: #6b7280; }
+  .badge-header {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #ede9fe; color: #4f46e5;
+    border: 1px solid #c4b5fd; border-radius: 8px;
+    padding: 6px 14px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
+  }
+
+  /* ── Sections ── */
+  h2 {
+    font-size: 15px; font-weight: 700; color: #1e1b4b;
+    margin: 32px 0 14px; padding-bottom: 7px;
+    border-bottom: 1.5px solid #e5e7eb;
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2 .num {
+    background: #4f46e5; color: #fff; border-radius: 50%;
+    width: 24px; height: 24px; display: inline-flex;
+    align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; flex-shrink: 0;
+  }
+  h3 { font-size: 13px; font-weight: 700; color: #374151; margin: 16px 0 8px; }
+  p  { margin-bottom: 10px; }
+
+  /* ── Flujo de pasos ── */
+  .flow {
+    background: #f8f7ff; border: 1px solid #c4b5fd;
+    border-radius: 10px; padding: 20px 24px;
+    margin: 12px 0 20px; font-family: 'Courier New', monospace;
+    font-size: 12px; line-height: 2; color: #1e1b4b;
+  }
+  .flow .arrow { color: #4f46e5; font-weight: 800; }
+  .flow .note  { color: #7c3aed; font-style: italic; }
+
+  /* ── Pasos visuales ── */
+  .steps { display: flex; flex-direction: column; gap: 12px; margin: 12px 0 20px; }
+  .step {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 12px 16px; border-radius: 10px;
+    background: #f9f8ff; border: 1px solid #e5e7eb;
+  }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #4f46e5; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800; flex-shrink: 0;
+  }
+  .step-body { flex: 1; }
+  .step-body strong { display: block; font-size: 13px; margin-bottom: 3px; color: #1e1b4b; }
+  .step-body span   { font-size: 12px; color: #6b7280; }
+
+  /* ── Tablas ── */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 12px; }
+  thead th {
+    background: #4f46e5; color: #fff; padding: 8px 12px;
+    text-align: left; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  tbody tr:nth-child(even) { background: #f9f8ff; }
+  tbody td { padding: 7px 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  .ok   { color: #059669; font-weight: 700; }
+  .warn { color: #d97706; font-weight: 700; }
+  .no   { color: #dc2626; font-weight: 700; }
+
+  /* ── Callouts ── */
+  .callout {
+    border-left: 4px solid #4f46e5; background: #f8f7ff;
+    border-radius: 0 8px 8px 0; padding: 12px 16px;
+    margin: 12px 0 20px; font-size: 12.5px; color: #1e1b4b;
+  }
+  .callout.success { border-color: #059669; background: #ecfdf5; color: #064e3b; }
+  .callout.warning { border-color: #d97706; background: #fffbeb; color: #78350f; }
+  .callout.danger  { border-color: #dc2626; background: #fef2f2; color: #991b1b; }
+
+  /* ── Badges de veredicto ── */
+  .verdicts { display: flex; gap: 14px; margin: 12px 0 20px; }
+  .vbox {
+    flex: 1; border-radius: 10px; padding: 14px; text-align: center;
+    border: 1.5px solid;
+  }
+  .vbox.buy  { background: #ecfdf5; border-color: #6ee7b7; color: #065f46; }
+  .vbox.sell { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
+  .vbox.hold { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+  .vbox .vlab  { font-size: 20px; font-weight: 900; letter-spacing: 0.06em; }
+  .vbox .vcond { font-size: 11px; margin-top: 4px; }
+
+  /* ── UI Mockup ── */
+  .ui-mockup {
+    background: #0f0f1a; border: 1px solid #333; border-radius: 12px;
+    padding: 16px; margin: 12px 0 20px; font-family: 'Courier New', monospace;
+    font-size: 11px; color: #e2e8f0; line-height: 1.8;
+  }
+  .ui-mockup .label { color: #7c3aed; font-weight: 700; }
+  .ui-mockup .value { color: #34d399; }
+  .ui-mockup .muted { color: #64748b; }
+  .ui-mockup .buy   { color: #34d399; font-weight: 700; }
+  .ui-mockup .sell  { color: #f87171; font-weight: 700; }
+  .ui-mockup .hold  { color: #fbbf24; font-weight: 700; }
+  .ui-mockup .accent{ color: #818cf8; }
+
+  code {
+    background: #ede9fe; color: #4f46e5;
+    border-radius: 3px; padding: 1px 5px; font-size: 11.5px;
+    font-family: 'Courier New', monospace;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    margin-top: 48px; padding-top: 16px;
+    border-top: 1px solid #e5e7eb;
+    font-size: 11px; color: #9ca3af;
+    display: flex; justify-content: space-between;
+  }
+
+  @media print {
+    body { padding: 24px 32px; }
+    h2 { page-break-after: avoid; }
+    table, .steps, .flow { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="header">
+  <div>
+    <h1>Análisis de Noticias 2</h1>
+    <p>InversionsPWA-NOSQL · Módulo TEAM-02 (003-core-indicadores)</p>
+    <p style="margin-top:4px;color:#9ca3af;">Funcionamiento completo · Junio 2026</p>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+    <span class="badge-header">📰 Noticias 2</span>
+    <span class="badge-header" style="background:#ecfdf5;color:#065f46;border-color:#6ee7b7;">✅ Producción</span>
+  </div>
+</div>
+
+<!-- ── 1. Qué es ── -->
+<h2><span class="num">1</span> ¿Qué es Noticias 2?</h2>
+<p>
+  <strong>Noticias 2</strong> es el módulo de análisis de sentimiento de noticias financieras del equipo
+  <strong>003-team-02 (core indicadores)</strong>. Analiza titulares reales obtenidos de
+  <strong>Yahoo Finance RSS</strong> (y opcionalmente Finnhub, NewsAPI, Polygon) para el ticker activo en
+  la Watchlist, genera un veredicto de inversión <strong>(COMPRAR / VENDER / ESPERAR)</strong> y lo integra
+  en la Tabla de Confluencias del dashboard.
+</p>
+<div class="callout success">
+  <strong>Diferencia clave vs "Noticias" (otro equipo):</strong> Noticias 2 trabaja con datos estructurados
+  de APIs financieras reales, filtra por fuentes seleccionadas por el usuario, genera razonamiento
+  basado en titulares textuales específicos y se integra con el Chat IA mediante prefill del input.
+</div>
+
+<!-- ── 2. Cómo activarlo ── -->
+<h2><span class="num">2</span> Cómo activar el módulo (flujo del usuario)</h2>
+<div class="steps">
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <strong>Selecciona un Ticker en la Watchlist</strong>
+      <span>Haz clic en SPY, AAPL, NVDA, etc. en el panel lateral izquierdo. El módulo reaccionará a este ticker automáticamente.</span>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <strong>Activa el chip "Noticias 2" en Cores de Análisis</strong>
+      <span>En el Panel de Control · Simulación, dentro de "CORES DE ANÁLISIS", encontrarás el chip <strong>Noticias 2</strong> junto a Indicadores, Fundamental, Técnico, Institucional, Noticias, IA. Actívalo.</span>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <strong>Presiona "Ejecutar Simulación"</strong>
+      <span>El módulo <strong>no se renderiza en el DOM</strong> hasta que la simulación se ejecute. Este es el gate de visibilidad (Bug 1 corregido). Solo entonces aparece el card de Noticias 2 en el body del dashboard.</span>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <strong>Selecciona las fuentes activas (máx. 5)</strong>
+      <span>En el panel izquierdo del card verás 8 fuentes predeterminadas. Selecciona hasta 5. Por defecto vienen activas: Nasdaq, Investing, CNBC. Usa el botón <strong>"Limpiar"</strong> para deseleccionar todas.</span>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-body">
+      <strong>Presiona "🔍 Analizar"</strong>
+      <span>Primera vez: botón dice <strong>"Analizar"</strong>. El sistema consulta Yahoo Finance RSS (y APIs adicionales si hay keys). Después del primer análisis, el botón cambia a <strong>"🔄 Re-analizar"</strong>.</span>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">6</div>
+    <div class="step-body">
+      <strong>Lee los resultados (Split Card)</strong>
+      <span>La columna izquierda muestra la <strong>Evidencia Cruda</strong> (titulares reales, fuente, snippet, fecha, enlace). La columna derecha muestra el <strong>Razonamiento IA</strong> con causalidad explícita.</span>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">7</div>
+    <div class="step-body">
+      <strong>Opcional: Enviar al Chat IA</strong>
+      <span>El botón <strong>"💬 Enviar análisis al Chat IA"</strong> precarga el input del chat con un prompt contextual (no lo envía automáticamente). El usuario presiona Enter para continuar el análisis con el copilot.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── 3. Reset al cambiar Ticker ── -->
+<h2><span class="num">3</span> Comportamiento al cambiar de Ticker</h2>
+<div class="callout warning">
+  <strong>Limpieza automática al cambiar ticker:</strong> Al seleccionar un ticker diferente en la Watchlist
+  (ej. pasar de AAPL a MSFT), el sistema ejecuta un reset total:
+  <ul style="margin-top:8px;padding-left:18px;">
+    <li>El módulo de Noticias 2 se <strong>oculta del DOM</strong></li>
+    <li>El flag <code>simulationHasRun</code> vuelve a <code>false</code></li>
+    <li>Se borra toda la Evidencia Cruda y el Razonamiento IA de memoria</li>
+    <li>El usuario <strong>debe ejecutar la simulación nuevamente</strong> para el nuevo ticker</li>
+  </ul>
+  Esto previene que datos de Apple aparezcan cuando se analiza Microsoft.
+</div>
+
+<!-- ── 4. Fuentes ── -->
+<h2><span class="num">4</span> Fuentes predeterminadas y proveedores reales</h2>
+<table>
+  <thead>
+    <tr><th>Fuente (UI)</th><th>URL de búsqueda</th><th>Proveedor backend</th><th>Requiere API key</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>📈 Nasdaq</td><td>nasdaq.com/search?q={ticker}+stock+news</td><td>yahooFinance</td><td><span class="ok">No (libre)</span></td></tr>
+    <tr><td>💹 Investing</td><td>investing.com/search/?q={ticker}</td><td>finnhub / newsapi</td><td><span class="warn">Opcional</span></td></tr>
+    <tr><td>📺 CNBC</td><td>cnbc.com/search/?query={ticker}+stock+news</td><td>newsapi</td><td><span class="warn">Opcional</span></td></tr>
+    <tr><td>🏦 Bloomberg</td><td>bloomberg.com/search?query={ticker}+stock</td><td>newsapi / polygon</td><td><span class="warn">Opcional</span></td></tr>
+    <tr><td>📰 Reuters</td><td>reuters.com/search/news?blob={ticker}+stock</td><td>newsapi</td><td><span class="warn">Opcional</span></td></tr>
+    <tr><td>📊 MarketWatch</td><td>marketwatch.com/search?q={ticker}</td><td>newsapi</td><td><span class="warn">Opcional</span></td></tr>
+    <tr><td>🔷 Yahoo Finance</td><td>finance.yahoo.com/quote/{ticker}/news/</td><td>yahooFinance</td><td><span class="ok">No (libre)</span></td></tr>
+    <tr><td>🔍 Seeking Alpha</td><td>seekingalpha.com/search?q={ticker}+stock</td><td>newsapi</td><td><span class="warn">Opcional</span></td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>Fallback automático:</strong> Si el usuario selecciona Bloomberg (requiere NEWSAPI_API_KEY) y esa key
+  no está configurada, el sistema usa Yahoo Finance RSS como fuente disponible y muestra un aviso naranja
+  en el card explicando el fallback. Nunca devuelve 0 artículos sin explicación.
+</div>
+
+<!-- ── 5. Veredictos ── -->
+<h2><span class="num">5</span> Cómo se calcula el veredicto</h2>
+<div class="verdicts">
+  <div class="vbox buy">
+    <div class="vlab">▲ COMPRAR</div>
+    <div class="vcond">Score promedio &gt; +0.25<br>ó mayoría de artículos alcistas</div>
+  </div>
+  <div class="vbox sell">
+    <div class="vlab">▼ VENDER</div>
+    <div class="vcond">Score promedio &lt; −0.25<br>ó mayoría de artículos bajistas</div>
+  </div>
+  <div class="vbox hold">
+    <div class="vlab">— ESPERAR</div>
+    <div class="vcond">Score entre −0.25 y +0.25<br>o señales divididas</div>
+  </div>
+</div>
+
+<table>
+  <thead><tr><th>Métrica</th><th>Qué significa</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Score</strong></td><td>Promedio de sentimiento de todos los artículos. Rango −1.0 (muy bajista) a +1.0 (muy alcista). Se muestra como barra visual centrada en neutro.</td></tr>
+    <tr><td><strong>Confianza</strong></td><td>Porcentaje de acuerdo entre artículos. Alta confianza (&gt;70%) = múltiples fuentes concordantes en la misma dirección.</td></tr>
+    <tr><td><strong>Artículos</strong></td><td>Número de artículos reales analizados de las fuentes activas. Mínimo 1 para emitir veredicto.</td></tr>
+  </tbody>
+</table>
+
+<!-- ── 6. Split Card ── -->
+<h2><span class="num">6</span> Estructura del card de resultados (Split Card)</h2>
+
+<div class="ui-mockup">
+<span class="accent">┌─────────────────────────────────────────────────────────────────────────┐</span><br>
+<span class="accent">│</span> <span class="label">NOTICIAS 2</span> · Análisis de sentimiento en tiempo real          <span class="buy">● NVDA</span> <span class="accent">│</span><br>
+<span class="accent">│</span> Watchlist: SPY  QQQ  AAPL  MSFT  GOOGL  AMZN  META  TSLA  AMD         <span class="accent">│</span><br>
+<span class="accent">├─────────────────────────────────────────────────────────────────────────┤</span><br>
+<span class="accent">│</span>                                                                         <span class="accent">│</span><br>
+<span class="accent">│</span>  <span class="label">NVDA</span>   📅 2026-06-03 → 2026-07-03               <span class="buy">▲ COMPRAR</span>              <span class="accent">│</span><br>
+<span class="accent">│</span>  Score: <span class="value">+0.42</span>    Confianza: <span class="value">68%</span>    Artículos: <span class="value">5</span>                      <span class="accent">│</span><br>
+<span class="accent">│</span>  ──────────────────────────────────────────                             <span class="accent">│</span><br>
+<span class="accent">│</span>  Bajista ←──────────────●──────── Neutral ────────────────→ Alcista    <span class="accent">│</span><br>
+<span class="accent">│</span>                                                                         <span class="accent">│</span><br>
+<span class="accent">├──────────────────────────┬──────────────────────────────────────────────┤</span><br>
+<span class="accent">│</span> <span class="label">📰 EVIDENCIA CRUDA</span>        <span class="accent">│</span> <span class="label">🧠 RAZONAMIENTO IA</span>                          <span class="accent">│</span><br>
+<span class="accent">│</span>                           <span class="accent">│</span>                                             <span class="accent">│</span><br>
+<span class="accent">│</span> <span class="value">Aptiv deepens NVIDIA AI</span>   <span class="accent">│</span> <span class="muted">El score +0.42 (alcista) está</span>              <span class="accent">│</span><br>
+<span class="accent">│</span> <span class="muted">partnership → Jetson</span>      <span class="accent">│</span> <span class="muted">justificado porque el titular</span>              <span class="accent">│</span><br>
+<span class="accent">│</span> <span class="muted">yahooFinance · 2 jun</span>      <span class="accent">│</span> <span class="muted">"Aptiv deepens NVIDIA AI                    </span><span class="accent">│</span><br>
+<span class="accent">│</span> <span class="buy">+0.85</span>                      <span class="accent">│</span> <span class="muted">partnership" indica impacto</span>                <span class="accent">│</span><br>
+<span class="accent">│</span> <span class="accent">Leer artículo original ↗</span>  <span class="accent">│</span> <span class="muted">alcista por expansión de</span>                   <span class="accent">│</span><br>
+<span class="accent">│</span>                           <span class="accent">│</span> <span class="muted">ecosistema de IA embebida...</span>               <span class="accent">│</span><br>
+<span class="accent">│</span> <span class="value">Coherent up 11.9% after</span>   <span class="accent">│</span>                                             <span class="accent">│</span><br>
+<span class="accent">│</span> <span class="muted">NVDA AI Optics deal</span>       <span class="accent">│</span>                                             <span class="accent">│</span><br>
+<span class="accent">│</span> <span class="muted">yahooFinance · 2 jun</span>      <span class="accent">│</span>                                             <span class="accent">│</span><br>
+<span class="accent">│</span> <span class="buy">+1.00</span>                      <span class="accent">│</span>                                             <span class="accent">│</span><br>
+<span class="accent">│</span> <span class="accent">Leer artículo original ↗</span>  <span class="accent">│</span>                                             <span class="accent">│</span><br>
+<span class="accent">├──────────────────────────┴──────────────────────────────────────────────┤</span><br>
+<span class="accent">│</span>  <span class="accent">💬 Enviar análisis al Chat IA</span>                                         <span class="accent">│</span><br>
+<span class="accent">└─────────────────────────────────────────────────────────────────────────┘</span>
+</div>
+
+<!-- ── 7. Tabla de confluencias ── -->
+<h2><span class="num">7</span> Integración en la Tabla de Confluencias</h2>
+<p>
+  Cuando el análisis de Noticias 2 produce un veredicto, éste aparece como un badge coloreado
+  en el header de la Tabla de Confluencias de Señales, evaluando si apoya o contradice la estrategia activa.
+</p>
+<table>
+  <thead><tr><th>Veredicto Noticias 2</th><th>Estrategia activa</th><th>Badge resultado</th><th>Color</th></tr></thead>
+  <tbody>
+    <tr><td>COMPRAR</td><td>LONG_CALL, BULL_CALL_SPREAD, WHEEL</td><td>▲ Comprar · apoya ✓</td><td><span class="ok">Verde</span></td></tr>
+    <tr><td>VENDER</td><td>LONG_CALL, BULL_CALL_SPREAD</td><td>▼ Vender · contradice ✗</td><td><span class="no">Rojo</span></td></tr>
+    <tr><td>ESPERAR</td><td>IRON_CONDOR, IRON_BUTTERFLY, STRADDLE</td><td>— Esperar · apoya ✓</td><td><span class="ok">Verde</span></td></tr>
+    <tr><td>COMPRAR</td><td>IRON_CONDOR, BUTTERFLY</td><td>▲ Comprar · sesgo ~</td><td><span class="warn">Naranja</span></td></tr>
+    <tr><td>VENDER</td><td>LONG_PUT, BEAR_PUT_SPREAD</td><td>▼ Vender · apoya ✓</td><td><span class="ok">Verde</span></td></tr>
+  </tbody>
+</table>
+
+<!-- ── 8. Chat IA ── -->
+<h2><span class="num">8</span> Integración con el Chat IA (Copilot)</h2>
+<p>
+  El botón <strong>"💬 Enviar análisis al Chat IA"</strong> NO envía el mensaje automáticamente.
+  Al hacer clic, <strong>precarga el input</strong> del chat con el siguiente texto contextual:
+</p>
+<div class="flow">
+  <em>"Las noticias recientes sugieren [COMPRAR] NVDA (score +0.42, confianza 68%) debido a:</em><br>
+  <em>'Aptiv deepens NVIDIA AI partnership — impacto alcista...'.</em><br>
+  <em>¿Qué indicadores técnicos actuales respaldan o contradicen esta decisión?"</em>
+</div>
+<p>El usuario puede editar el texto y presionar <strong>Enter</strong> para enviarlo al Copilot IA.</p>
+
+<!-- ── 9. Arquitectura ── -->
+<h2><span class="num">9</span> Arquitectura técnica</h2>
+
+<div class="flow">
+<span class="arrow">Frontend</span> (click en chip "Noticias 2" + Ejecutar Simulación)<br>
+&nbsp;&nbsp;<span class="arrow">↓</span> simulationHasRun = true → renderiza &lt;NewsSourcesAnalyzer&gt;<br>
+&nbsp;&nbsp;<span class="arrow">↓</span> usuario selecciona fuentes + presiona "Analizar"<br>
+<br>
+<span class="arrow">POST /api/news/analyze-sources</span><br>
+&nbsp;&nbsp;<span class="note">{ company: "NVDA", urls: ["nasdaq.com","cnbc.com","bloomberg.com"] }</span><br>
+<br>
+<span class="arrow">Backend: routes/news/urlAnalysis.ts</span><br>
+&nbsp;&nbsp;<span class="arrow">↓</span> resolveProviders(urls) → { yahooFinance, newsapi }<br>
+&nbsp;&nbsp;<span class="arrow">↓</span> fetchNewsData({ symbol: "NVDA", limit: 15 })<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── Yahoo Finance RSS (siempre activo, libre)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── Finnhub (si FINNHUB_API_KEY en .env)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── NewsAPI (si NEWSAPI_API_KEY en .env)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── Polygon (si POLYGON_API_KEY en .env)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── Alpha Vantage (si ALPHA_VANTAGE_API_KEY en .env)<br>
+&nbsp;&nbsp;<span class="arrow">↓</span> filtro estricto por proveedor activo<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(fallback a Yahoo RSS si filtro da 0 artículos)<br>
+&nbsp;&nbsp;<span class="arrow">↓</span> reasoning = titular real + causalidad explícita<br>
+<br>
+<span class="arrow">Respuesta:</span><br>
+&nbsp;&nbsp;<span class="note">{ verdict, score, confidence, reasoning, keyPoints, articles[], sourcesNote }</span><br>
+<br>
+<span class="arrow">Frontend: NewsSourcesAnalyzer.tsx</span><br>
+&nbsp;&nbsp;<span class="arrow">↓</span> split card: Evidencia Cruda (izq) + Razonamiento IA (der)<br>
+&nbsp;&nbsp;<span class="arrow">↓</span> noticias2Result → badge en Tabla de Confluencias<br>
+&nbsp;&nbsp;<span class="arrow">↓</span> prefillInput → Chat IA al presionar botón
+</div>
+
+<!-- ── 10. Variables de entorno ── -->
+<h2><span class="num">10</span> Variables de entorno para máximo rendimiento</h2>
+<table>
+  <thead><tr><th>Variable</th><th>Fuente que activa</th><th>Sin ella</th></tr></thead>
+  <tbody>
+    <tr><td><code>FINNHUB_API_KEY</code></td><td>Finnhub Company News</td><td>Se omite Finnhub; Yahoo RSS suplanta</td></tr>
+    <tr><td><code>NEWSAPI_API_KEY</code></td><td>NewsAPI (CNBC, Bloomberg, Reuters)</td><td>Se omite NewsAPI; Yahoo RSS suplanta</td></tr>
+    <tr><td><code>POLYGON_API_KEY</code></td><td>Polygon Ticker News</td><td>Se omite Polygon</td></tr>
+    <tr><td><code>ALPHA_VANTAGE_API_KEY</code></td><td>Alpha Vantage News Sentiment</td><td>Se omite Alpha Vantage</td></tr>
+    <tr><td><code>ANTHROPIC_API_KEY</code></td><td>Claude LLM para razonamiento</td><td>Usa analizador léxico determinista</td></tr>
+  </tbody>
+</table>
+<div class="callout warning">
+  <strong>Sin API keys:</strong> El módulo funciona 100% con <strong>Yahoo Finance RSS (gratis)</strong>.
+  Los artículos serán solo de Yahoo Finance sin importar qué fuente seleccione el usuario, y el razonamiento
+  lo genera el analizador léxico (no Claude). Para producción real, se recomienda al menos
+  <code>FINNHUB_API_KEY</code> + <code>ANTHROPIC_API_KEY</code>.
+</div>
+
+<!-- ── 11. Bugs corregidos ── -->
+<h2><span class="num">11</span> Bugs críticos corregidos (FASE 1)</h2>
+<table>
+  <thead><tr><th>#</th><th>Bug</th><th>Solución implementada</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>1</strong></td>
+      <td>El módulo se renderizaba antes de ejecutar la simulación</td>
+      <td>Gate <code>simulationHasRun</code>: el componente no existe en DOM hasta que la simulación completa</td>
+    </tr>
+    <tr>
+      <td><strong>2</strong></td>
+      <td>El análisis se disparaba automáticamente al activar fuentes o al ejecutar la simulación</td>
+      <td>Eliminado todo <code>useEffect</code> que disparaba análisis. Solo el botón "Analizar" ejecuta el fetch</td>
+    </tr>
+    <tr>
+      <td><strong>3</strong></td>
+      <td>El botón siempre decía "Re-analizar" sin importar el estado</td>
+      <td>Estado <code>hasAnalyzed</code>: "🔍 Analizar" la primera vez → "🔄 Re-analizar" después</td>
+    </tr>
+    <tr>
+      <td><strong>4</strong></td>
+      <td>Al cambiar de ticker la data vieja (ej. Apple) seguía visible</td>
+      <td><code>useEffect([selectedSymbol])</code>: oculta módulo + borra toda la data en memoria</td>
+    </tr>
+    <tr>
+      <td><strong>5</strong></td>
+      <td>Bloomberg seleccionado → Yahoo Finance aparecía en Evidencia Cruda sin aviso</td>
+      <td>Filtro estricto + fallback transparente con <code>sourcesNote</code> en el UI</td>
+    </tr>
+    <tr>
+      <td><strong>6</strong></td>
+      <td>Razonamiento IA mostraba "Análisis determinista de N titulares..."</td>
+      <td>Detecta texto determinista y lo descarta; construye reasoning desde titulares reales</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ── Footer ── -->
+<div class="footer">
+  <span>InversionsPWA-NOSQL · Módulo Noticias 2 · TEAM-02 (003-core-indicadores)</span>
+  <span>Junio 2026 · Commit e702f77</span>
+</div>
+
+</body>
+</html>

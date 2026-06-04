@@ -99,14 +99,18 @@ function buildLocalCanonicalNews(ticker: string, items: RelevantNewsItem[], sour
       observacion: {
         objetivo: item.headline,
         senal: item.sentiment ?? "neutral",
-        explicacion: item.summary ?? `Noticia de respaldo para ${symbol}.`,
+        explicacion: `Contexto de la noticia: ${item.summary ?? item.headline ?? `Noticia de respaldo para ${symbol}.`} Lectura para ${symbol}: proveedor=${item.source ?? source}, sentimiento=${item.sentiment ?? "neutral"}.`,
         metricas: {
+          TICKER: symbol,
           SENTIMIENTO: Number(score.toFixed(3)),
           CONFIANZA: Number(confidence.toFixed(3)),
           CREDIBILIDAD: Number(credibility.toFixed(3)),
           PESO_CALCULADO: peso,
           CALCULO_PESO: item.relevanceReason ?? `confianza(${confidence.toFixed(3)}) x credibilidad(${credibility.toFixed(3)}) = ${peso.toFixed(3)}`,
-          PROVEEDOR: item.source ?? source
+          PROVEEDOR: item.source ?? source,
+          FECHA_NOTICIA: item.publishedAt,
+          CONTEXTO_NOTICIA: item.summary ?? item.headline ?? "Sin contexto disponible",
+          FUENTE_URL: item.url ?? "n/a"
         }
       }
     });
@@ -123,7 +127,7 @@ function buildLocalCanonicalNews(ticker: string, items: RelevantNewsItem[], sour
       objetivo: `${symbol} - observacion canonica de noticias`,
       senal: `${tipoSenal}; ${rows.length} noticia(s)`,
       explicacion: "Salida canonica generada en frontend como respaldo para mantener el contrato de A_NOTICIAS.",
-      metricas: { SENTIMIENTO: Number(avg.toFixed(3)), VOLUMEN: rows.length, PROVEEDOR: source }
+      metricas: { TICKER: symbol, SENTIMIENTO: Number(avg.toFixed(3)), VOLUMEN: rows.length, PROVEEDOR: source }
     }
   });
 
@@ -179,10 +183,11 @@ function buildFallbackNews(ticker: string): RelevantNewsResponse {
 export async function getRelevantNews(
   ticker: string,
   limit = 5,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  dateRange?: NewsDateRange
 ): Promise<RelevantNewsResponse> {
   const symbol = ticker.trim().toUpperCase();
-  const cacheKey = `news:relevant:${symbol}:${limit}`;
+  const cacheKey = `news:relevant:${symbol}:${limit}:${dateRange?.from ?? "all"}:${dateRange?.to ?? "all"}`;
   const cached = getCached<RelevantNewsResponse>(cacheKey);
   if (cached) return cached;
 
@@ -191,6 +196,8 @@ export async function getRelevantNews(
   }
 
   const params = new URLSearchParams({ ticker: symbol, limit: String(limit) });
+  if (dateRange?.from) params.set("from", dateRange.from);
+  if (dateRange?.to) params.set("to", dateRange.to);
   const response = await fetch(`/api/news/relevant?${params}`, {
     headers: { ...getAuthHeaders() },
     signal,
@@ -272,6 +279,29 @@ export interface NewsAnalysisAggregate {
   canonical?: NewsCanonicalPayload;
 }
 
+
+export type NewsOptionRecommendation = "CALL" | "PUT" | "HOLD";
+
+export interface NewsRecommendationSummary {
+  symbol: string;
+  recommendation: NewsOptionRecommendation;
+  verdict: NewsVerdict;
+  sentiment: NewsSentiment;
+  confidence: number;
+  score: number;
+  summary: string;
+  reasoning: string;
+  bullishCount: number;
+  bearishCount: number;
+  neutralCount: number;
+  keyDrivers: string[];
+  topBullish: string[];
+  topBearish: string[];
+  topNeutral: string[];
+  riskNote: string;
+  strategyHint: string;
+}
+
 export interface NewsConfluenceResponse {
   symbol: string;
   generatedAt: string;
@@ -284,6 +314,7 @@ export interface NewsConfluenceResponse {
   realDataOnly: true;
   evidence: Array<{ sourceId: string; verdict: NewsVerdict; confidence: number; rationale: string }>;
   canonical?: NewsCanonicalPayload;
+  recommendationSummary?: NewsRecommendationSummary;
   recommendation?: {
     symbol: string;
     verdict: NewsVerdict;

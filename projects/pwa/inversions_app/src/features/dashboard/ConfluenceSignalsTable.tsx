@@ -13,7 +13,6 @@ import type { InstitutionalAnalysisResponse } from "../../services/institutional
 import { OptionGreeksRow } from "./OptionGreeksRow";
 import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailModal";
 import { AiDetailModal } from "../ai/AiDetailModal";
-import type { ModalRowData } from "../institutional/types";
 import { MarkdownContent } from "../../components/ui/MarkdownContent";
 import { ObservationsTab } from "./ObservationsTab";
 import { TecnicoDetailModal } from "./TecnicoDetailModal";
@@ -59,7 +58,27 @@ function buildResumen(
     }
   }
   const obs = row.observacion;
-  const met = Object.entries(obs.metricas ?? {}).map(([k, v]) => `${k}=${v}`).join(", ");
+  const metricasObj = obs.metricas ?? {};
+  if (row.core === "A_NOTICIAS") {
+    const contextoIa = String(
+      metricasObj.CONTEXTO_ANALIZADO_IA
+        ?? metricasObj.RESUMEN_NOTICIA
+        ?? metricasObj.CONTEXTO_NOTICIA
+        ?? metricasObj.TEXTO_ANALIZADO_IA
+        ?? obs.explicacion
+        ?? obs.senal
+        ?? ""
+    ).trim();
+    const veredicto = String(metricasObj.VEREDICTO ?? row.tipoSenal ?? "HOLD");
+    const proveedor = String(metricasObj.PROVEEDOR ?? row.fuente ?? "news-provider");
+    const fecha = String(metricasObj.FECHA_NOTICIA ?? row.fecha ?? "");
+    return [
+      `[Noticias ${row.ticket}] Contexto completo usado para BUY/SELL/HOLD: ${contextoIa}`,
+      `Veredicto=${veredicto}; Tipo señal=${row.tipoSenal}; Tendencia=${row.tendencia}`,
+      `Proveedor=${proveedor}; Fecha=${fecha}; Peso=${row.peso.toFixed(3)}; Score=${row.score.toFixed(3)}`
+    ].filter(Boolean).join(". ");
+  }
+  const met = Object.entries(metricasObj).map(([k, v]) => `${k}=${v}`).join(", ");
   return [obs.objetivo, obs.senal, obs.explicacion, met ? `Métricas: ${met}` : ""].filter(Boolean).join(". ");
 }
 
@@ -191,7 +210,7 @@ export function ConfluenceSignalsTable({
           const v     = noticias2Verdict;
 
           // Calcula si la noticia alinea o contradice la estrategia
-          let alignment: "apoya" | "contradice" | "neutral" = "neutral";
+          let alignment: "apoya" | "contradice" | "neutral" | "sesgo" = "neutral";
           let bg = "#ffa000";
 
           if (BULLISH_STRATS.has(strat)) {
@@ -444,7 +463,7 @@ export function ConfluenceSignalsTable({
       <TecnicoDetailModal
         isOpen={stubCore === "A_TECNICO"}
         onClose={() => { setStubCore(null); setStubRow(null); }}
-        ticker={symbol}
+        ticker={symbol ?? ""}
         signalRow={stubRow ?? undefined}
         activeStrategy={activeStrategy}
       />
@@ -452,7 +471,7 @@ export function ConfluenceSignalsTable({
       <NoticiasDetailModal
         isOpen={stubCore === "A_NOTICIAS"}
         onClose={() => { setStubCore(null); setStubRow(null); }}
-        ticker={symbol}
+        ticker={symbol ?? ""}
         signalRow={stubRow ?? undefined}
         activeStrategy={activeStrategy}
       />
@@ -460,7 +479,7 @@ export function ConfluenceSignalsTable({
       <AiDetailModal
         isOpen={aiModalOpen}
         onClose={() => { setAiModalOpen(false); setStubRow(null); }}
-        ticker={symbol}
+        ticker={symbol ?? ""}
         signalRow={stubRow ?? undefined}
         precalculatedRows={rows}
         onAiRetry={(newAiRow) => {

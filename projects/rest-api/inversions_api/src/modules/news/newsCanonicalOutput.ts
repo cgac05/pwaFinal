@@ -82,6 +82,28 @@ function formula(confidence: number, credibility: number, peso: number): string 
   return `peso=${confidence.toFixed(3)}*${credibility.toFixed(3)}=${peso.toFixed(3)}`;
 }
 
+function compactText(value: string | null | undefined, max = 1400): string {
+  const text = (value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "Sin resumen disponible.";
+  return text.length > max ? `${text.slice(0, max - 1).trim()}…` : text;
+}
+
+function buildAnalyzedNewsSummary(symbol: string, article: AnalyzedNewsSource): string {
+  const title = compactText(article.title, 220);
+  const summary = compactText(article.summary || article.rawText, 900);
+  const rawPreview = compactText(article.rawText, 900);
+  const context = summary && summary !== "Sin resumen disponible." ? summary : rawPreview;
+
+  return [
+    `Titular: ${title}`,
+    `Resumen enviado al analizador: ${context}`,
+    `Lectura para ${symbol}: proveedor=${providerLabel(article.provider)}, veredicto=${article.verdict}, sentimiento=${article.sentiment}.`,
+    `Métricas de lectura: sentimiento=${article.sentimentScore}, confianza=${round3(clamp01(article.confidence))}, credibilidad=${round3(clamp01(article.credibilityScore, sourceCredibilityFallback(article.provider, article.url)))}.`,
+    `Fecha y evidencia: ${article.publishedAt || "sin fecha"}; fuente=${article.url || article.id}.`
+  ].join("\n");
+}
+
+
 function sourceCredibilityFallback(provider: string | null | undefined, url?: string | null): number {
   const clean = `${provider ?? ""} ${url ?? ""}`.toLowerCase();
   let score = 0.48;
@@ -103,6 +125,8 @@ export function buildCanonicalRowFromAnalyzedSource(
   const peso = calculatePeso(confidence, credibility);
   const score = round3(clamp(article.sentimentScore * credibility, -1, 1));
   const provider = providerLabel(article.provider);
+  const resumenNoticia = buildAnalyzedNewsSummary(symbol, article);
+  const textoAnalizadoIa = `${article.title || ""} ${article.rawText || article.summary || ""}`.replace(/\s+/g, " ").trim();
 
   return canonicalize({
     core: "A_NOTICIAS",
@@ -114,16 +138,24 @@ export function buildCanonicalRowFromAnalyzedSource(
       objetivo: article.title || `${symbol} - noticia sin titulo`,
       senal: `${article.verdict} / ${article.sentiment}`,
       explicacion:
-        article.rationale ||
-        article.summary ||
-        `Noticia evaluada por A_NOTICIAS para ${symbol} con score ${score}.`,
+        `Resumen de la noticia usado para BUY/SELL/HOLD:\n${resumenNoticia}\n\nRazonamiento: ${
+          article.rationale ||
+          article.summary ||
+          `Noticia evaluada por A_NOTICIAS para ${symbol} con score ${score}.`
+        }`,
       metricas: {
+        TICKER: symbol,
+        TITULAR: article.title || `${symbol} - noticia sin titulo`,
+        RESUMEN_NOTICIA: resumenNoticia,
+        TEXTO_ANALIZADO_IA: textoAnalizadoIa,
         SENTIMIENTO: article.sentimentScore,
         CONFIANZA: confidence,
         CREDIBILIDAD: credibility,
         PESO_CALCULADO: peso,
         CALCULO_PESO: formula(confidence, credibility, peso),
         PROVEEDOR: provider,
+        FECHA_NOTICIA: article.publishedAt,
+        FUENTE_URL: article.url || article.id,
       },
     },
   });
