@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, Newspaper, Sparkles } from "lucide-react";
-import { getRelevantNews, type NewsCanonicalPayload, type NewsDateRange, type RelevantNewsItem } from "../../services/news/newsApi";
-import { NewsSourcesAnalyzer } from "../news-team06/NewsSourcesAnalyzer";
+import { getRelevantNews, type NewsCanonicalPayload, type NewsDateRange, type RelevantNewsItem } from "../../services/newsTeam06/newsTeam06Api";
+import { getMarketQuotes, type MarketQuote } from "../../services/signals/marketApi";
+import { NewsTeam06SourcesAnalyzer } from "../news-team06";
 
 type Props = {
   symbol: string;
@@ -33,6 +34,40 @@ function formatNewsWindow(dateRange?: NewsDateRange): string {
   const expandedFrom = addDaysIso(dateRange.from, -7) ?? "inicio";
   const expandedTo = addDaysIso(dateRange.to, 7) ?? "hoy";
   return `Ventana noticias: ${expandedFrom} → ${expandedTo} (rango estrategia ±7 días)`;
+}
+
+function trendFromTipo(tipo: NewsCanonicalPayload["aggregate"]["tipoSenal"]): "ALCISTA" | "BAJISTA" | "LATERAL" {
+  if (tipo === "CALL") return "ALCISTA";
+  if (tipo === "PUT") return "BAJISTA";
+  return "LATERAL";
+}
+
+function formatQuote(quote: MarketQuote | null, loading: boolean): string {
+  if (loading) return "Consultando...";
+  if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) return "No disponible";
+  const change = quote.changePercent >= 0 ? `+${quote.changePercent.toFixed(2)}%` : `${quote.changePercent.toFixed(2)}%`;
+  return `$${quote.price.toFixed(2)} USD (${change})`;
+}
+
+function CanonicalMiniTable({ rows }: { rows: Array<[string, string | number]> }) {
+  return (
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem", background: "#050505", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", overflow: "hidden" }}>
+      <thead>
+        <tr style={{ background: "rgba(255,255,255,0.08)", color: "#bcd7ff", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          <th style={{ textAlign: "left", padding: "0.62rem", borderBottom: "1px solid var(--color-border)", width: "38%" }}>Campo</th>
+          <th style={{ textAlign: "left", padding: "0.62rem", borderBottom: "1px solid var(--color-border)" }}>Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(([label, value]) => (
+          <tr key={label}>
+            <td style={{ padding: "0.58rem 0.62rem", borderBottom: "1px solid rgba(255,255,255,0.08)", color: "var(--color-text)", fontWeight: 700 }}>{label}</td>
+            <td style={{ padding: "0.58rem 0.62rem", borderBottom: "1px solid rgba(255,255,255,0.08)", color: "var(--color-text)", fontWeight: 750 }}>{value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
 function NewsCard({ item }: { item: RelevantNewsItem }) {
@@ -114,6 +149,34 @@ export function NewsSection({ symbol, dateRange }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState<string>("demo");
   const [canonical, setCanonical] = useState<NewsCanonicalPayload | null>(null);
+  const [quote, setQuote] = useState<MarketQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const ticker = symbol.trim().toUpperCase();
+    if (!ticker) return () => {
+      active = false;
+    };
+
+    setQuoteLoading(true);
+    setQuote(null);
+    getMarketQuotes([ticker])
+      .then((data) => {
+        if (!active) return;
+        setQuote(data.quotes.find((item) => item.symbol.toUpperCase() === ticker) ?? null);
+      })
+      .catch(() => {
+        if (active) setQuote(null);
+      })
+      .finally(() => {
+        if (active) setQuoteLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [symbol]);
 
   useEffect(() => {
     let active = true;
@@ -179,17 +242,34 @@ export function NewsSection({ symbol, dateRange }: Props) {
       )}
 
       {!loading && !error && canonical && (
-        <div style={{ display: "grid", gap: "0.65rem", padding: "var(--space-md)", border: "1px solid rgba(73, 79, 223, 0.45)", borderRadius: "var(--radius-md)", background: "rgba(73, 79, 223, 0.08)" }}>
+        <div style={{ display: "grid", gap: "0.75rem", padding: "var(--space-md)", border: "1px solid rgba(73, 79, 223, 0.45)", borderRadius: "var(--radius-md)", background: "rgba(73, 79, 223, 0.08)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-sm)", flexWrap: "wrap" }}>
-            <strong style={{ color: "var(--color-text)", fontSize: "var(--font-size-sm)", letterSpacing: "0.04em", textTransform: "uppercase" }}>Salida canónica estándar A_NOTICIAS</strong>
+            <strong style={{ color: "var(--color-text)", fontSize: "var(--font-size-sm)", letterSpacing: "0.04em", textTransform: "uppercase" }}>Señal de confluencia: {canonical.symbol}</strong>
             <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>{canonical.version}</span>
           </div>
-          <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
-            <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>Tipo: <strong style={{ color: "var(--color-text)" }}>{canonical.aggregate.tipoSenal}</strong></span>
-            <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>Score: <strong style={{ color: "var(--color-text)" }}>{canonical.aggregate.score.toFixed(3)}</strong></span>
-            <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>Filas: <strong style={{ color: "var(--color-text)" }}>{canonical.rows.length}</strong></span>
+          <CanonicalMiniTable
+            rows={[
+              ["Core", `${canonical.aggregate.core} / ${canonical.aggregate.subCore ?? "CANONICO"}`],
+              ["Tipo Señal", canonical.aggregate.tipoSenal],
+              ["Tendencia", trendFromTipo(canonical.aggregate.tipoSenal)],
+              ["Score", canonical.aggregate.score.toFixed(3)],
+              ["Peso", canonical.aggregate.peso.toFixed(3)],
+              ["Invertir", "NO"],
+              ["Estado", "ACTIVA"],
+              ["Timeframe", "Noticias"],
+              ["Fecha", canonical.generatedAt.slice(0, 10)],
+              ["Ticker", canonical.symbol],
+              ["Precio ticket", formatQuote(quote, quoteLoading)],
+              ["Filas", canonical.rows.length],
+            ]}
+          />
+          <div style={{ background: "#050505", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.85rem", display: "grid", gap: "0.45rem" }}>
+            <strong style={{ color: "var(--color-text)", textTransform: "uppercase", fontSize: "0.82rem" }}>Observación</strong>
+            <p style={{ margin: 0, color: "var(--color-text)", fontSize: "0.8rem", lineHeight: 1.55 }}><strong>Objetivo:</strong> {canonical.aggregate.observacion.objetivo}</p>
+            <p style={{ margin: 0, color: "var(--color-text)", fontSize: "0.8rem", lineHeight: 1.55 }}><strong>Señal:</strong> {canonical.aggregate.observacion.senal}</p>
+            <p style={{ margin: 0, color: "var(--color-text)", fontSize: "0.8rem", lineHeight: 1.55 }}><strong>Precio ticket:</strong> {formatQuote(quote, quoteLoading)}</p>
+            <p style={{ margin: 0, color: "var(--color-text-muted)", fontSize: "0.8rem", lineHeight: 1.55 }}><strong>Explicación:</strong> {canonical.aggregate.observacion.explicacion}</p>
           </div>
-          <pre style={{ margin: 0, padding: "0.75rem", borderRadius: "var(--radius-sm)", background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)", fontSize: "0.72rem", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: 160, overflowY: "auto" }}>{canonical.output}</pre>
         </div>
       )}
 
@@ -202,7 +282,7 @@ export function NewsSection({ symbol, dateRange }: Props) {
       )}
 
       <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-md)" }}>
-        <NewsSourcesAnalyzer symbol={symbol} dateRange={dateRange} />
+        <NewsTeam06SourcesAnalyzer symbol={symbol} dateRange={dateRange} />
       </div>
     </section>
   );

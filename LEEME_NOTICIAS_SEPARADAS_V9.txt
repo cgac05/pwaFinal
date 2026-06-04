@@ -1,0 +1,6 @@
+Parche V9
+
+- Noticias 1 / A_NOTICIAS queda en features/news-team06 y usa /api/news.
+- Noticias 2 queda con el diseño TNMT original en features/news y usa /api/news2.
+- Se separa el CSS: Noticias 1 usa NewsTeam06SourcesAnalyzer.css, Noticias 2 usa NewsSourcesAnalyzer.css.
+- Antes de aplicar, borra features/news2 y services/news2 si quedaron de parches anteriores.

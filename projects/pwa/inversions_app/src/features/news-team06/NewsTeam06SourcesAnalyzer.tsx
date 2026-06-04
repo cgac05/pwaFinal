@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, BarChart3, CheckCircle2, KeyRound, Newspaper, Radio, RefreshCw, ShieldCheck } from "lucide-react";
-import { analyzeNewsSources, getNewsConfluence, type NewsAnalysisAggregate, type NewsConfluenceResponse, type NewsDateRange, type NewsProviderStatus, type NewsSourceInput, type AnalyzedNewsSource } from "../../services/news/newsApi";
+import { analyzeNewsSources, getNewsConfluence, type NewsAnalysisAggregate, type NewsConfluenceResponse, type NewsDateRange, type NewsProviderStatus, type NewsSourceInput, type AnalyzedNewsSource } from "../../services/newsTeam06/newsTeam06Api";
 import { SourceInput } from "./SourceInput";
 import { SourceList } from "./SourceList";
 import { AnalysisResult } from "./AnalysisResult";
 import { NewsDetailModal } from "./NewsDetailModal";
-import "./NewsSourcesAnalyzer.css";
+import "../styles/NewsTeam06SourcesAnalyzer.css";
 
-interface NewsSourcesAnalyzerProps {
+interface NewsTeam06SourcesAnalyzerProps {
   symbol?: string;
   dateRange?: NewsDateRange;
   onArticleSelect?: (article: AnalyzedNewsSource) => void;
@@ -37,8 +37,8 @@ function ProviderPill({ provider }: { provider: NewsProviderStatus }) {
   const Icon = provider.enabled ? (provider.ok ? CheckCircle2 : AlertTriangle) : KeyRound;
 
   return (
-    <div className={`tnmt-provider-pill ${stateClass}`} title={provider.message}>
-      <div className="tnmt-provider-pill__top">
+    <div className={`team06-provider-pill ${stateClass}`} title={provider.message}>
+      <div className="team06-provider-pill__top">
         <Icon size={15} />
         <span>{provider.label}</span>
       </div>
@@ -55,7 +55,7 @@ function ProviderStatusSummary({ providers }: { providers: NewsProviderStatus[] 
   const totalRelevantNews = providers.reduce((sum, provider) => sum + (provider.relevantCount ?? provider.count ?? 0), 0);
 
   return (
-    <div className="tnmt-provider-summary">
+    <div className="team06-provider-summary">
       <span>APIs configuradas: <strong>{enabled}/{providers.length}</strong></span>
       <span>APIs respondiendo: <strong>{ok}/{providers.length}</strong></span>
       <span>Noticias recibidas (crudas): <strong>{totalRawNews}</strong></span>
@@ -64,7 +64,7 @@ function ProviderStatusSummary({ providers }: { providers: NewsProviderStatus[] 
   );
 }
 
-export function NewsSourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect }: NewsSourcesAnalyzerProps) {
+export function NewsTeam06SourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect }: NewsTeam06SourcesAnalyzerProps) {
   const normalizedSymbol = symbol.trim().toUpperCase() || "SPY";
   const [activeSymbol, setActiveSymbol] = useState(normalizedSymbol);
   const [sources, setSources] = useState<NewsSourceInput[]>([]);
@@ -128,10 +128,10 @@ export function NewsSourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect
   }, [activeSymbol, dateRange?.from, dateRange?.to]);
 
   return (
-    <section className="tnmt-news-panel" id="noticias-sentimiento">
-      <div className="tnmt-news-hero">
-        <div className="tnmt-news-hero__copy">
-          <div className="tnmt-eyebrow"><Newspaper size={16} /> TEAM-06 · Noticias reales y sentimiento</div>
+    <section className="team06-news-panel" id="noticias-sentimiento">
+      <div className="team06-news-hero">
+        <div className="team06-news-hero__copy">
+          <div className="team06-eyebrow"><Newspaper size={16} /> TEAM-06 · Noticias reales y sentimiento</div>
           <h2>Confluencia de noticias con fuentes externas reales</h2>
           <p>
             El panel muestra de forma visible qué proveedor entregó cada noticia. Consulta Yahoo Finance RSS y, si configuras llaves,
@@ -140,13 +140,13 @@ export function NewsSourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect
           <p style={{ marginTop: "0.35rem", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
             {describeNewsWindow(dateRange)}
           </p>
-          <div className="tnmt-hero-stats">
+          <div className="team06-hero-stats">
             <span><Radio size={15} /> Real only</span>
             <span><BarChart3 size={15} /> Señal BUY/HOLD/SELL</span>
             <span><ShieldCheck size={15} /> Evidencia verificable</span>
           </div>
         </div>
-        <div className="tnmt-symbol-box">
+        <div className="team06-symbol-box">
           <label>Símbolo</label>
           <input value={activeSymbol} onChange={(event) => setActiveSymbol(event.target.value.toUpperCase())} />
           <button type="button" onClick={loadTickerNews} disabled={loading}>
@@ -156,22 +156,22 @@ export function NewsSourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect
       </div>
 
       {confluence?.providerStatus && (
-        <div className="tnmt-provider-status-block" aria-label="Estado de proveedores de noticias">
-          <div className="tnmt-provider-status-block__header">
+        <div className="team06-provider-status-block" aria-label="Estado de proveedores de noticias">
+          <div className="team06-provider-status-block__header">
             <div>
               <strong>Estado real de las APIs de noticias</strong>
               <p>Esto te dice exactamente si Yahoo, Finnhub, NewsAPI, Polygon y Alpha Vantage están entregando datos.</p>
             </div>
             <ProviderStatusSummary providers={confluence.providerStatus} />
           </div>
-          <div className="tnmt-provider-grid">
+          <div className="team06-provider-grid">
             {confluence.providerStatus.map((provider) => <ProviderPill key={provider.id} provider={provider} />)}
           </div>
         </div>
       )}
 
-      <div className="tnmt-news-actions">
-        <button type="button" className="tnmt-primary-button" onClick={loadTickerNews} disabled={loading}>
+      <div className="team06-news-actions">
+        <button type="button" className="team06-primary-button" onClick={loadTickerNews} disabled={loading}>
           Cargar noticias reales del ticker
         </button>
         <button type="button" onClick={() => void analyzeManual()} disabled={!canAnalyzeManual || loading}>
@@ -179,10 +179,10 @@ export function NewsSourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect
         </button>
       </div>
 
-      {error && <div className="tnmt-error">{error}</div>}
+      {error && <div className="team06-error">{error}</div>}
 
-      <div className="tnmt-news-grid">
-        <div className="tnmt-news-column">
+      <div className="team06-news-grid">
+        <div className="team06-news-column">
           <SourceInput symbol={activeSymbol} onAdd={handleAddSource} />
           <SourceList
             sources={sources}
@@ -193,8 +193,8 @@ export function NewsSourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect
             }}
           />
         </div>
-        <div className="tnmt-news-column tnmt-news-column--results">
-          {loading && <div className="tnmt-loading">Consultando APIs reales y calculando sentimiento...</div>}
+        <div className="team06-news-column team06-news-column--results">
+          {loading && <div className="team06-loading">Consultando APIs reales y calculando sentimiento...</div>}
           <AnalysisResult confluence={confluence} manualAnalysis={manualAnalysis} onArticleSelect={handleArticleClick} />
         </div>
       </div>
@@ -206,6 +206,7 @@ export function NewsSourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect
           setSelectedArticle(null);
         }}
         article={selectedArticle}
+        symbol={activeSymbol}
       />
     </section>
   );

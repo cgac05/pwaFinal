@@ -604,6 +604,23 @@ const STRATEGY_OPTIONS: SelectOption[] = [
 function isoToday(): string       { return new Date().toISOString().slice(0, 10); }
 function isoPlusDays(n: number)   { return new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10); }
 
+function buildNoticias2OnlyResponse(payload: SimulationRequestPayload): SimulationResponse {
+  return {
+    verdict: {
+      verdict: "HOLD",
+      score: 0,
+      degraded: false,
+      source: "NOTICIAS_2_ONLY",
+      reason: "Noticias 2 corre su analisis en el panel de fuentes sin usar cores canonicos del backend.",
+    },
+    table: [],
+    inputs_echo: payload,
+    computed_at: new Date().toISOString(),
+    algorithm_version: "noticias2-local-v1",
+    signalMetrics: { buy: 0, sell: 0, hold: 0, total: 0 },
+  };
+}
+
 // FIC: Initial core state — ALL cores start DISABLED at system start (like the technical indicators);
 // FIC: the user opts in to each core (Indicadores, Fundamental, Técnico, Institucional, Noticias, IA)
 // FIC: explicitly. Purely the initial/reset state. (EN)
@@ -641,7 +658,6 @@ interface Props {
   onManualModeChange?: (manual: boolean) => void;
   onChainFocus?: () => void;
   onNoticias2Change?: (active: boolean) => void;
-  onStrategyDateRangeChange?: (range: { from: string; to: string }) => void;
 }
 
 // ─── Main component ────────────────────────────────────────────────────────────
@@ -660,7 +676,6 @@ export function SimulationControlPanel({
   onManualModeChange,
   onChainFocus,
   onNoticias2Change,
-  onStrategyDateRangeChange,
 }: Props) {
   const incrementSimulationRunCount = useSignalStore().incrementSimulationRunCount;
   const [preset, setPreset]               = useState<Preset>("3M");
@@ -681,10 +696,6 @@ export function SimulationControlPanel({
   // FIC: US-8 — optional historical as-of date; empty means "use latest data". (EN)
   // FIC: US-8 — fecha historica opcional; vacio significa "usar datos mas recientes". (ES)
   const [fechaHistorica, setFechaHistorica] = useState<string>("");
-
-  useEffect(() => {
-    onStrategyDateRangeChange?.({ from: estrategiaFrom, to: estrategiaTo });
-  }, [estrategiaFrom, estrategiaTo, onStrategyDateRangeChange]);
   const [loading, setLoading]             = useState(false);
   const [error, setError]                 = useState<string | null>(null);
   const [termModalOpen, setTermModalOpen] = useState(false);
@@ -876,7 +887,7 @@ export function SimulationControlPanel({
         rangoEstrategia: { from: estrategiaFrom, to: estrategiaTo },
         temporalidad,
         runtimeMode: "OFFLINE",
-        coresHabilitados: ALL_CORES.filter((c) => coresOn[c]),
+        coresHabilitados: activeCoreIds,
         indicadoresHabilitados: ALL_SUBCORES.filter((s) => indicadoresOn[s]),
         estrategia,
         toleranciaRiesgo: tolerancia,
@@ -885,6 +896,15 @@ export function SimulationControlPanel({
         // FIC: US-8 — send the as-of date only when the user picked one. (EN)
         ...(fechaHistorica ? { fechaHistorica } : {}),
       };
+
+      if (activeCoreIds.length === 0) {
+        if (noticias2On) {
+          onResult(buildNoticias2OnlyResponse(simPayload));
+          incrementSimulationRunCount();
+          return;
+        }
+        throw new Error("Selecciona al menos un core de analisis o activa Noticias 2.");
+      }
 
       if (isTermStrategy(estrategia)) {
         const strategyType = estrategia === "CALENDAR_SPREAD" ? "calendar" : "diagonal";
@@ -1012,6 +1032,8 @@ export function SimulationControlPanel({
   useEffect(() => {
     if (!hasRunOnceRef.current) return;
     if (!(CANONICAL_ESTRATEGIAS as readonly string[]).includes(estrategia)) return;
+    const activeCoreIds = ALL_CORES.filter((c) => coresOn[c]);
+    if (activeCoreIds.length === 0) return;
     const id = setTimeout(async () => {
       try {
         const simPayload: SimulationRequestPayload = {
@@ -1020,7 +1042,7 @@ export function SimulationControlPanel({
           rangoEstrategia: { from: estrategiaFrom, to: estrategiaTo },
           temporalidad,
           runtimeMode: "OFFLINE",
-          coresHabilitados: ALL_CORES.filter((c) => coresOn[c]),
+          coresHabilitados: activeCoreIds,
           indicadoresHabilitados: ALL_SUBCORES.filter((s) => indicadoresOn[s]),
           estrategia,
           toleranciaRiesgo: tolerancia,

@@ -66,6 +66,7 @@ import { createOptionsRouter } from "./routes/strategies/optionsRouter";
 import { createOptionsAnalysisQARouter } from "./routes/strategies/optionsAnalysisQARouter";
 import { newsSentimentRouter } from "./routes/news/sentiment";
 import newsUrlAnalysisRouter from "./routes/news/urlAnalysis";
+import noticias2UrlAnalysisRouter from "./routes/news2/urlAnalysis";
 
 const envValidation = validateEnvironment();
 if (!envValidation.isValid) {
@@ -142,6 +143,9 @@ app.use("/api/v1/strategies/term", diagonalSpreadRouter);
 // ── Team-05 routes: News & Sentiment Analysis ────────────────────────
 app.use("/api/news", newsSentimentRouter);
 app.use("/api/news", newsUrlAnalysisRouter);
+
+// ── Noticias 2 TNMT: flujo separado para que no use A_NOTICIAS / Team-06 ──
+app.use("/api/news2", noticias2UrlAnalysisRouter);
 
 // ── TEAM-08: Complex Strategy Routes ──
 app.use("/api/strategies/complex", optionsChainRouter);

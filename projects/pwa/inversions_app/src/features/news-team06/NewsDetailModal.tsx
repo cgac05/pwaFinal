@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import type { AnalyzedNewsSource, NewsCanonicalRow } from "../../services/news/newsApi";
+import type { AnalyzedNewsSource, NewsCanonicalRow } from "../../services/newsTeam06/newsTeam06Api";
 import { getMarketQuotes, type MarketQuote } from "../../services/signals/marketApi";
 
 interface NewsDetailModalProps {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { NewsSourceInput } from "../../services/news/newsApi";
+import type { NewsSourceInput } from "../../services/newsTeam06/newsTeam06Api";
 
 interface SourceInputProps {
   symbol: string;
@@ -27,13 +27,13 @@ export function SourceInput({ symbol, onAdd }: SourceInputProps) {
   };
 
   return (
-    <div className="tnmt-source-input">
-      <div className="tnmt-source-input__header">
+    <div className="team06-source-input">
+      <div className="team06-source-input__header">
         <div>
           <h3>Agregar fuente TNMT</h3>
           <p>Pega una URL o texto de noticia para analizar sentimiento, credibilidad y señal.</p>
         </div>
-        <div className="tnmt-segmented">
+        <div className="team06-segmented">
           <button type="button" className={mode === "text" ? "is-active" : ""} onClick={() => setMode("text")}>Texto</button>
           <button type="button" className={mode === "url" ? "is-active" : ""} onClick={() => setMode("url")}>URL</button>
         </div>
@@ -43,15 +43,15 @@ export function SourceInput({ symbol, onAdd }: SourceInputProps) {
         value={title}
         onChange={(event) => setTitle(event.target.value)}
         placeholder="Título opcional"
-        className="tnmt-input"
+        className="team06-input"
       />
       <textarea
         value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder={mode === "url" ? "https://..." : "Pega aquí el contenido de la noticia..."}
-        className="tnmt-textarea"
+        className="team06-textarea"
       />
-      <button type="button" className="tnmt-primary-button" onClick={addSource} disabled={!value.trim()}>
+      <button type="button" className="team06-primary-button" onClick={addSource} disabled={!value.trim()}>
         Agregar fuente
       </button>
     </div>

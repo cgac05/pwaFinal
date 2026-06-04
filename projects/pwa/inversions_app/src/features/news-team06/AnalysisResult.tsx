@@ -1,6 +1,6 @@
 import { ExternalLink, ChevronLeft, ChevronRight, CalendarDays, Gauge, Newspaper, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { AnalyzedNewsSource, NewsAnalysisAggregate, NewsConfluenceResponse, NewsVerdict } from "../../services/news/newsApi";
+import type { AnalyzedNewsSource, NewsAnalysisAggregate, NewsConfluenceResponse, NewsVerdict } from "../../services/newsTeam06/newsTeam06Api";
 
 interface AnalysisResultProps {
   confluence?: NewsConfluenceResponse | null;
@@ -78,7 +78,7 @@ interface PaginationControlsProps {
 
 function PaginationControls({ currentPage, totalPages, onPrevious, onNext }: PaginationControlsProps) {
   return (
-    <div className="tnmt-pagination">
+    <div className="team06-pagination">
       <button type="button" onClick={onPrevious} disabled={currentPage === 0}>
         <ChevronLeft size={16} /> Anterior
       </button>
@@ -93,8 +93,8 @@ function PaginationControls({ currentPage, totalPages, onPrevious, onNext }: Pag
 function SignalMeter({ value, verdict }: { value: number; verdict: NewsVerdict }) {
   const percent = confidencePct(value);
   return (
-    <div className="tnmt-signal-meter" aria-label={`Confianza ${percent}%`}>
-      <span className={`tnmt-signal-meter__fill ${verdictClass(verdict)}`} style={{ width: `${percent}%` }} />
+    <div className="team06-signal-meter" aria-label={`Confianza ${percent}%`}>
+      <span className={`team06-signal-meter__fill ${verdictClass(verdict)}`} style={{ width: `${percent}%` }} />
     </div>
   );
 }
@@ -111,25 +111,25 @@ function NewsSummaryRecommendationCard({ confluence }: { confluence: NewsConflue
   if (!summary) return null;
 
   return (
-    <div className={`tnmt-news-summary-card ${recommendationClass(summary.recommendation)}`}>
-      <div className="tnmt-news-summary-card__header">
+    <div className={`team06-news-summary-card ${recommendationClass(summary.recommendation)}`}>
+      <div className="team06-news-summary-card__header">
         <div>
-          <p className="tnmt-eyebrow">Resumen global de noticias</p>
+          <p className="team06-eyebrow">Resumen global de noticias</p>
           <h4>Recomendación sugerida: {summary.recommendation}</h4>
         </div>
-        <span className={`tnmt-verdict ${recommendationClass(summary.recommendation)}`}>{summary.recommendation}</span>
+        <span className={`team06-verdict ${recommendationClass(summary.recommendation)}`}>{summary.recommendation}</span>
       </div>
 
       <p>{summary.summary}</p>
-      <p className="tnmt-news-summary-card__reasoning">{summary.reasoning}</p>
+      <p className="team06-news-summary-card__reasoning">{summary.reasoning}</p>
 
-      <div className="tnmt-news-summary-counts">
+      <div className="team06-news-summary-counts">
         <span>Alcistas <strong>{summary.bullishCount}</strong></span>
         <span>Bajistas <strong>{summary.bearishCount}</strong></span>
         <span>Neutrales <strong>{summary.neutralCount}</strong></span>
       </div>
 
-      <div className="tnmt-news-summary-drivers">
+      <div className="team06-news-summary-drivers">
         <strong>Noticias que más influyeron:</strong>
         <ul>
           {summary.keyDrivers.slice(0, 4).map((driver, index) => (
@@ -138,7 +138,7 @@ function NewsSummaryRecommendationCard({ confluence }: { confluence: NewsConflue
         </ul>
       </div>
 
-      <div className="tnmt-news-summary-footer">
+      <div className="team06-news-summary-footer">
         <span>{summary.strategyHint}</span>
         <small>{summary.riskNote}</small>
       </div>
@@ -149,7 +149,7 @@ function NewsSummaryRecommendationCard({ confluence }: { confluence: NewsConflue
 function SourceCard({ source, index, onSelect }: { source: AnalyzedNewsSource; index: number; onSelect?: (article: AnalyzedNewsSource) => void }) {
   return (
     <article
-      className={`tnmt-article-card ${verdictClass(source.verdict)}`}
+      className={`team06-article-card ${verdictClass(source.verdict)}`}
       role={onSelect ? "button" : undefined}
       tabIndex={onSelect ? 0 : undefined}
       onClick={() => onSelect?.(source)}
@@ -161,18 +161,18 @@ function SourceCard({ source, index, onSelect }: { source: AnalyzedNewsSource; i
         }
       }}
     >
-      <div className="tnmt-article-card__top">
-        <span className="tnmt-article-rank">#{String(index + 1).padStart(2, "0")}</span>
-        <div className="tnmt-article-badges">
-          <span className={`tnmt-verdict ${verdictClass(source.verdict)}`}>{source.verdict}</span>
-          <span className={`tnmt-provider-badge ${providerClass(source.provider)}`}>{providerName(source.provider)}</span>
+      <div className="team06-article-card__top">
+        <span className="team06-article-rank">#{String(index + 1).padStart(2, "0")}</span>
+        <div className="team06-article-badges">
+          <span className={`team06-verdict ${verdictClass(source.verdict)}`}>{source.verdict}</span>
+          <span className={`team06-provider-badge ${providerClass(source.provider)}`}>{providerName(source.provider)}</span>
         </div>
       </div>
 
       <h4 title={source.title}>{source.title}</h4>
       <p>{source.summary || source.rationale || "Sin resumen disponible."}</p>
 
-      <div className="tnmt-article-meta-grid">
+      <div className="team06-article-meta-grid">
         <span><CalendarDays size={13} /> {formatDate(source.publishedAt)}</span>
         <span><Gauge size={13} /> {confidencePct(source.confidence)}% confianza</span>
         <span><ShieldCheck size={13} /> {confidencePct(source.credibilityScore)}% credibilidad</span>
@@ -180,13 +180,13 @@ function SourceCard({ source, index, onSelect }: { source: AnalyzedNewsSource; i
 
       <SignalMeter value={source.confidence} verdict={source.verdict} />
 
-      <div className="tnmt-tags">
+      <div className="team06-tags">
         <span>Sentimiento: {source.sentiment}</span>
         {source.affectedSymbols.map((symbol) => <span key={symbol}>{symbol}</span>)}
       </div>
 
       {source.url && (
-        <a className="tnmt-source-link" href={source.url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+        <a className="team06-source-link" href={source.url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
           Abrir noticia real <ExternalLink size={14} />
         </a>
       )}
@@ -203,11 +203,11 @@ function ProviderBreakdown({ articles }: { articles: AnalyzedNewsSource[] }) {
   if (entries.length === 0) return null;
 
   return (
-    <div className="tnmt-provider-breakdown">
+    <div className="team06-provider-breakdown">
       <strong>Distribución visible por proveedor</strong>
       <div>
         {entries.map(([provider, count]) => (
-          <span key={provider} className={`tnmt-provider-badge ${providerClass(provider)}`}>
+          <span key={provider} className={`team06-provider-badge ${providerClass(provider)}`}>
             {providerName(provider)}: {count}
           </span>
         ))}
@@ -238,24 +238,24 @@ function ArticlesCollection({
   const shownTo = Math.min(startIdx + pageItems.length, articles.length);
 
   return (
-    <section className="tnmt-news-collection">
-      <div className="tnmt-news-collection__header">
+    <section className="team06-news-collection">
+      <div className="team06-news-collection__header">
         <div>
-          <p className="tnmt-eyebrow"><Newspaper size={15} /> Noticias encontradas</p>
+          <p className="team06-eyebrow"><Newspaper size={15} /> Noticias encontradas</p>
           <h4>{title}</h4>
           <span>{subtitle}</span>
         </div>
-        <div className="tnmt-news-collection__count">
+        <div className="team06-news-collection__count">
           <strong>{articles.length}</strong>
           <span>noticias finales</span>
         </div>
       </div>
 
-      <div className="tnmt-news-collection__range">
+      <div className="team06-news-collection__range">
         Mostrando {shownFrom}-{shownTo} de {articles.length}. Cada tarjeta corresponde a una noticia real después de filtrar y quitar duplicados.
       </div>
 
-      <div className="tnmt-articles-grid">
+      <div className="team06-articles-grid">
         {pageItems.map((article, index) => (
           <SourceCard key={article.id} source={article} index={startIdx + index} onSelect={onArticleSelect} />
         ))}
@@ -289,28 +289,28 @@ export function AnalysisResult({ confluence, manualAnalysis, onArticleSelect }: 
   const sortedManualArticles = useMemo(() => sortArticles(manualAnalysis?.sources ?? []), [manualAnalysis?.sources]);
 
   if (!confluence && !manualAnalysis) {
-    return <p className="tnmt-empty">Carga noticias reales del ticker o pega fuentes propias para ver resultados.</p>;
+    return <p className="team06-empty">Carga noticias reales del ticker o pega fuentes propias para ver resultados.</p>;
   }
 
   const noRealNews = confluence && confluence.articles.length === 0;
 
   return (
-    <div className="tnmt-results">
+    <div className="team06-results">
       {confluence && (
-        <section className="tnmt-result-block tnmt-result-block--featured">
-          <div className="tnmt-result-header">
+        <section className="team06-result-block team06-result-block--featured">
+          <div className="team06-result-header">
             <div>
-              <p className="tnmt-eyebrow">Confluencia por noticias reales</p>
+              <p className="team06-eyebrow">Confluencia por noticias reales</p>
               <h3>{confluence.symbol} · {verdictLabel(confluence.verdict)}</h3>
-              <span className="tnmt-result-timestamp">Actualizado: {formatDateTime(confluence.generatedAt)}</span>
+              <span className="team06-result-timestamp">Actualizado: {formatDateTime(confluence.generatedAt)}</span>
             </div>
-            <span className={`tnmt-score ${verdictClass(confluence.verdict)}`}>{scoreAsPercent(confluence.score)}/100</span>
+            <span className={`team06-score ${verdictClass(confluence.verdict)}`}>{scoreAsPercent(confluence.score)}/100</span>
           </div>
 
-          <p className="tnmt-advice">{confluence.recommendation?.summary ?? "Señal generada desde noticias y sentimiento TNMT."}</p>
+          <p className="team06-advice">{confluence.recommendation?.summary ?? "Señal generada desde noticias y sentimiento TNMT."}</p>
           <NewsSummaryRecommendationCard confluence={confluence} />
 
-          <div className="tnmt-mini-grid">
+          <div className="team06-mini-grid">
             <span>Sentimiento <strong>{confluence.sentiment}</strong></span>
             <span>Confianza <strong>{confidencePct(confluence.confidence)}%</strong></span>
             <span>Noticias finales <strong>{confluence.articles.length}</strong></span>
@@ -320,7 +320,7 @@ export function AnalysisResult({ confluence, manualAnalysis, onArticleSelect }: 
           <ProviderBreakdown articles={confluence.articles} />
 
           {noRealNews ? (
-            <div className="tnmt-no-data">
+            <div className="team06-no-data">
               <strong>No se encontraron noticias reales para este ticker.</strong>
               <p>Agrega llaves de Finnhub, NewsAPI, Polygon o Alpha Vantage en el .env para ampliar la cobertura. No se generaron noticias demo.</p>
             </div>
@@ -338,16 +338,16 @@ export function AnalysisResult({ confluence, manualAnalysis, onArticleSelect }: 
       )}
 
       {manualAnalysis && (
-        <section className="tnmt-result-block">
-          <div className="tnmt-result-header">
+        <section className="team06-result-block">
+          <div className="team06-result-header">
             <div>
-              <p className="tnmt-eyebrow">Análisis manual de fuentes</p>
+              <p className="team06-eyebrow">Análisis manual de fuentes</p>
               <h3>{manualAnalysis.symbol} · {verdictLabel(manualAnalysis.verdict)}</h3>
             </div>
-            <span className={`tnmt-score ${verdictClass(manualAnalysis.verdict)}`}>{scoreAsPercent(manualAnalysis.sentimentScore)}/100</span>
+            <span className={`team06-score ${verdictClass(manualAnalysis.verdict)}`}>{scoreAsPercent(manualAnalysis.sentimentScore)}/100</span>
           </div>
 
-          <div className="tnmt-mini-grid">
+          <div className="team06-mini-grid">
             <span>BUY <strong>{manualAnalysis.buyCount}</strong></span>
             <span>HOLD <strong>{manualAnalysis.holdCount}</strong></span>
             <span>SELL <strong>{manualAnalysis.sellCount}</strong></span>

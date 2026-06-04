@@ -19,6 +19,19 @@ export interface SelectedSignal {
 
 // FIC: Strike selected from OptionChainTable — shared via store so CoverageStrategyModal can read it. (EN)
 // FIC: Strike seleccionado de OptionChainTable — compartido via store para que CoverageStrategyModal lo lea. (ES)
+export type SpreadStrategyKey =
+  | "BULL_CALL_SPREAD"
+  | "BEAR_PUT_SPREAD"
+  | "BULL_PUT_SPREAD"
+  | "BEAR_CALL_SPREAD";
+
+export interface SpreadSuggestion {
+  longStrike: number;
+  shortStrike: number;
+  longPremium: number;
+  shortPremium: number;
+}
+
 export interface SelectedStrike {
   strike: number;
   type: "call" | "put";
@@ -29,6 +42,9 @@ export interface SelectedStrike {
   callPremium?: number;
   putPremium?: number;
   estimatedRiskFreeRate?: number;
+  // FIC: Suggestions calculated from the adjacent option-chain rows so spread modals can auto-fill both legs. (EN)
+  // FIC: Sugerencias calculadas con strikes vecinos para llenar automaticamente ambas patas de spreads. (ES)
+  spreadSuggestions?: Partial<Record<SpreadStrategyKey, SpreadSuggestion>>;
 }
 
 export interface SelectedOptionsStrategy {

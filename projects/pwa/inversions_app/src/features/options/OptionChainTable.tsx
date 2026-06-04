@@ -1,6 +1,6 @@
 // FIC: Option chain table — 3-column layout (calls | strike | puts), auto-updates on ticker change. (EN)
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useSignalStore } from "../../store/signals";
+import { useSignalStore, type SpreadSuggestion } from "../../store/signals";
 import { useStrategyLegsStore, isComplexLegStrategy, isVariantStrategy } from "../../store/strategyLegs";
 import { SkeletonCard } from "../../components/ui/SkeletonCard";
 import {
@@ -23,6 +23,7 @@ export interface OptionChainTableProps {
       callPremium: number;
       putPremium: number;
       estimatedRiskFreeRate?: number;
+      spreadSuggestions?: Partial<Record<"BULL_CALL_SPREAD" | "BEAR_PUT_SPREAD" | "BULL_PUT_SPREAD" | "BEAR_CALL_SPREAD", SpreadSuggestion>>;
     }
   ) => void;
   // FIC: Active strategy — when it's a complex multi-leg one (Iron Condor…), right-click a row to
@@ -70,6 +71,91 @@ function estimateRiskFreeRateFromParity(input: {
   const rate = -Math.log(discountedStrike / input.strike) / years;
   if (!Number.isFinite(rate)) return undefined;
   return Math.max(0, Math.min(0.1, rate)) * 100;
+}
+
+function callPremium(row: OptionChainRow): number {
+  return midpoint(row.callBid, row.callAsk) || row.callLastPrice || 0;
+}
+
+function putPremium(row: OptionChainRow): number {
+  return midpoint(row.putBid, row.putAsk) || row.putLastPrice || 0;
+}
+
+function buildSpreadSuggestions(rows: OptionChainRow[], row: OptionChainRow): Partial<Record<"BULL_CALL_SPREAD" | "BEAR_PUT_SPREAD" | "BULL_PUT_SPREAD" | "BEAR_CALL_SPREAD", SpreadSuggestion>> {
+  const idx = rows.findIndex((r) => r.strike === row.strike);
+  const lower = idx > 0 ? rows[idx - 1] : undefined;
+  const higher = idx >= 0 && idx < rows.length - 1 ? rows[idx + 1] : undefined;
+  const suggestions: Partial<Record<"BULL_CALL_SPREAD" | "BEAR_PUT_SPREAD" | "BULL_PUT_SPREAD" | "BEAR_CALL_SPREAD", SpreadSuggestion>> = {};
+
+  // Bull call: buy lower call, sell higher call. Prefer the clicked row as the long leg.
+  if (higher) {
+    suggestions.BULL_CALL_SPREAD = {
+      longStrike: row.strike,
+      longPremium: callPremium(row),
+      shortStrike: higher.strike,
+      shortPremium: callPremium(higher),
+    };
+  } else if (lower) {
+    suggestions.BULL_CALL_SPREAD = {
+      longStrike: lower.strike,
+      longPremium: callPremium(lower),
+      shortStrike: row.strike,
+      shortPremium: callPremium(row),
+    };
+  }
+
+  // Bear call: sell lower call, buy higher call. Prefer the clicked row as the short leg.
+  if (higher) {
+    suggestions.BEAR_CALL_SPREAD = {
+      shortStrike: row.strike,
+      shortPremium: callPremium(row),
+      longStrike: higher.strike,
+      longPremium: callPremium(higher),
+    };
+  } else if (lower) {
+    suggestions.BEAR_CALL_SPREAD = {
+      shortStrike: lower.strike,
+      shortPremium: callPremium(lower),
+      longStrike: row.strike,
+      longPremium: callPremium(row),
+    };
+  }
+
+  // Bear put: buy higher put, sell lower put. Prefer the clicked row as the long leg.
+  if (lower) {
+    suggestions.BEAR_PUT_SPREAD = {
+      longStrike: row.strike,
+      longPremium: putPremium(row),
+      shortStrike: lower.strike,
+      shortPremium: putPremium(lower),
+    };
+  } else if (higher) {
+    suggestions.BEAR_PUT_SPREAD = {
+      longStrike: higher.strike,
+      longPremium: putPremium(higher),
+      shortStrike: row.strike,
+      shortPremium: putPremium(row),
+    };
+  }
+
+  // Bull put: sell higher put, buy lower put. Prefer the clicked row as the short leg.
+  if (lower) {
+    suggestions.BULL_PUT_SPREAD = {
+      shortStrike: row.strike,
+      shortPremium: putPremium(row),
+      longStrike: lower.strike,
+      longPremium: putPremium(lower),
+    };
+  } else if (higher) {
+    suggestions.BULL_PUT_SPREAD = {
+      shortStrike: higher.strike,
+      shortPremium: putPremium(higher),
+      longStrike: row.strike,
+      longPremium: putPremium(row),
+    };
+  }
+
+  return suggestions;
 }
 
 // ─── Styles (reusing existing CSS tokens only) ────────────────────────────────
@@ -274,32 +360,34 @@ export function OptionChainTable({ symbol, onSelectStrike, activeStrategy, highl
 
   const handleCallClick = useCallback(
     (row: OptionChainRow) => {
-      const callPremium = midpoint(row.callBid, row.callAsk) || row.callLastPrice;
-      const putPremium = midpoint(row.putBid, row.putAsk) || row.putLastPrice;
-      onSelectStrike?.(row.strike, "call", callPremium, row.callIV, {
+      const call = callPremium(row);
+      const put = putPremium(row);
+      onSelectStrike?.(row.strike, "call", call, row.callIV, {
         expiration: selectedExpiration,
         underlyingPrice,
-        callPremium,
-        putPremium,
-        estimatedRiskFreeRate: estimateRiskFreeRateFromParity({ underlyingPrice, strike: row.strike, callPremium, putPremium, expiration: selectedExpiration }),
+        callPremium: call,
+        putPremium: put,
+        estimatedRiskFreeRate: estimateRiskFreeRateFromParity({ underlyingPrice, strike: row.strike, callPremium: call, putPremium: put, expiration: selectedExpiration }),
+        spreadSuggestions: buildSpreadSuggestions(chain?.rows ?? [], row),
       });
     },
-    [onSelectStrike, selectedExpiration, underlyingPrice]
+    [onSelectStrike, selectedExpiration, underlyingPrice, chain]
   );
 
   const handlePutClick = useCallback(
     (row: OptionChainRow) => {
-      const callPremium = midpoint(row.callBid, row.callAsk) || row.callLastPrice;
-      const putPremium = midpoint(row.putBid, row.putAsk) || row.putLastPrice;
-      onSelectStrike?.(row.strike, "put", putPremium, row.putIV, {
+      const call = callPremium(row);
+      const put = putPremium(row);
+      onSelectStrike?.(row.strike, "put", put, row.putIV, {
         expiration: selectedExpiration,
         underlyingPrice,
-        callPremium,
-        putPremium,
-        estimatedRiskFreeRate: estimateRiskFreeRateFromParity({ underlyingPrice, strike: row.strike, callPremium, putPremium, expiration: selectedExpiration }),
+        callPremium: call,
+        putPremium: put,
+        estimatedRiskFreeRate: estimateRiskFreeRateFromParity({ underlyingPrice, strike: row.strike, callPremium: call, putPremium: put, expiration: selectedExpiration }),
+        spreadSuggestions: buildSpreadSuggestions(chain?.rows ?? [], row),
       });
     },
-    [onSelectStrike, selectedExpiration, underlyingPrice]
+    [onSelectStrike, selectedExpiration, underlyingPrice, chain]
   );
 
 

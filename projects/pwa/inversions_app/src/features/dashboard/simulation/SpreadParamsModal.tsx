@@ -1,4 +1,5 @@
 import React from "react";
+import { useSignalStore } from "../../../store/signals";
 
 export type SpreadStrategy =
   | "BULL_CALL_SPREAD"
@@ -69,7 +70,58 @@ const labelStyle: React.CSSProperties = {
   display: "block",
 };
 
+function money(value: number | undefined): number {
+  if (!value || !Number.isFinite(value)) return 0;
+  return Number(value.toFixed(4));
+}
+
+function sameParams(a: SpreadModalParams, b: SpreadModalParams): boolean {
+  return a.currentPrice === b.currentPrice
+    && a.longStrike === b.longStrike
+    && a.shortStrike === b.shortStrike
+    && a.longPremium === b.longPremium
+    && a.shortPremium === b.shortPremium
+    && a.contracts === b.contracts;
+}
+
 export function SpreadParamsModal({ open, estrategia, ticker, params, onChange, onClose, onConfirm }: Props) {
+  const { selectedStrike } = useSignalStore();
+
+  React.useEffect(() => {
+    if (!open || !isSpreadStrategy(estrategia) || !selectedStrike) return;
+
+    const suggestion = selectedStrike.spreadSuggestions?.[estrategia];
+    const next: SpreadModalParams = {
+      ...params,
+      currentPrice: selectedStrike.underlyingPrice && selectedStrike.underlyingPrice > 0
+        ? money(selectedStrike.underlyingPrice)
+        : params.currentPrice,
+      contracts: params.contracts || 1,
+    };
+
+    if (suggestion) {
+      next.longStrike = money(suggestion.longStrike);
+      next.shortStrike = money(suggestion.shortStrike);
+      next.longPremium = money(suggestion.longPremium);
+      next.shortPremium = money(suggestion.shortPremium);
+    } else {
+      const wantsCall = estrategia === "BULL_CALL_SPREAD" || estrategia === "BEAR_CALL_SPREAD";
+      const premium = wantsCall
+        ? money(selectedStrike.callPremium ?? (selectedStrike.type === "call" ? selectedStrike.premium : 0))
+        : money(selectedStrike.putPremium ?? (selectedStrike.type === "put" ? selectedStrike.premium : 0));
+
+      if (estrategia === "BULL_CALL_SPREAD" || estrategia === "BEAR_PUT_SPREAD") {
+        next.longStrike = money(selectedStrike.strike);
+        next.longPremium = premium;
+      } else {
+        next.shortStrike = money(selectedStrike.strike);
+        next.shortPremium = premium;
+      }
+    }
+
+    if (!sameParams(params, next)) onChange(next);
+  }, [open, estrategia, selectedStrike, params, onChange]);
+
   if (!open || !isSpreadStrategy(estrategia)) return null;
 
   const set = <K extends keyof SpreadModalParams>(field: K, value: SpreadModalParams[K]) =>

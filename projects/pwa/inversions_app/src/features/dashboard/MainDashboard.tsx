@@ -27,7 +27,7 @@ import type { ConfluenceSignalRow, SimulationResponse, CoreId, SignalMetrics } f
 import { buildComplexStrategyRows } from "../../services/strategies/buildStrategyRows";
 import { ComplexStrategyModal } from "./simulation/ComplexStrategyModal";
 import type { FromChainResponse } from "../../services/strategies/strategyApi";
-import { useSignalStore } from "../../store/signals";
+import { useSignalStore, type SelectedStrike } from "../../store/signals";
 import { useAppShellStore } from "../../store/appShell";
 import { useInstitutionalStore, setInstitutionalLoading, setInstitutionalResult, setInstitutionalError } from "../../store/institutional";
 import { getInstitutionalAnalysis } from "../../services/institutional/institutionalApi";
@@ -36,7 +36,7 @@ import { formatCurrency } from "../../utils/format";
 import { Tooltip } from "../../components/ui/Tooltip";
 import { ReportePDFTemplate } from "./ReportePDFTemplate";
 import { getAuthHeaders } from "../../services/signals/signalApi";
-import type { NewsDateRange } from "../../services/news/newsApi";
+import type { NewsDateRange } from "../../services/newsTeam06/newsTeam06Api";
 // FIC: US-5 — compact buy/sell/hold counter chip shown above the confluence table. (EN)
 // FIC: US-5 — chip compacto de conteo compra/venta/hold mostrado sobre la tabla. (ES)
 function SignalMetricChip({ label, value, color }: { label: string; value: number; color: string }) {
@@ -75,16 +75,12 @@ export function MainDashboard() {
   const [newsDateRange, setNewsDateRange] = useState<NewsDateRange | undefined>(undefined);
   const [spreadRequest, setSpreadRequest] = useState<{ params: SpreadModalParams; kind: string } | null>(null);
   const [copilotOpen, setCopilotOpen] = useState(false);
-  const [selectedStrikeData, setSelectedStrikeData] = useState<{
-    strike: number; type: "call" | "put"; premium: number; iv: number;
-    expiration?: string; underlyingPrice?: number; estimatedRiskFreeRate?: number;
-  } | null>(null);
+  const [selectedStrikeData, setSelectedStrikeData] = useState<SelectedStrike | null>(null);
   const [activeChartTab, setActiveChartTab] = useState<"chart" | "chain">("chart");
   const [pdfChartImg, setPdfChartImg] = useState<string | undefined>(undefined);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [chainFocusKey, setChainFocusKey] = useState(0);
   const chainRef = useRef<HTMLDivElement>(null);
-  const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
   const [noticias2Active, setNoticias2Active] = useState(false);
 
   const [simulationHasRun, setSimulationHasRun] = useState(false);
@@ -98,22 +94,6 @@ export function MainDashboard() {
   const { results: institutionalResults, loading: institutionalLoading, errors: institutionalErrors } = useInstitutionalStore();
 
   const selectedSymbol = selectedInstrument?.symbol ?? "SPY";
-
-  // Carga watchlist al activar Noticias 2; limpia resultados al desactivar
-  useEffect(() => {
-    if (!noticias2Active) {
-      setNoticias2Result(null);
-      setNoticias2ChatContext(null);
-      return;
-    }
-    fetch("/api/watchlist", { headers: getAuthHeaders() })
-      .then((r) => r.json())
-      .then((data) => {
-        const symbols: string[] = (data.items ?? []).map((i: any) => i.symbol).filter(Boolean);
-        if (symbols.length > 0) setWatchlistSymbols(symbols);
-      })
-      .catch(() => {});
-  }, [noticias2Active]);
 
   // FIC: Clear simulation results and institutional flag when the user selects a new ticker. (EN)
   // FIC: Limpiar resultados de simulación y flag institucional cuando el usuario selecciona un nuevo ticker. (ES)
@@ -148,8 +128,9 @@ export function MainDashboard() {
     setSimulationRows(result.table);
     setSimulationVerdict(result.verdict);
     setSimulationHasRun(true);
-    // Req 2: captura el rango de fechas para pasarlo a NewsSourcesAnalyzer
+    // Captura el rango de fechas para Noticias y Noticias 2 sin mezclar sus componentes.
     if (result.inputs_echo?.rangoEstrategia) {
+      setNewsDateRange(result.inputs_echo.rangoEstrategia);
       setNoticias2DateRange(result.inputs_echo.rangoEstrategia);
     }
     // FIC: US-5 — prefer backend-computed metrics; fall back to a client-side count. (EN)
@@ -185,10 +166,6 @@ export function MainDashboard() {
     (params: SpreadModalParams, kind: string) => setSpreadRequest({ params, kind }),
     []
   );
-
-  const handleStrategyDateRangeChange = useCallback((range: NewsDateRange) => {
-    setNewsDateRange(range);
-  }, []);
 
   const handleOptionStrategyCalculated = useCallback((analysis: OptionStrategyAnalysis) => {
     setOptionStrategyAnalysis(analysis);
@@ -231,13 +208,7 @@ export function MainDashboard() {
       type: "call" | "put",
       premium: number,
       iv: number,
-      meta?: {
-        expiration: string;
-        underlyingPrice: number;
-        callPremium: number;
-        putPremium: number;
-        estimatedRiskFreeRate?: number;
-      }
+      meta?: Omit<SelectedStrike, "strike" | "type" | "premium" | "iv">
     ) => {
       const selected = { strike, type, premium, iv, ...meta };
       setSelectedStrikeData(selected);
@@ -573,7 +544,6 @@ export function MainDashboard() {
           setTimeout(() => chainRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 100);
         }}
         onNoticias2Change={(v) => setNoticias2Active(v)}
-        onStrategyDateRangeChange={handleStrategyDateRangeChange}
       />
 
       {/* ── Strategy error (from buildComplexStrategyRows validation) */}
@@ -806,11 +776,10 @@ export function MainDashboard() {
         <NewsSection symbol={selectedSymbol} dateRange={newsDateRange} />
       )}
 
-      {/* Noticias 2: solo aparece cuando la simulación corrió CON el chip Noticias 2 activo */}
+      {/* Noticias 2: diseño TNMT original, pero con archivos y rutas /api/news2 separadas de Noticias 1. */}
       {noticias2Active && simulationHasRun && (
         <NewsSourcesAnalyzer
-          selectedSymbol={selectedSymbol}
-          watchlistSymbols={watchlistSymbols.length > 0 ? watchlistSymbols : undefined}
+          symbol={selectedSymbol}
           dateRange={noticias2DateRange}
           onResult={(r) => {
             setNoticias2Result(r);

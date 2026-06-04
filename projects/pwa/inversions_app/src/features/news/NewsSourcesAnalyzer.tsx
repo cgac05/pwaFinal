@@ -1,213 +1,329 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, BarChart3, CheckCircle2, KeyRound, Newspaper, Radio, RefreshCw, ShieldCheck } from "lucide-react";
-import { analyzeNewsSources, getNewsConfluence, type NewsAnalysisAggregate, type NewsConfluenceResponse, type NewsDateRange, type NewsProviderStatus, type NewsSourceInput, type AnalyzedNewsSource } from "../../services/news/newsApi";
-import { SourceInput } from "./SourceInput";
-import { SourceList } from "./SourceList";
-import { AnalysisResult } from "./AnalysisResult";
-import { NewsDetailModal } from "./NewsDetailModal";
-import "../styles/NewsSourcesAnalyzer.css";
+/**
+ * src/features/news/NewsSourcesAnalyzer.tsx
+ * FIC: Noticias 2 — analizador TNMT original separado de Noticias 1.
+ *
+ * Se mantiene el diseño original de Noticias 2, pero sus llamadas ahora van a /api/news2
+ * para que no se mezclen con A_NOTICIAS / Team-06.
+ */
 
-interface NewsSourcesAnalyzerProps {
+import React, { useEffect, useState } from 'react';
+import { SourceInput } from './SourceInput';
+import { SourceList } from './SourceList';
+import { AnalysisResult } from './AnalysisResult';
+import '../styles/NewsSourcesAnalyzer.css';
+
+interface NewsSource {
+  id: string;
+  url: string;
+  status: 'pending' | 'valid' | 'invalid' | 'analyzed';
+  addedAt: string;
+}
+
+interface AnalysisState {
+  loading: boolean;
+  error: string | null;
+  result: NewsAnalysisResult | null;
+}
+
+export interface NewsAnalysisResult {
+  company: string;
+  verdict: 'BUY' | 'SELL' | 'HOLD';
+  score: number;
+  confidence: number;
+  reasoning: string;
+  keyPoints: string[];
+  timestamp: string;
+}
+
+export interface NewsSourcesAnalyzerProps {
   symbol?: string;
-  dateRange?: NewsDateRange;
-  onArticleSelect?: (article: AnalyzedNewsSource) => void;
+  dateRange?: { from?: string; to?: string };
+  onResult?: (result: NewsAnalysisResult) => void;
+  onSendToChat?: () => void;
 }
 
+const DEFAULT_SOURCES: NewsSource[] = [
+  {
+    id: 'default-nasdaq',
+    url: 'nasdaq.com',
+    status: 'valid',
+    addedAt: new Date().toISOString(),
+  },
+  {
+    id: 'default-investing',
+    url: 'investing.com',
+    status: 'valid',
+    addedAt: new Date().toISOString(),
+  },
+];
 
-function addDaysIso(value: string | undefined, days: number): string | undefined {
-  if (!value) return undefined;
-  const date = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime())) return undefined;
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
+export const NewsSourcesAnalyzer: React.FC<NewsSourcesAnalyzerProps> = ({
+  symbol = '',
+  dateRange,
+  onResult,
+  onSendToChat,
+}) => {
+  // FIC: Estado de fuentes agregadas
+  const [sources, setSources] = useState<NewsSource[]>(DEFAULT_SOURCES);
+  const [selectedCompany, setSelectedCompany] = useState<string>(symbol.trim().toUpperCase());
+  const [isExpanded, setIsExpanded] = useState<boolean>(true);
 
-function describeNewsWindow(dateRange?: NewsDateRange): string {
-  if (!dateRange?.from && !dateRange?.to) return "Sin rango de estrategia aplicado";
-  const expandedFrom = addDaysIso(dateRange.from, -7) ?? "inicio";
-  const expandedTo = addDaysIso(dateRange.to, 7) ?? "hoy";
-  return `Rango estrategia ${dateRange.from ?? "inicio"} → ${dateRange.to ?? "hoy"}; análisis noticias ${expandedFrom} → ${expandedTo}`;
-}
+  // FIC: Estado de análisis
+  const [analysis, setAnalysis] = useState<AnalysisState>({
+    loading: false,
+    error: null,
+    result: null,
+  });
 
-function ProviderPill({ provider }: { provider: NewsProviderStatus }) {
-  const stateClass = provider.enabled ? (provider.ok ? "is-online" : "is-warning") : "is-offline";
-  const rawCount = provider.rawCount ?? provider.count;
-  const relevantCount = provider.relevantCount ?? provider.count;
-  const stateText = provider.enabled ? (provider.ok ? `${rawCount} recibidas / ${relevantCount} relevantes` : "falló") : "sin key";
-  const Icon = provider.enabled ? (provider.ok ? CheckCircle2 : AlertTriangle) : KeyRound;
+  useEffect(() => {
+    const nextSymbol = symbol.trim().toUpperCase();
+    if (nextSymbol) {
+      setSelectedCompany(nextSymbol);
+      setAnalysis((prev) => ({
+        loading: false,
+        error: null,
+        result: prev.result?.company === nextSymbol ? prev.result : null,
+      }));
+    }
+  }, [symbol]);
+
+  /**
+   * Agrega una nueva fuente a la lista
+   */
+  const handleAddSource = async (url: string) => {
+    const normalizedUrl = url.replace(/^www\./, '').toLowerCase();
+    const alreadyExists = sources.some(
+      (source) => source.url.replace(/^www\./, '').toLowerCase() === normalizedUrl
+    );
+
+    if (alreadyExists) {
+      setAnalysis({
+        loading: false,
+        error: 'Esa fuente ya esta agregada',
+        result: null,
+      });
+      return;
+    }
+
+    // FIC: Valida URL en el frontend primero
+    const newSource: NewsSource = {
+      id: `source-${Date.now()}`,
+      url,
+      status: 'pending',
+      addedAt: new Date().toISOString(),
+    };
+
+    setSources((prev) => [newSource, ...prev]);
+
+    // FIC: Valida con el backend independiente de Noticias 2
+    try {
+      const response = await fetch('/api/news2/validate-url?url=' + encodeURIComponent(url));
+      const data = await response.json();
+
+      setSources((prev) =>
+        prev.map((s) =>
+          s.id === newSource.id
+            ? { ...s, status: data.valid ? 'valid' : 'invalid' }
+            : s
+        )
+      );
+    } catch (error) {
+      console.error('[Noticias2SourcesAnalyzer] Error validating URL:', error);
+      setSources((prev) =>
+        prev.map((s) =>
+          s.id === newSource.id ? { ...s, status: 'invalid' } : s
+        )
+      );
+    }
+  };
+
+  /**
+   * Elimina una fuente de la lista
+   */
+  const handleRemoveSource = (id: string) => {
+    setSources((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const getReusableSources = () =>
+    sources.filter((s) => s.status === 'valid' || s.status === 'analyzed');
+
+  const handleCompanyChange = (value: string) => {
+    setSelectedCompany(value);
+    setAnalysis((prev) => ({
+      loading: false,
+      error: null,
+      result: prev.result?.company === value.trim() ? prev.result : null,
+    }));
+  };
+
+  /**
+   * Ejecuta el análisis consolidado
+   */
+  const handleAnalyze = async () => {
+    if (!selectedCompany.trim()) {
+      setAnalysis({
+        loading: false,
+        error: 'Por favor selecciona una compañía',
+        result: null,
+      });
+      return;
+    }
+
+    const validSources = getReusableSources();
+    if (validSources.length === 0) {
+      setAnalysis({
+        loading: false,
+        error: 'Agrega al menos una fuente válida',
+        result: null,
+      });
+      return;
+    }
+
+    setAnalysis({
+      loading: true,
+      error: null,
+      result: null,
+    });
+
+    try {
+      const response = await fetch('/api/news2/analyze-sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company: selectedCompany.trim(),
+          urls: validSources.map((s) => s.url),
+          dateRange,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Error en el análisis');
+      }
+
+      const data = await response.json() as NewsAnalysisResult;
+
+      // FIC: Actualiza estado de fuentes después del análisis
+      setSources((prev) =>
+        prev.map((s) =>
+          validSources.some((vs) => vs.id === s.id)
+            ? { ...s, status: 'analyzed' }
+            : s
+        )
+      );
+
+      setAnalysis({
+        loading: false,
+        error: null,
+        result: data,
+      });
+      onResult?.(data);
+    } catch (error) {
+      setAnalysis({
+        loading: false,
+        error: (error as Error).message,
+        result: null,
+      });
+    }
+  };
 
   return (
-    <div className={`tnmt-provider-pill ${stateClass}`} title={provider.message}>
-      <div className="tnmt-provider-pill__top">
-        <Icon size={15} />
-        <span>{provider.label}</span>
+    <div className="news-sources-analyzer">
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div className="nsa-header">
+        <h2>Análisis de Fuentes de Noticias</h2>
+        <p className="nsa-description">
+          Agrega dominios de fuentes financieras (ej: bloomberg.com, cnbc.com) y selecciona una compañía.
+          El sistema buscará automáticamente noticias de esa compañía en esos sitios y proporcionará
+          un análisis consolidado con recomendación de inversión (Comprar, Vender, Mantener).
+        </p>
       </div>
-      <strong>{stateText}</strong>
-      <small>{provider.message}</small>
-    </div>
-  );
-}
 
-function ProviderStatusSummary({ providers }: { providers: NewsProviderStatus[] }) {
-  const enabled = providers.filter((provider) => provider.enabled).length;
-  const ok = providers.filter((provider) => provider.enabled && provider.ok).length;
-  const totalRawNews = providers.reduce((sum, provider) => sum + (provider.rawCount ?? provider.count ?? 0), 0);
-  const totalRelevantNews = providers.reduce((sum, provider) => sum + (provider.relevantCount ?? provider.count ?? 0), 0);
+      <div className="nsa-layout">
+        {/* ── Columna izquierda: Entrada y lista ────────────────────────────────────────────── */}
+        <div className="nsa-left">
+          {/* Input para agregar URLs */}
+          <SourceInput onAddSource={handleAddSource} loading={analysis.loading} />
 
-  return (
-    <div className="tnmt-provider-summary">
-      <span>APIs configuradas: <strong>{enabled}/{providers.length}</strong></span>
-      <span>APIs respondiendo: <strong>{ok}/{providers.length}</strong></span>
-      <span>Noticias recibidas (crudas): <strong>{totalRawNews}</strong></span>
-      <span>Noticias relevantes: <strong>{totalRelevantNews}</strong></span>
-    </div>
-  );
-}
-
-export function NewsSourcesAnalyzer({ symbol = "SPY", dateRange, onArticleSelect }: NewsSourcesAnalyzerProps) {
-  const normalizedSymbol = symbol.trim().toUpperCase() || "SPY";
-  const [activeSymbol, setActiveSymbol] = useState(normalizedSymbol);
-  const [sources, setSources] = useState<NewsSourceInput[]>([]);
-  const [confluence, setConfluence] = useState<NewsConfluenceResponse | null>(null);
-  const [manualAnalysis, setManualAnalysis] = useState<NewsAnalysisAggregate | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedArticle, setSelectedArticle] = useState<AnalyzedNewsSource | null>(null);
-  const [showModal, setShowModal] = useState(false);
-
-  useEffect(() => {
-    setActiveSymbol(normalizedSymbol);
-  }, [normalizedSymbol]);
-
-  const canAnalyzeManual = sources.length > 0;
-
-  const loadTickerNews = async () => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await getNewsConfluence(activeSymbol, 100, controller.signal, dateRange);
-      setConfluence(result);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const analyzeManual = async (nextSources = sources) => {
-    if (nextSources.length === 0) return;
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await analyzeNewsSources(activeSymbol, nextSources, controller.signal);
-      setManualAnalysis(result);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleArticleClick = (article: AnalyzedNewsSource) => {
-    setSelectedArticle(article);
-    setShowModal(true);
-    onArticleSelect?.(article);
-  };
-
-  const handleAddSource = (source: NewsSourceInput) => {
-    const nextSources = [...sources, source];
-    setSources(nextSources);
-    void analyzeManual(nextSources);
-  };
-
-  useEffect(() => {
-    void loadTickerNews();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSymbol, dateRange?.from, dateRange?.to]);
-
-  return (
-    <section className="tnmt-news-panel" id="noticias-sentimiento">
-      <div className="tnmt-news-hero">
-        <div className="tnmt-news-hero__copy">
-          <div className="tnmt-eyebrow"><Newspaper size={16} /> TEAM-06 · Noticias reales y sentimiento</div>
-          <h2>Confluencia de noticias con fuentes externas reales</h2>
-          <p>
-            El panel muestra de forma visible qué proveedor entregó cada noticia. Consulta Yahoo Finance RSS y, si configuras llaves,
-            también Finnhub, NewsAPI, Polygon y Alpha Vantage. El modo demo fue eliminado.
-          </p>
-          <p style={{ marginTop: "0.35rem", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
-            {describeNewsWindow(dateRange)}
-          </p>
-          <div className="tnmt-hero-stats">
-            <span><Radio size={15} /> Real only</span>
-            <span><BarChart3 size={15} /> Señal BUY/HOLD/SELL</span>
-            <span><ShieldCheck size={15} /> Evidencia verificable</span>
+          {/* Selector de compañía */}
+          <div className="nsa-company-section">
+            <label htmlFor="company-input" className="nsa-label">
+              Compañía a Analizar
+            </label>
+            <input
+              id="company-input"
+              type="text"
+              placeholder="Ej: Apple, Microsoft, Tesla..."
+              value={selectedCompany}
+              onChange={(e) => handleCompanyChange(e.target.value)}
+              disabled={analysis.loading}
+              className="nsa-company-input"
+            />
           </div>
-        </div>
-        <div className="tnmt-symbol-box">
-          <label>Símbolo</label>
-          <input value={activeSymbol} onChange={(event) => setActiveSymbol(event.target.value.toUpperCase())} />
-          <button type="button" onClick={loadTickerNews} disabled={loading}>
-            <RefreshCw size={16} /> Actualizar
+
+          {/* Lista expandible de fuentes */}
+          <div className="nsa-sources-section">
+            <button
+              className="nsa-toggle-btn"
+              onClick={() => setIsExpanded(!isExpanded)}
+              disabled={sources.length === 0}
+            >
+              <span className="toggle-icon">{isExpanded ? '▼' : '▶'}</span>
+              Fuentes Agregadas ({sources.length})
+            </button>
+
+            {isExpanded && sources.length > 0 && (
+              <SourceList
+                sources={sources}
+                onRemove={handleRemoveSource}
+                loading={analysis.loading}
+              />
+            )}
+          </div>
+
+          {/* Botón de análisis */}
+          <button
+            className="nsa-analyze-btn"
+            onClick={handleAnalyze}
+            disabled={
+              analysis.loading ||
+              getReusableSources().length === 0 ||
+              !selectedCompany.trim()
+            }
+          >
+            {analysis.loading ? 'Analizando...' : 'Analizar Fuentes'}
           </button>
-        </div>
-      </div>
 
-      {confluence?.providerStatus && (
-        <div className="tnmt-provider-status-block" aria-label="Estado de proveedores de noticias">
-          <div className="tnmt-provider-status-block__header">
-            <div>
-              <strong>Estado real de las APIs de noticias</strong>
-              <p>Esto te dice exactamente si Yahoo, Finnhub, NewsAPI, Polygon y Alpha Vantage están entregando datos.</p>
+          {analysis.result && onSendToChat && (
+            <button
+              type="button"
+              className="nsa-chat-btn"
+              onClick={onSendToChat}
+              disabled={analysis.loading}
+            >
+              Enviar contexto al chat IA
+            </button>
+          )}
+        </div>
+
+        {/* ── Columna derecha: Resultados ────────────────────────────────────────────── */}
+        <div className="nsa-right">
+          {analysis.error && (
+            <div className="nsa-error-box">
+              <span className="error-icon">⚠</span>
+              <p>{analysis.error}</p>
             </div>
-            <ProviderStatusSummary providers={confluence.providerStatus} />
-          </div>
-          <div className="tnmt-provider-grid">
-            {confluence.providerStatus.map((provider) => <ProviderPill key={provider.id} provider={provider} />)}
-          </div>
-        </div>
-      )}
+          )}
 
-      <div className="tnmt-news-actions">
-        <button type="button" className="tnmt-primary-button" onClick={loadTickerNews} disabled={loading}>
-          Cargar noticias reales del ticker
-        </button>
-        <button type="button" onClick={() => void analyzeManual()} disabled={!canAnalyzeManual || loading}>
-          <ShieldCheck size={16} /> Analizar fuentes pegadas
-        </button>
-      </div>
+          {analysis.result && <AnalysisResult result={analysis.result} />}
 
-      {error && <div className="tnmt-error">{error}</div>}
-
-      <div className="tnmt-news-grid">
-        <div className="tnmt-news-column">
-          <SourceInput symbol={activeSymbol} onAdd={handleAddSource} />
-          <SourceList
-            sources={sources}
-            onRemove={(id) => setSources((current) => current.filter((source) => (source.id ?? source.url ?? source.title) !== id))}
-            onClear={() => {
-              setSources([]);
-              setManualAnalysis(null);
-            }}
-          />
-        </div>
-        <div className="tnmt-news-column tnmt-news-column--results">
-          {loading && <div className="tnmt-loading">Consultando APIs reales y calculando sentimiento...</div>}
-          <AnalysisResult confluence={confluence} manualAnalysis={manualAnalysis} onArticleSelect={handleArticleClick} />
+          {!analysis.result && !analysis.error && !analysis.loading && (
+            <div className="nsa-placeholder">
+              <p>Agrega fuentes y haz clic en "Analizar Fuentes"</p>
+            </div>
+          )}
         </div>
       </div>
-
-      <NewsDetailModal
-        isOpen={showModal}
-        onClose={() => {
-          setShowModal(false);
-          setSelectedArticle(null);
-        }}
-        article={selectedArticle}
-        symbol={activeSymbol}
-      />
-    </section>
+    </div>
   );
-}
+};

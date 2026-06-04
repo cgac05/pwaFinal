@@ -1,9 +1,9 @@
 /**
- * src/features/news/index.ts
- * FIC: Barril de exportación para el módulo de noticias
+ * src/features/news-team06/index.ts
+ * Noticias 1 / A_NOTICIAS separado de Noticias 2.
  */
 
-export { NewsSourcesAnalyzer } from './NewsSourcesAnalyzer';
+export { NewsTeam06SourcesAnalyzer } from './NewsTeam06SourcesAnalyzer';
 export { NewsDetailModal } from './NewsDetailModal';
 export { SourceInput } from './SourceInput';
 export { SourceList } from './SourceList';
