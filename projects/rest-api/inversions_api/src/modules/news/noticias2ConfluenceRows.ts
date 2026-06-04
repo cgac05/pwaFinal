@@ -177,7 +177,7 @@ export async function buildNoticias2ConfluenceRows(
   // 3. Score agregado (promedio ponderado por orden de aparición)
   const weights  = scored.map((_, i) => 1 / (i + 1));
   const wTotal   = weights.reduce((s, w) => s + w, 0);
-  const aggScore = Number((scored.reduce((s, a, i) => s + a.score * weights[i], 0) / wTotal).toFixed(3));
+  const aggScore = Number((scored.reduce((s, a, i) => s + (a.score ?? 0) * weights[i], 0) / wTotal).toFixed(3));
   const confidence = Math.min(0.85, 0.45 + Math.abs(aggScore) * 0.4);
 
   // 4. Construye UNA fila resumen de A_NOTICIAS_2 (patrón equivalente a fila CANONICAL de TEAM-06)
@@ -226,7 +226,7 @@ export async function buildNoticias2ConfluenceRows(
 
   // 5. Construye filas individuales por artículo (subCore = índice)
   const articleRows: ConfluenceSignalRow[] = scored.slice(0, 4).map((a, idx) => {
-    const s  = a.score !== 0 ? a.score : scoreLexicon(`${a.headline} ${a.snippet}`);
+    const s  = Number(((a.score ?? 0) !== 0 ? (a.score ?? 0) : scoreLexicon(`${a.headline} ${a.snippet}`)).toFixed(3));
     const ts = tipoSenalFromScore(s);
     return {
       ticket:     sym,
@@ -237,7 +237,7 @@ export async function buildNoticias2ConfluenceRows(
       fecha:      (() => { try { return new Date(a.publishedAt).toISOString().slice(0, 10); } catch { return now.toISOString().slice(0, 10); } })(),
       timeframe,
       tendencia:  tendenciaFromScore(s),
-      score:      Number(s.toFixed(3)),
+      score:      s,
       peso:       Number(Math.max(0.05, Math.abs(s) * confidence).toFixed(3)),
       invertir:   ts === "CALL" && s > 0.3,
       estado:     estadoFromScore(s),
