@@ -1,0 +1,107 @@
+/* FIC: Revolut Design System — CSS token registry. Single source of truth for all design values.
+   FIC: Sistema de diseño Revolut — registro de tokens CSS. Fuente única de verdad de todos los valores de diseño. */
+
+/* ────────────────────────────────────────
+   REVOLUT DESIGN SYSTEM — Token Registry
+   Modo: dark (default) + light (override)
+   ──────────────────────────────────────── */
+
+:root {
+  /* Color — Canvas */
+  --color-bg: #000000;
+  --color-surface: #0a0a0a;
+  --color-surface-raised: #16181a;
+
+  /* Color — Bordes */
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+
+  /* Color — Texto */
+  --color-text: #ffffff;
+  --color-text-muted: rgba(255, 255, 255, 0.72);
+
+  /* Color — Acento (cobalt-violet, única marca Revolut) */
+  --color-accent: #494fdf;
+  --color-accent-hover: #4f55f1;
+  --color-accent-subtle: rgba(73, 79, 223, 0.12);
+
+  /* Color — Estados financieros */
+  --color-buy: #00a87e;
+  --color-sell: #e23b4a;
+  --color-hold: #b09000;
+
+  /* Color — Modo real (warning) */
+  --color-warning: #ec7e00;
+  --color-warning-subtle: rgba(236, 126, 0, 0.12);
+
+  /* Forma — Border radius */
+  --radius-pill: 999px;
+  --radius-lg: 20px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 4px;
+
+  /* Elevación — Revolut no usa drop-shadows; elevación por contraste de superficie */
+  --shadow-card: none;
+
+  /* Tipografía */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-weight-body: 400;
+  --font-weight-emphasis: 600;
+  --font-weight-bold: 700;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.5rem;
+
+  /* Espaciado */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* Animaciones */
+  --duration-fast: 120ms;
+  --duration-normal: 220ms;
+  --duration-slow: 350ms;
+  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-decelerate: cubic-bezier(0, 0, 0.2, 1);
+
+  /* Layout */
+  --nav-height: 64px;
+  --sidebar-width: 280px;
+  --drawer-width: 320px;
+
+  /* AppShell — Feature 005 */
+  --activity-bar-width: 48px;
+  --left-panel-width: 280px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg: #ffffff;
+    --color-surface: #f4f4f4;
+    --color-surface-raised: #ffffff;
+    --color-border: #e2e2e7;
+    --color-border-subtle: rgba(0, 0, 0, 0.06);
+    --color-text: #191c1f;
+    --color-text-muted: #505a63;
+    --color-accent: #494fdf;
+    --color-accent-hover: #3a40c4;
+    --color-accent-subtle: rgba(73, 79, 223, 0.08);
+    --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.08);
+  }
+}
+
+/* FIC: Zero-out all durations when user prefers reduced motion — disables all animations automatically.
+   FIC: Poner en cero todas las duraciones cuando el usuario prefiere movimiento reducido — deshabilita todas las animaciones automáticamente. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+  }
+}

@@ -1,0 +1,490 @@
+// FIC: Phase 5 T095 — tabla canonica con columnas del PDF "DASBOARD Y TABLA v1".
+// FIC: Reemplaza la tabla v0 (symbol/direction/confidence/timestamp) por el contrato del PDF.
+
+import React, { useEffect, useMemo, useState } from "react";
+import { useSignalStore, type SelectedSignal } from "../../store/signals";
+import { useInstitutionalStore } from "../../store/institutional";
+import {
+  getConfluenceTable,
+  type ConfluenceSignalRow,
+  type ConfluenceTableResponse
+} from "../../services/signals/confluenceTableApi";
+import type { InstitutionalAnalysisResponse } from "../../services/institutional/institutionalApi";
+import { OptionGreeksRow } from "./OptionGreeksRow";
+import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailModal";
+import { AiDetailModal } from "../ai/AiDetailModal";
+import { MarkdownContent } from "../../components/ui/MarkdownContent";
+import { ObservationsTab } from "./ObservationsTab";
+import { TecnicoDetailModal } from "./TecnicoDetailModal";
+import { NoticiasDetailModal } from "./NoticiasDetailModal";
+
+// FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
+const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia"; label: string; width: number }> = [
+  { key: "ticket", label: "TICKET", width: 76 },
+  { key: "core", label: "CORE", width: 150 },
+  { key: "subCore", label: "SUBCORE", width: 110 },
+  { key: "precio", label: "PRECIO", width: 96 },
+  { key: "tipoSenal", label: "TIPO SEÑAL", width: 108 },
+  { key: "fecha", label: "FECHA", width: 110 },
+  { key: "timeframe", label: "TIMEFRAME", width: 112 },
+  { key: "tendencia", label: "TENDENCIA", width: 128 },
+  { key: "score", label: "SCORE", width: 86 },
+  { key: "peso", label: "PESO", width: 82 },
+  { key: "invertir", label: "INVERTIR", width: 96 },
+  { key: "estado", label: "ESTADO", width: 118 },
+  { key: "estrategia", label: "ESTRATEGIA", width: 170 },
+];
+
+function buildResumen(
+  row: ConfluenceSignalRow,
+  instResults: Record<string, InstitutionalAnalysisResponse>
+): string {
+  if (row.core === "A_INSTITUCIONAL") {
+    const result = instResults[row.ticket?.toUpperCase() ?? ""];
+    if (result) {
+      const parts: string[] = [];
+      if (result.trends) {
+        parts.push(`Tendencia: ${result.trends.direction} SMA50=${result.trends.sma50.toFixed(2)} SMA200=${result.trends.sma200.toFixed(2)}`);
+        if (result.trends.crossover) parts.push(`Crossover: ${result.trends.crossover.type} hace ${result.trends.crossover.daysAgo}d`);
+      }
+      if (result.zones) {
+        parts.push(`Zonas: ${result.zones.support.length} soporte, ${result.zones.resistance.length} resistencia`);
+        if (result.zones.support.length) parts.push(`Soporte clave: $${result.zones.support[0].price.toFixed(2)}`);
+        if (result.zones.resistance.length) parts.push(`Resistencia clave: $${result.zones.resistance[0].price.toFixed(2)}`);
+      }
+      if (result.expiration) parts.push(`Vencimiento: régimen=${result.expiration.currentRegime}, ${result.expiration.daysToNextOpex}d para OpEx, sesgo=${result.expiration.expiryBias}`);
+      if (result.metrics) parts.push(`Ownership: ${result.metrics.fundsOwnershipPct.toFixed(1)}%, NetFlow: $${result.metrics.netFlow.toLocaleString()}`);
+      return `[Institucional ${row.ticket}] ${parts.join(". ")}`;
+    }
+  }
+  const obs = row.observacion;
+  const metricasObj = obs.metricas ?? {};
+  if (row.core === "A_NOTICIAS") {
+    const contextoIa = String(
+      metricasObj.CONTEXTO_ANALIZADO_IA
+        ?? metricasObj.RESUMEN_NOTICIA
+        ?? metricasObj.CONTEXTO_NOTICIA
+        ?? metricasObj.TEXTO_ANALIZADO_IA
+        ?? obs.explicacion
+        ?? obs.senal
+        ?? ""
+    ).trim();
+    const veredicto = String(metricasObj.VEREDICTO ?? row.tipoSenal ?? "HOLD");
+    const proveedor = String(metricasObj.PROVEEDOR ?? row.fuente ?? "news-provider");
+    const fecha = String(metricasObj.FECHA_NOTICIA ?? row.fecha ?? "");
+    return [
+      `[Noticias ${row.ticket}] Contexto completo usado para BUY/SELL/HOLD: ${contextoIa}`,
+      `Veredicto=${veredicto}; Tipo señal=${row.tipoSenal}; Tendencia=${row.tendencia}`,
+      `Proveedor=${proveedor}; Fecha=${fecha}; Peso=${row.peso.toFixed(3)}; Score=${row.score.toFixed(3)}`
+    ].filter(Boolean).join(". ");
+  }
+  const met = Object.entries(metricasObj).map(([k, v]) => `${k}=${v}`).join(", ");
+  return [obs.objetivo, obs.senal, obs.explicacion, met ? `Métricas: ${met}` : ""].filter(Boolean).join(". ");
+}
+
+interface Props {
+  symbol?: string;
+  /** FIC: Permite sobrescribir las filas (por ejemplo desde una corrida de simulacion). */
+  rows?: ConfluenceSignalRow[];
+  activeStrategy?: string;
+  fundamentalAnalysis?: any;
+  /** Veredicto del módulo Noticias 2 para el ticker activo. */
+  noticias2Verdict?: "BUY" | "SELL" | "HOLD" | null;
+  /** Callback cuando el usuario hace clic en una fila de estrategia. */
+  onStrategyRowClick?: (row: ConfluenceSignalRow) => void;
+}
+
+function colorForTipo(tipo: string): string {
+  if (tipo === "CALL") return "var(--color-buy, #2ec27e)";
+  if (tipo === "PUT") return "var(--color-sell, #f85149)";
+  return "var(--color-text-muted, #8b949e)";
+}
+
+function colorForEstado(estado: string): string {
+  if (estado === "DEGRADADA") return "var(--color-text-muted, #8b949e)";
+  if (estado === "INVALIDADA") return "var(--color-sell, #f85149)";
+  return "var(--color-buy, #2ec27e)";
+}
+
+export function ConfluenceSignalsTable({
+  symbol,
+  rows: rowsProp,
+  activeStrategy,
+  fundamentalAnalysis,
+  noticias2Verdict,
+}: Props) {
+  const [rows, setRows] = useState<ConfluenceSignalRow[]>(rowsProp ?? []);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [meta, setMeta] = useState<Omit<ConfluenceTableResponse, "rows"> | null>(null);
+  const [modalTicker, setModalTicker] = useState<string | null>(null);
+  const [modalResumen, setModalResumen] = useState<string>("");
+  const [modalRow, setModalRow] = useState<ConfluenceSignalRow | null>(null);
+  const [stubCore, setStubCore] = useState<string | null>(null);
+  const [stubResumen, setStubResumen] = useState<string>("");
+  // FIC: Full row stored for A_TECNICO structured detail panel. (EN)
+  // FIC: Fila completa almacenada para el panel de detalle estructurado de A_TECNICO. (ES)
+  const [stubRow, setStubRow] = useState<ConfluenceSignalRow | null>(null);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+
+  const { setSelectedSignal } = useSignalStore();
+  const { results: institutionalResults } = useInstitutionalStore();
+
+  useEffect(() => {
+    if (!stubCore) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setStubCore(null); setStubRow(null); } };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [stubCore]);
+
+  useEffect(() => {
+    if (rowsProp) {
+      setRows(rowsProp);
+      return;
+    }
+    if (!symbol) return;
+    setLoading(true);
+    setError(null);
+    getConfluenceTable({ ticket: symbol })
+      .then((res) => {
+        setRows(res.rows);
+        setMeta({
+          generated_at: res.generated_at,
+          algorithm_version: res.algorithm_version,
+          ticket: res.ticket,
+          timeframe: res.timeframe
+        });
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "load_failed"))
+      .finally(() => setLoading(false));
+  }, [symbol, rowsProp]);
+
+  const enrichedSorted = useMemo(() => {
+    const order = ["A_INDICADORES", "A_FUNDAMENTAL", "A_TECNICO", "A_INSTITUCIONAL", "A_NOTICIAS", "A_IA"];
+    
+    let finalRows = [...rows];
+    if (fundamentalAnalysis?.confluenceRows && fundamentalAnalysis.confluenceRows.length > 0) {
+      finalRows = finalRows.filter((r) => r.core !== "A_FUNDAMENTAL");
+      finalRows.push(...fundamentalAnalysis.confluenceRows);
+    }
+    
+    return finalRows
+      .sort((a, b) => order.indexOf(a.core) - order.indexOf(b.core))
+      .map((row) => ({ ...row, resumen_analisis: buildResumen(row, institutionalResults) }));
+  }, [rows, institutionalResults, fundamentalAnalysis]);
+
+  const totalCols = TABLE_COLUMNS.length;
+  const sorted = enrichedSorted;
+
+  return (
+    <section className="card" style={{ overflow: "hidden" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+        <h2 style={{ margin: 0 }}>Tabla de Confluencia de Señales</h2>
+        {meta && (
+          <span style={{ color: "var(--color-text-muted)", fontSize: "0.75rem" }}>
+            {meta.ticket} · {meta.timeframe} · v{meta.algorithm_version}
+          </span>
+        )}
+      </div>
+
+      {error && (
+        <div style={{ color: "var(--color-sell, #f85149)", marginBottom: "0.5rem", fontSize: "0.8rem" }}>
+          Error: {error}
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+        <span className="badge badge-medium">Vista compacta</span>
+        <span className="badge badge-hold" style={{ fontSize: "0.72rem" }}>
+          Estrategia: {(activeStrategy ?? "SIN_ESTRATEGIA").replace(/_/g, " ")}
+        </span>
+        {noticias2Verdict && (() => {
+          // Estrategias alcistas (BUY apoya, SELL contradice)
+          const BULLISH_STRATS = new Set(["LONG_CALL","BUY_CALL","BULL_CALL_SPREAD","CALENDAR_SPREAD","DIAGONAL_SPREAD","WHEEL"]);
+          // Estrategias bajistas (SELL apoya, BUY contradice)
+          const BEARISH_STRATS = new Set(["LONG_PUT","BUY_PUT","BEAR_PUT_SPREAD"]);
+          // Estrategias neutras de volatilidad (HOLD es lo ideal, BUY/SELL añaden sesgo)
+          const NEUTRAL_STRATS = new Set(["IRON_CONDOR","IRON_BUTTERFLY","CONDOR","BUTTERFLY_SPREAD","STRADDLE","STRANGLE","BUTTERFLY"]);
+
+          const strat = (activeStrategy ?? "").toUpperCase();
+          const v     = noticias2Verdict;
+
+          // Calcula si la noticia alinea o contradice la estrategia
+          let alignment: "apoya" | "contradice" | "neutral" | "sesgo" = "neutral";
+          let bg = "#ffa000";
+
+          if (BULLISH_STRATS.has(strat)) {
+            alignment = v === "BUY" ? "apoya" : v === "SELL" ? "contradice" : "neutral";
+            bg = v === "BUY" ? "#00c853" : v === "SELL" ? "#ff1744" : "#ffa000";
+          } else if (BEARISH_STRATS.has(strat)) {
+            alignment = v === "SELL" ? "apoya" : v === "BUY" ? "contradice" : "neutral";
+            bg = v === "SELL" ? "#00c853" : v === "BUY" ? "#ff1744" : "#ffa000";
+          } else if (NEUTRAL_STRATS.has(strat)) {
+            // En estrategias de volatilidad, cualquier sesgo fuerte contradice
+            alignment = v === "HOLD" ? "apoya" : "sesgo";
+            bg = v === "HOLD" ? "#00c853" : "#ffa000";
+          }
+
+          const ICON  = { BUY: "▲", SELL: "▼", HOLD: "—" };
+          const LABEL = { BUY: "Comprar", SELL: "Vender", HOLD: "Esperar" };
+          const ALIGN_ICON = alignment === "apoya" ? "✓" : alignment === "contradice" ? "✗" : "~";
+          const tooltipText = `Sentimiento de noticias: ${LABEL[v]}. ${alignment === "apoya" ? "Apoya" : alignment === "contradice" ? "Contradice" : "Neutral respecto a"} la estrategia ${strat.replace(/_/g, " ")}.`;
+
+          return (
+            <span
+              title={tooltipText}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
+                padding: "4px 12px", borderRadius: "var(--radius-pill)",
+                background: bg, color: "#fff",
+                fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.03em",
+                cursor: "help", boxShadow: `0 0 0 2px ${bg}44`,
+              }}
+            >
+              <span>{ICON[v]}</span>
+              <span>Noticias 2: {LABEL[v]}</span>
+              <span style={{ opacity: 0.8, fontSize: "0.65rem" }}>{ALIGN_ICON}</span>
+            </span>
+          );
+        })()}
+      </div>
+
+      <div style={{ maxHeight: 500, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
+        <table style={{ width: "100%", minWidth: 1400, borderCollapse: "collapse", tableLayout: "fixed" }}>
+          <thead>
+            <tr>
+              {TABLE_COLUMNS.map((col) => (
+                <th key={col.key} style={{ position: "sticky", top: 0, background: "var(--color-surface)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", width: col.width }}>
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading && rows.length === 0 ? (
+              <tr><td colSpan={totalCols} style={{ padding: "1rem", textAlign: "center" }}>Cargando…</td></tr>
+            ) : sorted.length === 0 ? (
+              <tr><td colSpan={totalCols} style={{ padding: "1rem", textAlign: "center", color: "var(--color-text-muted)" }}>Sin datos para mostrar</td></tr>
+            ) : (
+              sorted.flatMap((row, idx) => {
+                const rowKey = `${row.core}-${row.subCore ?? "agg"}-${idx}`;
+                const instData = institutionalResults[row.ticket?.toUpperCase() ?? ""];
+                const onClick = () => {
+                  if (row.core === "A_INSTITUCIONAL") {
+                    if (instData) {
+                      setModalTicker(row.ticket ?? null);
+                      setModalResumen(row.resumen_analisis ?? "");
+                      setModalRow(row);
+                    } else {
+                      setSelectedSignal({
+                        id: rowKey,
+                        symbol: row.ticket,
+                        metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
+                      } as SelectedSignal);
+                    }
+                  } else if (row.core === "A_INDICADORES") {
+                    setSelectedSignal({
+                      id: rowKey,
+                      symbol: row.ticket,
+                      metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
+                    } as SelectedSignal);
+                  } else {
+                    setStubCore(row.core);
+                    setStubResumen(row.resumen_analisis ?? "");
+                    setStubRow(row);
+                    if (row.core === "A_IA") {
+                      setStubRow(row);
+                      setAiModalOpen(true);
+                      setStubCore(null); // Clear stubCore so the right panel doesn't open
+                      setStubResumen("");
+                    }
+                  }
+                };
+
+                const cells = (
+                  <tr key={rowKey} onClick={onClick} data-resumen={row.resumen_analisis ?? ""} style={{ cursor: "pointer", opacity: row.estado === "DEGRADADA" ? 0.62 : 1 }}>
+                    {TABLE_COLUMNS.map((col) => {
+                      let content: React.ReactNode;
+                      if (col.key === "estrategia") {
+                        const label = (row.estrategia ?? activeStrategy ?? "N/A").replace(/_/g, " ");
+                        content = <span className="badge badge-hold">{label}</span>;
+                      } else if (col.key === "tipoSenal") {
+                        content = <span style={{ color: colorForTipo(row.tipoSenal), fontWeight: 700 }}>{row.tipoSenal}</span>;
+                      } else if (col.key === "estado") {
+                        content = <span style={{ color: colorForEstado(row.estado), fontWeight: 600 }}>{row.estado}</span>;
+                      } else if (col.key === "invertir") {
+                        content = row.invertir ? "SI" : "NO";
+                      } else if (col.key === "score" || col.key === "peso" || col.key === "precio") {
+                        const v = row[col.key] as number;
+                        content = Number.isFinite(v) ? v.toFixed(3) : "-";
+                      } else if (col.key === "core" && row.core === "A_IA") {
+                        content = (
+                          <span>
+                            {row.core}{" "}
+                            <span title={row.disclaimer_id} style={{ background: "var(--color-accent-subtle)", color: "var(--color-accent)", borderRadius: 3, padding: "0 4px", fontSize: "0.6rem", fontWeight: 700 }}>IA</span>
+                          </span>
+                        );
+                      } else {
+                        const v = (row as any)[col.key];
+                        content = v == null ? "-" : String(v);
+                      }
+                      return (
+                        <td key={col.key} style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {content}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+                if (row.optionLeg) {
+                  return [cells, <OptionGreeksRow key={`${rowKey}-greeks`} greeks={row.optionLeg} colSpan={totalCols} />];
+                }
+                return [cells];
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {stubCore && stubCore !== "A_TECNICO" && stubCore !== "A_NOTICIAS" && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="stub-dialog-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.72)",
+            zIndex: 1100,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1.25rem"
+          }}
+          onClick={() => { setStubCore(null); setStubRow(null); }}
+        >
+          <div
+            className="card"
+            style={{
+              width: "min(560px, 94vw)",
+              maxHeight: "80vh",
+              display: "flex",
+              flexDirection: "column",
+              border: "1px solid var(--color-border)",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
+              padding: "1.75rem"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="stub-dialog-title" style={{ marginBottom: "0.25rem", flexShrink: 0 }}>
+              {stubCore === "A_TECNICO" ? "Análisis Técnico" : stubCore === "A_IA" ? "Auditoría de Inteligencia Artificial" : stubCore.replace("A_", "")}
+            </h2>
+            {stubCore !== "A_TECNICO" && (
+              <p style={{ color: "var(--color-text-muted)", fontSize: "0.8rem", marginBottom: "1.25rem", flexShrink: 0 }}>
+                Análisis gráfico en construcción — próximamente disponible.
+              </p>
+            )}
+
+            {/* A_TECNICO logic moved to TecnicoDetailModal */}
+
+            {/* FIC: Non-A_IA: ObservationsTab when stubRow available (upstream), else plain stubResumen. (EN) */}
+            {stubCore !== "A_IA" && stubRow && (
+              <>
+                <div style={{
+                  borderTop: "1px solid var(--color-border-subtle)",
+                  paddingTop: "1rem",
+                  marginBottom: "0.5rem",
+                  flexShrink: 0
+                }}>
+                  <span style={{
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
+                    color: "var(--color-text-muted)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.07em"
+                  }}>
+                    Observaciones
+                  </span>
+                </div>
+                <div style={{ flex: 1, overflowY: "auto", marginBottom: "1.25rem", background: "var(--color-surface-raised)", borderRadius: "var(--radius-sm)", padding: "0.9rem 1rem" }}>
+                  <ObservationsTab row={stubRow} activeStrategy={activeStrategy} />
+                </div>
+              </>
+            )}
+
+
+            {stubCore !== "A_IA" && !stubRow && stubResumen && (
+              <>
+                <div style={{
+                  borderTop: "1px solid var(--color-border-subtle)",
+                  paddingTop: "1rem",
+                  marginBottom: "0.5rem",
+                  flexShrink: 0
+                }}>
+                  <span style={{
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
+                    color: "var(--color-text-muted)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.07em"
+                  }}>
+                    Observaciones
+                  </span>
+                </div>
+                <div style={{
+                  flex: 1,
+                  overflowY: "auto",
+                  background: "var(--color-surface-raised)",
+                  borderRadius: "var(--radius-sm)",
+                  padding: "0.9rem 1rem",
+                  marginBottom: "1.25rem"
+                }}>
+                  <MarkdownContent content={stubResumen} />
+                </div>
+              </>
+            )}
+
+            <button className="btn-ghost" type="button" onClick={() => { setStubCore(null); setStubRow(null); }} style={{ flexShrink: 0, alignSelf: "flex-end" }}>
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
+      <InstitutionalDetailModal
+        isOpen={modalTicker !== null}
+        onClose={() => { setModalTicker(null); setModalRow(null); }}
+        ticker={modalTicker ?? ""}
+        data={modalTicker ? (institutionalResults[modalTicker.toUpperCase()] ?? null) : null}
+        resumen={modalResumen}
+        signalRow={modalRow ?? undefined}
+      />
+
+      <TecnicoDetailModal
+        isOpen={stubCore === "A_TECNICO"}
+        onClose={() => { setStubCore(null); setStubRow(null); }}
+        ticker={symbol ?? ""}
+        signalRow={stubRow ?? undefined}
+        activeStrategy={activeStrategy}
+      />
+
+      <NoticiasDetailModal
+        isOpen={stubCore === "A_NOTICIAS"}
+        onClose={() => { setStubCore(null); setStubRow(null); }}
+        ticker={symbol ?? ""}
+        signalRow={stubRow ?? undefined}
+        activeStrategy={activeStrategy}
+      />
+
+      <AiDetailModal
+        isOpen={aiModalOpen}
+        onClose={() => { setAiModalOpen(false); setStubRow(null); }}
+        ticker={symbol ?? ""}
+        signalRow={stubRow ?? undefined}
+        activeStrategy={activeStrategy}
+      />
+    </section>
+  );
+}
+
+export default ConfluenceSignalsTable;

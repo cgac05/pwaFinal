@@ -1,0 +1,254 @@
+/* FIC: Inversions App PWA — Design System Base. Imports Revolut token registry and animations.
+   FIC: Inversions App PWA — Base del sistema de diseño. Importa el registro de tokens Revolut y animaciones. */
+@import './styles/tokens.css';
+@import './styles/animations.css';
+
+/* =========================================================
+   Inversions App PWA – Design System Base
+   ========================================================= */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* ── Typography ─────────────────────────────────────────── */
+h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 1.05rem; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+p  { color: var(--color-text-muted); }
+
+/* ── Buttons ────────────────────────────────────────────── */
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-emphasis);
+  font-family: var(--font-family);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button {
+    transition: background var(--duration-fast) var(--easing-standard), opacity var(--duration-fast) var(--easing-standard);
+  }
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  color: #fff;
+  padding: 0.5rem 1.25rem;
+  border-radius: var(--radius-pill);
+}
+.btn-primary:hover:not(:disabled) { background: var(--color-accent-hover); }
+
+.btn-ghost {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+.btn-ghost:hover:not(:disabled) { background: var(--color-surface-raised); opacity: 0.8; }
+.btn-ghost.active { border-color: var(--color-accent); color: var(--color-accent); }
+
+/* ── Inputs & Selects ───────────────────────────────────── */
+input, select {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  padding: 0.45rem 0.75rem;
+  outline: none;
+  transition: border-color var(--duration-fast) var(--easing-standard);
+  width: 100%;
+}
+input:focus, select:focus { border-color: var(--color-accent); }
+input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ── Cards ──────────────────────────────────────────────── */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  box-shadow: var(--shadow-card);
+}
+
+/* ── Badges ─────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  border-radius: var(--radius-pill);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.6rem;
+  text-transform: uppercase;
+}
+.badge-buy  { background: rgba(63, 185, 80, 0.15); color: var(--color-buy); border: 1px solid var(--color-buy); }
+.badge-sell { background: rgba(248, 81, 73, 0.15); color: var(--color-sell); border: 1px solid var(--color-sell); }
+.badge-hold { background: rgba(210, 153, 34, 0.15); color: var(--color-hold); border: 1px solid var(--color-hold); }
+.badge-low  { background: rgba(63, 185, 80, 0.1); color: var(--color-buy); }
+.badge-medium { background: rgba(210, 153, 34, 0.1); color: var(--color-warning); }
+.badge-high   { background: rgba(248, 81, 73, 0.1); color: var(--color-sell); }
+
+/* ── Tables ─────────────────────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+thead th {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--color-border);
+}
+tbody td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text);
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--color-surface-raised); }
+
+/* ── Loading Skeleton ───────────────────────────────────── */
+.skeleton {
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton {
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+  }
+}
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg); }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: var(--radius-xs); }
+
+
+/* AppShell dashboard responsiveness */
+.dashboard-main-content {
+  width: 100%;
+  min-width: 0;
+  --dashboard-panel-max-width: calc(100vw - var(--activity-bar-width) - var(--left-panel-width) - (var(--space-lg) * 2));
+}
+
+.dashboard-main-content > * {
+  justify-self: center;
+  min-width: 0;
+  width: min(100%, var(--dashboard-panel-max-width));
+}
+
+.dashboard-panel-stack {
+  justify-items: stretch;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+.dashboard-main-content > .dashboard-panel-stack {
+  justify-self: center;
+  width: min(100%, var(--dashboard-panel-max-width));
+}
+
+.dashboard-panel-stack > * {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+.dashboard-panel-stack > section.card,
+.dashboard-panel-stack > .card,
+.dashboard-panel-stack section.card {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+.dashboard-main-content .card {
+  max-width: 100%;
+}
+
+.dashboard-topbar,
+.dashboard-controls-card {
+  min-width: 0;
+  row-gap: var(--space-sm);
+}
+
+.dashboard-filter-grid {
+  min-width: 0;
+}
+
+.dashboard-chart-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-main-content {
+    padding: var(--space-md) !important;
+    gap: var(--space-md) !important;
+    --dashboard-panel-max-width: calc(100vw - var(--activity-bar-width) - (var(--space-md) * 2));
+  }
+
+  .dashboard-topbar {
+    align-items: flex-start !important;
+    flex-direction: column;
+  }
+
+  .dashboard-filter-grid {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+
+  .dashboard-core-count {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-main-content {
+    padding: var(--space-sm) !important;
+    --dashboard-panel-max-width: calc(100vw - var(--activity-bar-width) - (var(--space-sm) * 2));
+  }
+
+  .dashboard-filter-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dashboard-filter-grid .btn-primary,
+  .dashboard-controls-card > * {
+    width: 100%;
+  }
+
+  .dashboard-chart-card {
+    min-height: 320px !important;
+  }
+}
