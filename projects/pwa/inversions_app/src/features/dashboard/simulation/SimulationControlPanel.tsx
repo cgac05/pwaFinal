@@ -196,7 +196,7 @@ const CORE_META: Record<CoreId, { label: string; icon: React.ReactNode; tooltip:
   A_TECNICO:      { label: "Técnico",       icon: <TrendingUp size={13} />, tooltip: "Patrones de precio y volumen en el chart. Detecta soportes, resistencias y formaciones técnicas clave." },
   A_INSTITUCIONAL:{ label: "Institucional", icon: <Building2 size={13} />,  tooltip: "Actividad de grandes capitales: fondos, opciones institucionales y flujo de dinero inteligente (smart money)." },
   A_NOTICIAS:     { label: "Noticias",      icon: <Newspaper size={13} />,  tooltip: "Sentimiento del mercado basado en noticias y eventos recientes que afectan directamente al ticker." },
-  A_NOTICIAS_2:   { label: "Noticias 2",   icon: <Newspaper size={13} />,  tooltip: "006-noticias-2: análisis de sentimiento con fuentes financieras independientes (Yahoo RSS + fallback contextual). Genera filas canónicas en la Tabla de Confluencias." },
+  A_NOTICIAS_2:   { label: "Noticias 2",   icon: <Newspaper size={13} />,  tooltip: "Análisis de sentimiento de mercado avanzado. Extrae titulares en tiempo real de múltiples fuentes financieras y utiliza IA para justificar detalladamente el veredicto, contrastando la evidencia cruda con el razonamiento algorítmico en la Tabla de Confluencias." },
   A_IA:           { label: "IA",            icon: <Cpu size={13} />,        tooltip: "Motor de inteligencia artificial que sintetiza señales multi-fuente y detecta patrones no lineales." },
 };
 
