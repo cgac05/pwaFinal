@@ -1,12 +1,12 @@
-// FIC: Shared handler for building strategies from real Alpaca options chain data.
+// FIC: Shared handler for building strategies from real multi-source options chain data.
 // All strategy endpoints (from-chain, iron-condor, iron-butterfly, butterfly-spread, condor)
-// delegate to this handler to ensure zero fake data — premiums always come from Alpaca.
+// delegate to this handler to ensure zero fake data — premiums always come from real sources.
 //
-// FIC: Handler compartido para construir estrategias desde datos reales de options chain de Alpaca.
+// FIC: Handler compartido para construir estrategias desde datos reales de options chain multi-fuente.
 // Todos los endpoints de estrategia (from-chain, iron-condor, iron-butterfly, butterfly-spread, condor)
-// delegan a este handler para garantizar cero datos fake — las primas siempre vienen de Alpaca.
+// delegan a este handler para garantizar cero datos fake — las primas siempre vienen de fuentes reales.
 
-import { createAlpacaOptionsService } from "../../../modules/strategies/complex/alpacaOptionsService";
+import { getMultiSourceOptionsChain } from "../../../modules/strategies/complex/multiSourceOptionsService";
 import { ComplexSimulationEngine, DEFAULT_SIMULATION_CONFIG } from "../../../modules/strategies/complex/complexSimulationEngine";
 import { ComplexRiskEngine, type PortfolioContext } from "../../../modules/strategies/complex/complexRiskEngine";
 import { ComplexReportEngine } from "../../../modules/strategies/complex/complexReportEngine";
@@ -104,7 +104,6 @@ const STRATEGY_ENGINES: Record<SupportedStrategy, () => IComplexStrategyEngine> 
 // FIC: Shared instances / Instancias compartidas
 // ──────────────────────────────────────────────
 
-const optionsService = createAlpacaOptionsService();
 const simulationEngine = new ComplexSimulationEngine();
 const riskEngine = new ComplexRiskEngine();
 const reportEngine = new ComplexReportEngine();
@@ -152,8 +151,8 @@ export class AlpacaAuthError extends Error {
 }
 
 // ──────────────────────────────────────────────
-// FIC: Main handler — builds a strategy from real Alpaca data /
-//      Handler principal — construye una estrategia desde datos reales de Alpaca
+// FIC: Main handler — builds a strategy from real multi-source data /
+//      Handler principal — construye una estrategia desde datos reales multi-fuente
 // ──────────────────────────────────────────────
 
 export async function buildStrategyFromChain(
@@ -163,8 +162,8 @@ export async function buildStrategyFromChain(
   const ticker = request.ticker.trim().toUpperCase();
   const expiration = request.expiracion?.trim() || undefined;
 
-  // ── Step 1: Fetch real options chain from Alpaca ──
-  const chain = await optionsService.getOptionsChain(ticker, expiration);
+  // ── Step 1: Fetch real options chain from multi-source (Tradier → CBOE → MarketData → Alpaca → Yahoo) ──
+  const chain = await getMultiSourceOptionsChain(ticker, expiration);
 
   if (chain.entries.length === 0) {
     throw new ChainNotFoundError(ticker, expiration);
