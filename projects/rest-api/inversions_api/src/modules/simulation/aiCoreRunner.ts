@@ -117,12 +117,15 @@ function buildDeterministicIaCoreFallback(params: {
   decision?: "CALL" | "PUT" | "HOLD";
   reasonCode?: string;
   precalculatedRows?: ConfluenceSignalRow[];
+  errorMessage?: string;
 }): ConfluenceSignalRow {
   const ticker = params.ticket.toUpperCase();
   
   let decision = params.decision;
   let confidence = 0.50;
-  let explicacion = `[Modo de Respaldo] El modelo de IA no está disponible temporalmente. Se ha emitido un veredicto neutral ("HOLD") por precaución. Por favor, inténtalo de nuevo más tarde para obtener el análisis completo.`;
+  let explicacion = params.errorMessage 
+    ? `[Modo de Respaldo] El modelo de IA no está disponible temporalmente. Detalle: ${params.errorMessage}. Se ha emitido un veredicto neutral ("HOLD") por precaución. Por favor, inténtalo de nuevo más tarde para obtener el análisis completo.`
+    : `[Modo de Respaldo] El modelo de IA no está disponible temporalmente. Se ha emitido un veredicto neutral ("HOLD") por precaución. Por favor, inténtalo de nuevo más tarde para obtener el análisis completo.`;
 
   if (!decision) {
     if (params.precalculatedRows && params.precalculatedRows.length > 0) {
@@ -150,7 +153,9 @@ function buildDeterministicIaCoreFallback(params: {
       if (confidence > 1) confidence = 1;
       
       // Mensaje simplificado para UI: evita textos técnicos largos y permite reintento aislado en frontend
-      explicacion = "No pudimos conectarnos con el modelo, inténtalo de nuevo.";
+      explicacion = params.errorMessage 
+        ? `No pudimos conectarnos con el modelo, inténtalo de nuevo. Detalle: ${params.errorMessage}`
+        : "No pudimos conectarnos con el modelo, inténtalo de nuevo.";
     } else {
       decision = "HOLD";
     }
@@ -278,7 +283,8 @@ export async function runAiCore(params: {
       timeframe: params.timeframe,
       sourceInputHash: params.sourceInputHash,
       computedAt: params.computedAt,
-      reasonCode: "LLM_UNAVAILABLE"
+      reasonCode: "LLM_UNAVAILABLE",
+      errorMessage: "Gemini no está habilitado"
     });
   }
 
@@ -391,14 +397,17 @@ ${rowsContext}`;
       source_input_hash: params.sourceInputHash,
     };
   } catch (error: any) {
-    console.error("A_IA: Error ejecutando Gemini, activando canal de respaldo cuantitativo local:", error.message || error);
+    const errMsg = error.message || String(error);
+    console.error("A_IA: Error ejecutando Gemini, activando canal de respaldo cuantitativo local:", errMsg);
     return buildDeterministicIaCoreFallback({
       ticket: params.ticket,
       timeframe: params.timeframe,
       sourceInputHash: params.sourceInputHash,
       computedAt: params.computedAt,
       reasonCode: "LLM_RATE_LIMITED",
-      precalculatedRows: params.precalculatedRows
+      precalculatedRows: params.precalculatedRows,
+      errorMessage: errMsg
     });
   }
 }
+
