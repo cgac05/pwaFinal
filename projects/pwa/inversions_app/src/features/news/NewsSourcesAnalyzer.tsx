@@ -59,6 +59,144 @@ const V = {
   HOLD: { label: 'ESPERAR', bg: '#ffa000', soft: 'rgba(255,160,0,0.12)', text: '#fff', border: '#ffa000' },
 };
 
+// ─── RichReasoning — visualización estructurada del razonamiento IA ──────────
+// Parsea el texto en secciones, extrae entidades clave y las presenta
+// con badges, bullets y sub-secciones escaneables en 5 segundos.
+function RichReasoning({ text, verdict, company }: { text: string; verdict: string; company: string }) {
+  if (!text || text.length < 10) {
+    return <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>Sin razonamiento disponible.</span>;
+  }
+
+  // Entidades financieras conocidas para badgear automáticamente
+  const ENTITY_PATTERNS = [
+    { pattern: /\b(Fed|Federal Reserve|FOMC)\b/gi, color: '#6366f1', bg: '#6366f122' },
+    { pattern: /\b(Warren Buffett|Buffett)\b/gi, color: '#f59e0b', bg: '#f59e0b22' },
+    { pattern: /\b(Elon Musk|Musk)\b/gi, color: '#10b981', bg: '#10b98122' },
+    { pattern: /\b(Trump|Biden|Obama)\b/gi, color: '#ef4444', bg: '#ef444422' },
+    { pattern: /\b(Apple|AAPL)\b/g, color: '#64748b', bg: '#64748b22' },
+    { pattern: /\b(NVIDIA|NVDA)\b/g, color: '#76b900', bg: '#76b90022' },
+    { pattern: /\b(Microsoft|MSFT)\b/g, color: '#0078d4', bg: '#0078d422' },
+    { pattern: /\b(Amazon|AMZN|AWS)\b/g, color: '#ff9900', bg: '#ff990022' },
+    { pattern: /\b(Google|Alphabet|GOOGL)\b/g, color: '#4285f4', bg: '#4285f422' },
+    { pattern: /\b(Tesla|TSLA)\b/g, color: '#e31937', bg: '#e3193722' },
+    { pattern: /\b(tasas de interés|interest rates|rate hike|rate cut)\b/gi, color: '#8b5cf6', bg: '#8b5cf622' },
+    { pattern: /\b(IA|AI|inteligencia artificial|artificial intelligence)\b/gi, color: '#0ea5e9', bg: '#0ea5e922' },
+    { pattern: /\b(alcist[ao]|bullish|alcista)\b/gi, color: '#00c853', bg: '#00c85322' },
+    { pattern: /\b(bajist[ao]|bearish|bajista)\b/gi, color: '#ff1744', bg: '#ff174422' },
+  ];
+
+  // Resalta entidades en un fragmento de texto
+  function highlightEntities(fragment: string) {
+    let parts: (string | React.ReactElement)[] = [fragment];
+    ENTITY_PATTERNS.forEach(({ pattern, color, bg }) => {
+      parts = parts.flatMap(part => {
+        if (typeof part !== 'string') return [part];
+        const segments: (string | React.ReactElement)[] = [];
+        let last = 0;
+        let m: RegExpExecArray | null;
+        pattern.lastIndex = 0;
+        while ((m = pattern.exec(part)) !== null) {
+          if (m.index > last) segments.push(part.slice(last, m.index));
+          segments.push(
+            <span key={`${m[0]}-${m.index}`} style={{
+              display: 'inline-block', padding: '1px 6px', borderRadius: 4,
+              background: bg, color, fontWeight: 700, fontSize: '0.72rem',
+              margin: '0 2px',
+            }}>{m[0]}</span>
+          );
+          last = m.index + m[0].length;
+        }
+        if (last < part.length) segments.push(part.slice(last));
+        return segments;
+      });
+    });
+    return parts;
+  }
+
+  // Divide el texto en oraciones/bullets
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 10);
+
+  // Agrupa en 3 sub-secciones según el contenido de la oración
+  const context:    string[] = [];
+  const impact:     string[] = [];
+  const projection: string[] = [];
+
+  const PROJECTION_KW = /proyecci[oó]n|proyect|pr[oó]xim[oa]|futuro|semana|mes|trimestre|Q[1-4]|week|month|forward|outlook/i;
+  const IMPACT_KW     = /impacto|impact|implica|genera|provoca|cause|result|effect|por lo tanto|therefore|thus/i;
+
+  sentences.forEach(s => {
+    if (PROJECTION_KW.test(s)) projection.push(s);
+    else if (IMPACT_KW.test(s)) impact.push(s);
+    else context.push(s);
+  });
+
+  // Si todas las oraciones fueron a context (texto genérico), las distribuye proporcionalmente
+  if (context.length === sentences.length && sentences.length >= 3) {
+    const third = Math.ceil(sentences.length / 3);
+    context.length = 0;
+    sentences.forEach((s, i) => {
+      if (i < third) context.push(s);
+      else if (i < third * 2) impact.push(s);
+      else projection.push(s);
+    });
+  }
+
+  const sectionStyle: React.CSSProperties = {
+    marginBottom: 10, paddingBottom: 8,
+    borderBottom: '1px solid var(--color-border-subtle)',
+  };
+  const titleStyle: React.CSSProperties = {
+    fontSize: '0.63rem', fontWeight: 800, textTransform: 'uppercase',
+    letterSpacing: '0.1em', color: 'var(--color-text-muted)', marginBottom: 5,
+    display: 'flex', alignItems: 'center', gap: 5,
+  };
+  const bulletStyle: React.CSSProperties = {
+    fontSize: '0.75rem', color: 'var(--color-text-muted)',
+    lineHeight: 1.55, wordBreak: 'break-word', whiteSpace: 'normal',
+    display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 4,
+  };
+
+  const Section = ({ icon, label, items }: { icon: string; label: string; items: string[] }) => {
+    if (!items.length) return null;
+    return (
+      <div style={sectionStyle}>
+        <div style={titleStyle}><span>{icon}</span>{label}</div>
+        {items.map((s, i) => (
+          <div key={i} style={bulletStyle}>
+            <span style={{ flexShrink: 0, marginTop: 2, color: 'var(--color-accent)', fontWeight: 700 }}>▸</span>
+            <span>{highlightEntities(s)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Badge de veredicto en la cabecera del razonamiento
+  const VERDICT_STYLE: Record<string, { bg: string; color: string; label: string }> = {
+    BUY:  { bg: '#00c85322', color: '#00c853', label: 'Alcista' },
+    SELL: { bg: '#ff174422', color: '#ff1744', label: 'Bajista' },
+    HOLD: { bg: '#ffa00022', color: '#ffa000', label: 'Neutral' },
+  };
+  const vs = VERDICT_STYLE[verdict] ?? VERDICT_STYLE['HOLD'];
+
+  return (
+    <div style={{ fontSize: '0.78rem' }}>
+      {/* Chip de postura */}
+      <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ padding: '3px 10px', borderRadius: 'var(--radius-pill)', background: vs.bg, color: vs.color, fontWeight: 700, fontSize: '0.7rem' }}>
+          {vs.label} — {company}
+        </span>
+      </div>
+      <Section icon="🌐" label="Contexto de Mercado"  items={context} />
+      <Section icon="⚡" label="Impacto Directo"       items={impact} />
+      <Section icon="🎯" label="Proyección"             items={projection} />
+    </div>
+  );
+}
+
 // ─── Mini ScoreBar ────────────────────────────────────────────────────────────
 function ScoreBar({ value }: { value: number }) {
   // value en [-1, 1] → barra centrada en 50%
@@ -545,62 +683,91 @@ export const NewsSourcesAnalyzer: React.FC<NewsSourcesAnalyzerProps> = ({
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
 
                   {/* Col 1 — Evidencia Cruda (causa) */}
-                  <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--color-surface-raised)', border: `1px solid ${vm.border}44`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--color-surface-raised)', border: `1px solid ${vm.border}44`, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
                     <div style={{ fontSize: '0.67rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: vm.bg, display: 'flex', alignItems: 'center', gap: 5 }}>
                       📰 Evidencia Cruda
+                      <span style={{ marginLeft: 'auto', fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--color-text-muted)' }}>
+                        {r.articles?.length ?? 0} fuente(s)
+                      </span>
                     </div>
 
                     {(!r.articles || r.articles.length === 0) ? (
                       <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-                        Sin artículos reales disponibles. Yahoo Finance RSS puede estar limitado para este ticker.
+                        Sin artículos disponibles para este ticker.
                       </p>
                     ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', maxHeight: 280 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', maxHeight: 340, paddingRight: 2 }}>
                         {r.articles.slice(0, 4).map((art, i) => {
-                          const artScore  = art.score      != null ? Number(art.score)      : 0;
-                          const artColor  = artScore > 0.1 ? '#00c853' : artScore < -0.1 ? '#ff1744' : '#ffa000';
+                          const artScore = art.score != null ? Number(art.score) : 0;
+                          const artColor = artScore > 0.1 ? '#00c853' : artScore < -0.1 ? '#ff1744' : '#ffa000';
+                          // Genera enlace de búsqueda si el artículo no tiene URL directa
+                          const linkHref = art.url && art.url.length > 5
+                            ? art.url
+                            : `https://finance.yahoo.com/quote/${r.company}/news/`;
+                          const linkLabel = art.url && art.url.length > 5
+                            ? `Leer en ${art.source} ↗`
+                            : `Buscar en Yahoo Finance ↗`;
                           return (
                             <div key={i} style={{
-                              padding: '8px 10px', borderRadius: 8,
+                              padding: '10px 12px', borderRadius: 8,
                               background: 'var(--color-bg)',
-                              border: `1px solid ${artColor}44`,
+                              border: `1.5px solid ${artColor}33`,
+                              minWidth: 0,
                             }}>
-                              {/* Titular */}
-                              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-text)', lineHeight: 1.4, marginBottom: 4 }}>
+                              {/* Titular — sin truncado */}
+                              <div style={{
+                                fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-text)',
+                                lineHeight: 1.45, marginBottom: 5,
+                                wordBreak: 'break-word', whiteSpace: 'normal',
+                              }}>
                                 {art.headline}
                               </div>
-                              {/* Fuente + fecha */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                <span style={{ padding: '1px 6px', borderRadius: 4, background: artColor + '22', color: artColor, fontSize: '0.63rem', fontWeight: 700 }}>
+
+                              {/* Fuente + fecha + score */}
+                              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                                <span style={{
+                                  padding: '2px 7px', borderRadius: 4,
+                                  background: artColor + '22', color: artColor,
+                                  fontSize: '0.63rem', fontWeight: 700, flexShrink: 0,
+                                }}>
                                   {art.source}
                                 </span>
                                 <span style={{ fontSize: '0.62rem', color: 'var(--color-text-muted)' }}>
-                                  {art.publishedAt ? new Date(art.publishedAt).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' }) : '—'}
+                                  {art.publishedAt ? new Date(art.publishedAt).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
                                 </span>
-                                <span style={{ marginLeft: 'auto', fontSize: '0.62rem', fontWeight: 700, color: artColor }}>
+                                <span style={{ marginLeft: 'auto', fontSize: '0.65rem', fontWeight: 800, color: artColor }}>
                                   {artScore >= 0 ? '+' : ''}{artScore.toFixed(2)}
                                 </span>
                               </div>
-                              {/* Snippet */}
+
+                              {/* Snippet completo sin truncado */}
                               {art.snippet && (
-                                <p style={{ margin: '0 0 6px', fontSize: '0.72rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-                                  {art.snippet.slice(0, 120)}{art.snippet.length > 120 ? '…' : ''}
+                                <p style={{
+                                  margin: '0 0 8px', fontSize: '0.72rem',
+                                  color: 'var(--color-text-muted)', lineHeight: 1.55,
+                                  wordBreak: 'break-word', whiteSpace: 'normal',
+                                }}>
+                                  {art.snippet}
                                 </p>
                               )}
-                              {/* Enlace */}
-                              {art.url && (
-                                <a
-                                  href={art.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{
-                                    fontSize: '0.68rem', color: 'var(--color-accent)',
-                                    textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3,
-                                  }}
-                                >
-                                  Leer artículo original ↗
-                                </a>
-                              )}
+
+                              {/* Enlace siempre visible */}
+                              <a
+                                href={linkHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                  padding: '4px 10px', borderRadius: 6,
+                                  background: artColor + '18', border: `1px solid ${artColor}55`,
+                                  color: artColor, fontSize: '0.67rem', fontWeight: 700,
+                                  textDecoration: 'none', transition: 'opacity 0.15s',
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.opacity = '0.75')}
+                                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                              >
+                                {linkLabel}
+                              </a>
                             </div>
                           );
                         })}
@@ -608,14 +775,18 @@ export const NewsSourcesAnalyzer: React.FC<NewsSourcesAnalyzerProps> = ({
                     )}
                   </div>
 
-                  {/* Col 2 — Razonamiento IA (efecto) */}
-                  <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-subtle)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {/* Col 2 — Razonamiento IA estructurado */}
+                  <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-subtle)', display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
                     <div style={{ fontSize: '0.67rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
                       🧠 Razonamiento IA
                     </div>
-                    <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-text-muted)', lineHeight: 1.65, flex: 1 }}>
-                      {r.reasoning || 'Sin razonamiento disponible.'}
-                    </p>
+                    <div style={{ flex: 1, overflowY: 'auto', maxHeight: 340 }}>
+                      <RichReasoning
+                        text={r.reasoning ?? ''}
+                        verdict={r.verdict}
+                        company={r.company}
+                      />
+                    </div>
                   </div>
                 </div>
 
