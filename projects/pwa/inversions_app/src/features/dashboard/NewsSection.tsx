@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, Newspaper, Sparkles } from "lucide-react";
 import { getRelevantNews, type NewsCanonicalPayload, type NewsDateRange, type RelevantNewsItem } from "../../services/news/newsApi";
-// NewsSourcesAnalyzer se controla exclusivamente desde MainDashboard
-// a través del chip "Noticias 2" + gate de simulación. No debe instanciarse aquí.
+import { NewsSourcesAnalyzer } from "../news-team06/NewsSourcesAnalyzer";
 
 type Props = {
   symbol: string;
@@ -19,6 +18,21 @@ function formatPublishedAt(isoDate: string): string {
   const date = new Date(isoDate);
   if (Number.isNaN(date.getTime())) return "Reciente";
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function addDaysIso(value: string | undefined, days: number): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return undefined;
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatNewsWindow(dateRange?: NewsDateRange): string {
+  if (!dateRange?.from && !dateRange?.to) return "Últimas noticias disponibles";
+  const expandedFrom = addDaysIso(dateRange.from, -7) ?? "inicio";
+  const expandedTo = addDaysIso(dateRange.to, 7) ?? "hoy";
+  return `Ventana noticias: ${expandedFrom} → ${expandedTo} (rango estrategia ±7 días)`;
 }
 
 function NewsCard({ item }: { item: RelevantNewsItem }) {
@@ -107,7 +121,7 @@ export function NewsSection({ symbol, dateRange }: Props) {
     setLoading(true);
     setError(null);
 
-    getRelevantNews(symbol, 4)
+    getRelevantNews(symbol, 4, undefined, dateRange)
       .then((response) => {
         if (!active) return;
         setItems(response.items);
@@ -127,7 +141,7 @@ export function NewsSection({ symbol, dateRange }: Props) {
     return () => {
       active = false;
     };
-  }, [symbol]);
+  }, [symbol, dateRange?.from, dateRange?.to]);
 
   return (
     <section className="card" style={{ padding: "var(--space-lg)", display: "grid", gap: "var(--space-md)", overflow: "hidden" }}>
@@ -138,7 +152,7 @@ export function NewsSection({ symbol, dateRange }: Props) {
             <h2 style={{ margin: 0, fontSize: "var(--font-size-lg)" }}>Noticias relevantes</h2>
           </div>
           <p style={{ margin: "0.4rem 0 0", color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
-            Últimos titulares vinculados a {symbol.toUpperCase()} con salida canónica para el core de IA.
+            Últimos titulares vinculados a {symbol.toUpperCase()} con salida canónica para el core de IA. {formatNewsWindow(dateRange)}.
           </p>
         </div>
         <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-pill)", padding: "2px 10px" }}>
@@ -160,7 +174,7 @@ export function NewsSection({ symbol, dateRange }: Props) {
 
       {!loading && !error && items.length === 0 && (
         <p style={{ margin: 0, color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
-          No se encontraron noticias para este ticker en el archivo local.
+          No se encontraron noticias relevantes para este ticker dentro de la ventana seleccionada.
         </p>
       )}
 
@@ -187,6 +201,9 @@ export function NewsSection({ symbol, dateRange }: Props) {
         </div>
       )}
 
+      <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-md)" }}>
+        <NewsSourcesAnalyzer symbol={symbol} dateRange={dateRange} />
+      </div>
     </section>
   );
 }

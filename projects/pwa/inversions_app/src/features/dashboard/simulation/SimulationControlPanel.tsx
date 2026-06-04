@@ -641,6 +641,7 @@ interface Props {
   onManualModeChange?: (manual: boolean) => void;
   onChainFocus?: () => void;
   onNoticias2Change?: (active: boolean) => void;
+  onStrategyDateRangeChange?: (range: { from: string; to: string }) => void;
 }
 
 // ─── Main component ────────────────────────────────────────────────────────────
@@ -659,6 +660,7 @@ export function SimulationControlPanel({
   onManualModeChange,
   onChainFocus,
   onNoticias2Change,
+  onStrategyDateRangeChange,
 }: Props) {
   const incrementSimulationRunCount = useSignalStore().incrementSimulationRunCount;
   const [preset, setPreset]               = useState<Preset>("3M");
@@ -679,6 +681,10 @@ export function SimulationControlPanel({
   // FIC: US-8 — optional historical as-of date; empty means "use latest data". (EN)
   // FIC: US-8 — fecha historica opcional; vacio significa "usar datos mas recientes". (ES)
   const [fechaHistorica, setFechaHistorica] = useState<string>("");
+
+  useEffect(() => {
+    onStrategyDateRangeChange?.({ from: estrategiaFrom, to: estrategiaTo });
+  }, [estrategiaFrom, estrategiaTo, onStrategyDateRangeChange]);
   const [loading, setLoading]             = useState(false);
   const [error, setError]                 = useState<string | null>(null);
   const [termModalOpen, setTermModalOpen] = useState(false);

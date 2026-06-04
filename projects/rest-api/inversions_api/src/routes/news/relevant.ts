@@ -2,7 +2,12 @@ import { Router } from "express";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NewsAdapter, demoNewsForSymbol } from "../../modules/news/newsAdapter";
 import { fetchNewsData } from "../../modules/news/newsDataService";
-import type { AnalyzedNewsSource, NewsArticle, NewsSentiment, NewsCanonicalPayload } from "../../modules/news/types";
+import type {
+  AnalyzedNewsSource,
+  NewsArticle,
+  NewsSentiment,
+  NewsCanonicalPayload,
+} from "../../modules/news/types";
 import { buildNewsCanonicalPayloadFromRelevantItems } from "../../modules/news/newsCanonicalOutput";
 
 interface NewsArchiveRow {
@@ -56,12 +61,69 @@ export function parseNewsLimit(rawLimit: unknown): number {
   return Math.min(Math.max(Math.trunc(parsed), 1), 12);
 }
 
-function toArchivedSentiment(sentiment: NewsSentiment): "bullish" | "bearish" | "neutral" {
+function parseNewsDate(rawDate: unknown): string | undefined {
+  const text = String(rawDate ?? "").trim();
+  if (!text) return undefined;
+  const date = new Date(
+    text.length <= 10 ? `${text.slice(0, 10)}T00:00:00.000Z` : text,
+  );
+  return Number.isNaN(date.getTime())
+    ? undefined
+    : date.toISOString().slice(0, 10);
+}
+
+function addDaysIso(
+  value: string | undefined,
+  days: number,
+): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return undefined;
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function buildRelevantNewsWindow(
+  from?: string,
+  to?: string,
+): {
+  requestedFrom?: string;
+  requestedTo?: string;
+  analysisFrom?: string;
+  analysisTo?: string;
+} {
+  const requestedFrom = parseNewsDate(from);
+  const requestedTo = parseNewsDate(to);
+  return {
+    requestedFrom,
+    requestedTo,
+    analysisFrom: addDaysIso(requestedFrom, -7),
+    analysisTo: addDaysIso(requestedTo, 7),
+  };
+}
+
+function isWithinDateRange(
+  publishedAt: string | undefined,
+  from?: string,
+  to?: string,
+): boolean {
+  if (!from && !to) return true;
+  const date = publishedAt ? new Date(publishedAt) : null;
+  if (!date || Number.isNaN(date.getTime())) return false;
+  const timestamp = date.getTime();
+  if (from && timestamp < new Date(`${from}T00:00:00.000Z`).getTime())
+    return false;
+  if (to && timestamp > new Date(`${to}T23:59:59.999Z`).getTime()) return false;
+  return true;
+}
+
+function toArchivedSentiment(
+  sentiment: NewsSentiment,
+): "bullish" | "bearish" | "neutral" {
   if (sentiment === "positive") return "bullish";
   if (sentiment === "negative") return "bearish";
   return "neutral";
 }
-
 
 function clamp(value: number, min = 0, max = 1): number {
   return Math.max(min, Math.min(max, value));
@@ -71,29 +133,89 @@ function round3(value: number): number {
   return Number(value.toFixed(3));
 }
 
-function sourceCredibility(provider: string | null | undefined, url?: string | null, text = ""): number {
+function sourceCredibility(
+  provider: string | null | undefined,
+  url?: string | null,
+  text = "",
+): number {
   const clean = `${provider ?? ""} ${url ?? ""}`.toLowerCase();
   let score = 0.48;
   if (/reuters|bloomberg|wsj|sec\.gov/.test(clean)) score += 0.32;
-  else if (/yahoo|finnhub|polygon|alphavantage|alpha vantage|newsapi|marketwatch|cnbc|nasdaq/.test(clean)) score += 0.25;
+  else if (
+    /yahoo|finnhub|polygon|alphavantage|alpha vantage|newsapi|marketwatch|cnbc|nasdaq/.test(
+      clean,
+    )
+  )
+    score += 0.25;
   else if (/stocktwits|seekingalpha|benzinga/.test(clean)) score += 0.16;
   if ((url ?? "").startsWith("https://")) score += 0.07;
   if (text.length > 300) score += 0.04;
   return round3(clamp(score, 0.18, 0.98));
 }
 
-function sentimentEvidence(text: string): { bullish: number; bearish: number; confidence: number; sentiment: "bullish" | "bearish" | "neutral" } {
+function sentimentEvidence(text: string): {
+  bullish: number;
+  bearish: number;
+  confidence: number;
+  sentiment: "bullish" | "bearish" | "neutral";
+} {
   const normalized = text.toLowerCase();
-  const bullishTerms = ["supera", "eleva", "solidos", "sólidos", "fuerte", "impulsa", "growth", "beats", "surge", "rally", "gain", "record", "higher", "strong", "bullish"];
-  const bearishTerms = ["presion", "presión", "costos", "competencia", "reguladores", "falls", "risk", "probe", "drop", "loss", "lower", "warning", "bearish"];
-  const bullish = bullishTerms.reduce((sum, term) => sum + (normalized.includes(term) ? 1 : 0), 0);
-  const bearish = bearishTerms.reduce((sum, term) => sum + (normalized.includes(term) ? 1 : 0), 0);
+  const bullishTerms = [
+    "supera",
+    "eleva",
+    "solidos",
+    "sólidos",
+    "fuerte",
+    "impulsa",
+    "growth",
+    "beats",
+    "surge",
+    "rally",
+    "gain",
+    "record",
+    "higher",
+    "strong",
+    "bullish",
+  ];
+  const bearishTerms = [
+    "presion",
+    "presión",
+    "costos",
+    "competencia",
+    "reguladores",
+    "falls",
+    "risk",
+    "probe",
+    "drop",
+    "loss",
+    "lower",
+    "warning",
+    "bearish",
+  ];
+  const bullish = bullishTerms.reduce(
+    (sum, term) => sum + (normalized.includes(term) ? 1 : 0),
+    0,
+  );
+  const bearish = bearishTerms.reduce(
+    (sum, term) => sum + (normalized.includes(term) ? 1 : 0),
+    0,
+  );
   const total = bullish + bearish;
   const density = clamp(total / 5, 0, 1);
   const textCoverage = clamp(text.length / 450, 0, 1);
-  const confidence = round3(total === 0 ? 0.25 + textCoverage * 0.15 : 0.35 + density * 0.45 + textCoverage * 0.2);
-  const sentiment = bullish > bearish ? "bullish" : bearish > bullish ? "bearish" : "neutral";
-  return { bullish, bearish, confidence: clamp(confidence, 0, 0.95), sentiment };
+  const confidence = round3(
+    total === 0
+      ? 0.25 + textCoverage * 0.15
+      : 0.35 + density * 0.45 + textCoverage * 0.2,
+  );
+  const sentiment =
+    bullish > bearish ? "bullish" : bearish > bullish ? "bearish" : "neutral";
+  return {
+    bullish,
+    bearish,
+    confidence: clamp(confidence, 0, 0.95),
+    sentiment,
+  };
 }
 
 function relevanceFormula(confidence: number, credibility: number): string {
@@ -111,9 +233,19 @@ function mapRow(row: NewsArchiveRow): RelevantNewsItem {
       row.relevance_score === null || row.relevance_score === ""
         ? null
         : Number(row.relevance_score),
-    confidenceScore: row.relevance_score === null || row.relevance_score === "" ? null : Number(row.relevance_score),
-    credibilityScore: row.source ? sourceCredibility(row.source, row.url, `${row.headline} ${row.summary ?? ""}`) : null,
-    relevanceReason: "Supabase solo entrego relevance_score; se conserva y se calcula credibilidad por fuente/URL.",
+    confidenceScore:
+      row.relevance_score === null || row.relevance_score === ""
+        ? null
+        : Number(row.relevance_score),
+    credibilityScore: row.source
+      ? sourceCredibility(
+          row.source,
+          row.url,
+          `${row.headline} ${row.summary ?? ""}`,
+        )
+      : null,
+    relevanceReason:
+      "Supabase solo entrego relevance_score; se conserva y se calcula credibilidad por fuente/URL.",
     source: row.source,
     url: row.url,
     publishedAt: row.published_at,
@@ -121,7 +253,10 @@ function mapRow(row: NewsArchiveRow): RelevantNewsItem {
   };
 }
 
-function mapAnalyzedArticle(article: AnalyzedNewsSource, ticker: string): RelevantNewsItem {
+function mapAnalyzedArticle(
+  article: AnalyzedNewsSource,
+  ticker: string,
+): RelevantNewsItem {
   const confidence = round3(clamp(article.confidence));
   const credibility = round3(clamp(article.credibilityScore));
   const relevanceScore = round3(confidence * credibility);
@@ -131,7 +266,7 @@ function mapAnalyzedArticle(article: AnalyzedNewsSource, ticker: string): Releva
     symbol: ticker,
     headline: article.title,
     summary: article.summary || article.rationale || null,
-    sentiment: toArchivedSentiment(article.sentiment ?? "neutral"),
+    sentiment: toArchivedSentiment(article.sentiment),
     relevanceScore,
     confidenceScore: confidence,
     credibilityScore: credibility,
@@ -143,10 +278,17 @@ function mapAnalyzedArticle(article: AnalyzedNewsSource, ticker: string): Releva
   };
 }
 
-function mapAdapterArticle(article: NewsArticle, ticker: string): RelevantNewsItem {
+function mapAdapterArticle(
+  article: NewsArticle,
+  ticker: string,
+): RelevantNewsItem {
   const text = `${article.headline} ${article.summary}`;
   const evidence = sentimentEvidence(text);
-  const credibility = sourceCredibility(article.source || "Alpaca News", article.url, text);
+  const credibility = sourceCredibility(
+    article.source || "Alpaca News",
+    article.url,
+    text,
+  );
   const relevanceScore = round3(evidence.confidence * credibility);
 
   return {
@@ -170,11 +312,24 @@ function safeErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function readFromArchive(supabaseClient: SupabaseClient, ticker: string, limit: number): Promise<RelevantNewsItem[]> {
-  const { data, error } = await supabaseClient
+async function readFromArchive(
+  supabaseClient: SupabaseClient,
+  ticker: string,
+  limit: number,
+  from?: string,
+  to?: string,
+): Promise<RelevantNewsItem[]> {
+  let query = supabaseClient
     .from("news_archive")
-    .select("id,symbol,headline,summary,sentiment,relevance_score,source,url,published_at,archived_at")
-    .or(`symbol.eq.${ticker},symbol.is.null`)
+    .select(
+      "id,symbol,headline,summary,sentiment,relevance_score,source,url,published_at,archived_at",
+    )
+    .or(`symbol.eq.${ticker},symbol.is.null`);
+
+  if (from) query = query.gte("published_at", `${from}T00:00:00.000Z`);
+  if (to) query = query.lte("published_at", `${to}T23:59:59.999Z`);
+
+  const { data, error } = await query
     .order("published_at", { ascending: false })
     .limit(limit);
 
@@ -185,21 +340,49 @@ async function readFromArchive(supabaseClient: SupabaseClient, ticker: string, l
   return ((data ?? []) as NewsArchiveRow[]).map(mapRow);
 }
 
-async function readFromLiveProviders(ticker: string, limit: number): Promise<RelevantNewsItem[]> {
-  const data = await fetchNewsData({ symbol: ticker, limit, includeFallback: false }, limit);
-  return data.articles.slice(0, limit).map((article) => mapAnalyzedArticle(article, ticker));
+async function readFromLiveProviders(
+  ticker: string,
+  limit: number,
+  from?: string,
+  to?: string,
+): Promise<RelevantNewsItem[]> {
+  const data = await fetchNewsData(
+    { symbol: ticker, limit, from, to, includeFallback: false },
+    limit,
+  );
+  return data.articles
+    .slice(0, limit)
+    .map((article) => mapAnalyzedArticle(article, ticker));
 }
 
-async function readFromAlpacaOrDemo(ticker: string, limit: number): Promise<{ items: RelevantNewsItem[]; source: "alpaca-news" | "demo-fallback" }> {
+async function readFromAlpacaOrDemo(
+  ticker: string,
+  limit: number,
+  from?: string,
+  to?: string,
+): Promise<{
+  items: RelevantNewsItem[];
+  source: "alpaca-news" | "demo-fallback";
+}> {
   const adapter = new NewsAdapter();
   const articles = await adapter.getRecentNews(ticker, limit);
-  const fallback = articles.length > 0 ? articles : demoNewsForSymbol(ticker, limit);
-  const items = fallback.slice(0, limit).map((article) => mapAdapterArticle(article, ticker));
+  const fallback =
+    articles.length > 0 ? articles : demoNewsForSymbol(ticker, limit);
+  const items = fallback
+    .slice(0, limit * 3)
+    .map((article) => mapAdapterArticle(article, ticker))
+    .filter((item) => isWithinDateRange(item.publishedAt, from, to))
+    .slice(0, limit);
   const usedDemo = items.some((item) => item.id.startsWith(`demo-${ticker}-`));
   return { items, source: usedDemo ? "demo-fallback" : "alpaca-news" };
 }
 
-function buildPayload(ticker: string, items: RelevantNewsItem[], source: RelevantNewsPayload["source"], warnings: string[]): RelevantNewsPayload {
+function buildPayload(
+  ticker: string,
+  items: RelevantNewsItem[],
+  source: RelevantNewsPayload["source"],
+  warnings: string[],
+): RelevantNewsPayload {
   const fetchedAt = new Date().toISOString();
 
   return {
@@ -209,7 +392,12 @@ function buildPayload(ticker: string, items: RelevantNewsItem[], source: Relevan
     source,
     warnings,
     fetchedAt,
-    canonical: buildNewsCanonicalPayloadFromRelevantItems(ticker, items, source, fetchedAt),
+    canonical: buildNewsCanonicalPayloadFromRelevantItems(
+      ticker,
+      items,
+      source,
+      fetchedAt,
+    ),
     version: "news-canonical-v13",
   };
 }
@@ -218,57 +406,98 @@ export async function buildRelevantNewsPayload(
   supabaseClient: SupabaseClient,
   ticker: string,
   limit: number,
+  from?: string,
+  to?: string,
 ): Promise<RelevantNewsPayload> {
   const warnings: string[] = [];
+  const { requestedFrom, requestedTo, analysisFrom, analysisTo } =
+    buildRelevantNewsWindow(from, to);
+  if (requestedFrom || requestedTo) {
+    warnings.push(
+      `news_window=${analysisFrom ?? "-inf"}..${analysisTo ?? "+inf"}`,
+    );
+  }
 
   // Supabase NO debe tumbar noticias. Si el schema public esta mal, brincamos a fuentes reales.
   try {
-    const archivedItems = await readFromArchive(supabaseClient, ticker, limit);
+    const archivedItems = await readFromArchive(
+      supabaseClient,
+      ticker,
+      limit,
+      analysisFrom,
+      analysisTo,
+    );
     if (archivedItems.length > 0) {
       return buildPayload(ticker, archivedItems, "supabase", warnings);
     }
     warnings.push("news_archive_empty");
   } catch (error) {
     warnings.push("news_archive_unavailable");
-    console.warn(`[news/relevant:canonical-v13] Supabase omitido para ${ticker}: ${safeErrorMessage(error)}`);
+    console.warn(
+      `[news/relevant:canonical-v13] Supabase omitido para ${ticker}: ${safeErrorMessage(error)}`,
+    );
   }
 
   // Luego intenta fuentes reales configuradas en newsDataService: Yahoo RSS/API providers.
   try {
-    const liveItems = await readFromLiveProviders(ticker, limit);
+    const liveItems = await readFromLiveProviders(
+      ticker,
+      limit,
+      requestedFrom,
+      requestedTo,
+    );
     if (liveItems.length > 0) {
       return buildPayload(ticker, liveItems, "live-providers", warnings);
     }
     warnings.push("live_providers_empty");
   } catch (error) {
     warnings.push("live_providers_unavailable");
-    console.warn(`[news/relevant:canonical-v13] Proveedores reales omitidos para ${ticker}: ${safeErrorMessage(error)}`);
+    console.warn(
+      `[news/relevant:canonical-v13] Proveedores reales omitidos para ${ticker}: ${safeErrorMessage(error)}`,
+    );
   }
 
   // Ultimo respaldo: Alpaca si hay keys; si no, demo determinista. Nunca debe regresar 500.
   try {
-    const { items, source } = await readFromAlpacaOrDemo(ticker, limit);
+    const { items, source } = await readFromAlpacaOrDemo(
+      ticker,
+      limit,
+      analysisFrom,
+      analysisTo,
+    );
     return buildPayload(
       ticker,
       items,
       source,
       source === "demo-fallback"
-        ? [...warnings, "demo_news_used_after_real_sources_failed_or_returned_empty"]
+        ? [
+            ...warnings,
+            "demo_news_used_after_real_sources_failed_or_returned_empty",
+          ]
         : warnings,
     );
   } catch (error) {
     warnings.push("adapter_unavailable");
-    console.warn(`[news/relevant:canonical-v13] Adapter omitido para ${ticker}: ${safeErrorMessage(error)}`);
+    console.warn(
+      `[news/relevant:canonical-v13] Adapter omitido para ${ticker}: ${safeErrorMessage(error)}`,
+    );
     return buildPayload(
       ticker,
-      demoNewsForSymbol(ticker, limit).map((article) => mapAdapterArticle(article, ticker)),
+      demoNewsForSymbol(ticker, limit * 3)
+        .map((article) => mapAdapterArticle(article, ticker))
+        .filter((item) =>
+          isWithinDateRange(item.publishedAt, analysisFrom, analysisTo),
+        )
+        .slice(0, limit),
       "demo-fallback",
       [...warnings, "forced_demo_news_used"],
     );
   }
 }
 
-export function createRelevantNewsRouter(supabaseClient: SupabaseClient): Router {
+export function createRelevantNewsRouter(
+  supabaseClient: SupabaseClient,
+): Router {
   const router = Router();
 
   router.get("/relevant", async (req, res) => {
@@ -280,6 +509,8 @@ export function createRelevantNewsRouter(supabaseClient: SupabaseClient): Router
           : undefined;
     const ticker = parseNewsTicker(rawTicker);
     const limit = parseNewsLimit(req.query.limit);
+    const from = parseNewsDate(req.query.from);
+    const to = parseNewsDate(req.query.to);
 
     if (!ticker) {
       return res.status(400).json({
@@ -290,14 +521,26 @@ export function createRelevantNewsRouter(supabaseClient: SupabaseClient): Router
     }
 
     try {
-      const payload = await buildRelevantNewsPayload(supabaseClient, ticker, limit);
+      const payload = await buildRelevantNewsPayload(
+        supabaseClient,
+        ticker,
+        limit,
+        from,
+        to,
+      );
       return res.status(200).json(payload);
     } catch (error) {
-      console.warn(`[news/relevant:canonical-v13] Fallback final activado para ${ticker}: ${safeErrorMessage(error)}`);
+      console.warn(
+        `[news/relevant:canonical-v13] Fallback final activado para ${ticker}: ${safeErrorMessage(error)}`,
+      );
+      const { analysisFrom, analysisTo } = buildRelevantNewsWindow(from, to);
       return res.status(200).json(
         buildPayload(
           ticker,
-          demoNewsForSymbol(ticker, limit).map((article) => mapAdapterArticle(article, ticker)),
+          demoNewsForSymbol(ticker, limit * 3)
+            .map((article) => mapAdapterArticle(article, ticker))
+            .filter((item) => isWithinDateRange(item.publishedAt, analysisFrom, analysisTo))
+            .slice(0, limit),
           "demo-fallback",
           ["final_demo_fallback_used"],
         ),

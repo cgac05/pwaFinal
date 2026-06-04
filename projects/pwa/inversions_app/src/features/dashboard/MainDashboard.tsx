@@ -35,6 +35,7 @@ import type { FundamentalAnalysisResponse } from "../../services/fundamental/fun
 import { formatCurrency } from "../../utils/format";
 import { Tooltip } from "../../components/ui/Tooltip";
 import { getAuthHeaders } from "../../services/signals/signalApi";
+import type { NewsDateRange } from "../../services/news/newsApi";
 
 // FIC: US-5 — compact buy/sell/hold counter chip shown above the confluence table. (EN)
 // FIC: US-5 — chip compacto de conteo compra/venta/hold mostrado sobre la tabla. (ES)
@@ -71,7 +72,7 @@ export function MainDashboard() {
   const [strategyError, setStrategyError] = useState<string | null>(null);
   const [simulationMetrics, setSimulationMetrics] = useState<SignalMetrics | null>(null);
   const [institutionalCoreWasActive, setInstitutionalCoreWasActive] = useState(false);
-  const [, setNewsDateRange] = useState<string | undefined>(undefined);
+  const [newsDateRange, setNewsDateRange] = useState<NewsDateRange | undefined>(undefined);
   const [spreadRequest, setSpreadRequest] = useState<{ params: SpreadModalParams; kind: string } | null>(null);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [selectedStrikeData, setSelectedStrikeData] = useState<{
@@ -188,6 +189,10 @@ export function MainDashboard() {
     (params: SpreadModalParams, kind: string) => setSpreadRequest({ params, kind }),
     []
   );
+
+  const handleStrategyDateRangeChange = useCallback((range: NewsDateRange) => {
+    setNewsDateRange(range);
+  }, []);
 
   const handleOptionStrategyCalculated = useCallback((analysis: OptionStrategyAnalysis) => {
     setOptionStrategyAnalysis(analysis);
@@ -450,6 +455,7 @@ export function MainDashboard() {
           setTimeout(() => chainRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 100);
         }}
         onNoticias2Change={(v) => setNoticias2Active(v)}
+        onStrategyDateRangeChange={handleStrategyDateRangeChange}
       />
 
       {/* ── Strategy error (from buildComplexStrategyRows validation) */}
@@ -679,7 +685,7 @@ export function MainDashboard() {
       />
       {/* NewsSection: solo aparece cuando el core A_NOTICIAS estaba activo en la simulación */}
       {noticiasCoreWasActive && simulationHasRun && (
-        <NewsSection symbol={selectedSymbol} />
+        <NewsSection symbol={selectedSymbol} dateRange={newsDateRange} />
       )}
 
       {/* Noticias 2: solo aparece cuando la simulación corrió CON el chip Noticias 2 activo */}

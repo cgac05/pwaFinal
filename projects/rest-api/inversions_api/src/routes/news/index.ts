@@ -1,22 +1,10 @@
 import { Router } from "express";
 import { InvestmentAdvisor } from "../../modules/news/investmentAdvisor";
-import { analyzeNewsSource } from "../../modules/news/urlAnalysisService";
+import { analyzeSentiment, sentimentToVerdict } from "../../modules/news/sentimentService";
+import { analyzeNewsSource, analyzeNewsSources } from "../../modules/news/urlAnalysisService";
 import { evaluateNewsImpact } from "../../modules/news/newsImpactEngine";
 import { fetchNewsData } from "../../modules/news/newsDataService";
-import type { NewsImpactResponse } from "../../modules/news/types";
-
-// Stubs para funciones que existían en versiones anteriores del módulo
-// pero no están en la implementación actual de TEAM-02.
-function analyzeSentiment(_text: string) { return { score: 0, label: "NEUTRAL" }; }
-function sentimentToVerdict(score: number) { return score > 0.3 ? "BUY" : score < -0.3 ? "SELL" : "HOLD"; }
-function buildInvestmentAdvice(result: NewsImpactResponse) {
-  return { verdict: result.verdict, score: result.score, confidence: result.confidence };
-}
-// analyzeNewsSources: wrapper sobre analyzeNewsSource para arrays
-async function analyzeNewsSources(sources: any[], symbol: string) {
-  const results = await Promise.allSettled(sources.map(s => analyzeNewsSource(s, symbol)));
-  return results.flatMap(r => r.status === "fulfilled" ? [r.value] : []);
-}
+import { buildInvestmentAdvice } from "../../modules/news/investmentAdvisor";
 
 export const newsRouter = Router();
 
@@ -61,11 +49,11 @@ newsRouter.post("/analyze-source", async (req, res) => {
     const symbol = toSymbol(req.body?.symbol ?? req.body?.company);
     const source = (req.body?.source ?? req.body) as Record<string, unknown>;
     const result = await analyzeNewsSource({
-      id: typeof source.id === "string" ? source.id : `src-${Date.now()}`,
+      id: typeof source.id === "string" ? source.id : undefined,
       title: typeof source.title === "string" ? source.title : undefined,
       url: typeof source.url === "string" ? source.url : undefined,
       text: typeof source.text === "string" ? source.text : undefined,
-      provider: (typeof source.provider === "string" ? source.provider : "url") as any,
+      provider: typeof source.provider === "string" ? source.provider : undefined,
       publishedAt: typeof source.publishedAt === "string" ? source.publishedAt : undefined,
       symbol
     }, symbol);
@@ -79,7 +67,6 @@ newsRouter.post("/analyze-url", async (req, res) => {
   try {
     const symbol = toSymbol(req.body?.symbol ?? req.body?.company);
     const result = await analyzeNewsSource({
-      id: `url-${Date.now()}`,
       url: String(req.body?.url ?? ""),
       title: typeof req.body?.title === "string" ? req.body.title : undefined,
       provider: "url",
@@ -144,7 +131,7 @@ newsRouter.post("/advisor", async (req, res) => {
     const sources = Array.isArray(req.body?.sources) ? req.body.sources : [];
     if (sources.length > 0) {
       const analyzed = await analyzeNewsSources(sources, symbol);
-      res.status(200).json({ analysis: analyzed, recommendation: buildInvestmentAdvice(analyzed as any) });
+      res.status(200).json({ analysis: analyzed, recommendation: buildInvestmentAdvice(analyzed) });
       return;
     }
 
