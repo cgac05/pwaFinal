@@ -2,7 +2,10 @@
 
 import type { FundamentalAnalysisData } from "./fundamentalSourceContract";
 
+export type ViabilityScore = any;
+
 export class ViabilityEngine {
+  normalize(value: number, min: number, max: number) { return 0; }
   calculateViability(data: FundamentalAnalysisData) {
     return {
       overall: 80,

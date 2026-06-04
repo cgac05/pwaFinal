@@ -331,7 +331,7 @@ export async function runSimulation(
           investmentProfile: "Value",
           horizon: "Largo plazo",
           selectedMetrics: ["Valoración", "Crecimiento", "Rentabilidad", "Salud Financiera", "Flujo de Caja", "Riesgo", "Ventaja Competitiva"],
-          strategy: request.estrategia,
+          strategy: request.estrategia ?? "",
           comparisons: [],
           projectionFrom: request.fechaHistorica
         };

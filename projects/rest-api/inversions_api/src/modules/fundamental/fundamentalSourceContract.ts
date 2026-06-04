@@ -1,6 +1,7 @@
 // FIC: Contract types for Fundamental Analysis
 
 export interface FundamentalAnalysisData {
+  ticker?: string;
   companyName: string;
   metadata: {
     sourceId: string;
