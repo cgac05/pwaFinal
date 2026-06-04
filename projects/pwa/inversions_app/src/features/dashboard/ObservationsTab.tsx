@@ -430,6 +430,27 @@ export function ObservationsTab({ row, activeStrategy }: Props) {
               color: #475569; 
               font-weight: 700;
             }
+            .details-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 15px 0 25px 0;
+              font-size: 12px;
+              page-break-inside: avoid;
+            }
+            .details-table th,
+            .details-table td {
+              border-bottom: 1px solid #e2e8f0;
+              padding: 12px 14px;
+              text-align: left;
+            }
+            .details-table th {
+              background-color: #f8fafc;
+              text-transform: uppercase;
+              font-size: 10px;
+              letter-spacing: 0.05em;
+              color: #475569;
+              font-weight: 700;
+            }
             .badge-core {
               font-size: 9px;
               background-color: #e2e8f0;
@@ -524,6 +545,46 @@ export function ObservationsTab({ row, activeStrategy }: Props) {
           ${graphicalChartsContainer}
 
           ${signalsChartHtml}
+
+          <div class="section-title">Detalles de la Señal</div>
+          <table class="details-table">
+            <thead>
+              <tr>
+                <th>Campo</th>
+                <th>Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Core</td>
+                <td>${row.core}${row.subCore ? ` / ${row.subCore}` : ""}</td>
+              </tr>
+              <tr>
+                <td>Tipo Señal</td>
+                <td>${row.tipoSenal}</td>
+              </tr>
+              <tr>
+                <td>Tendencia</td>
+                <td>${row.tendencia ?? "N/A"}</td>
+              </tr>
+              <tr>
+                <td>Precio</td>
+                <td>${typeof row.precio === "number" ? `$${row.precio.toFixed(2)}` : "N/A"}</td>
+              </tr>
+              <tr>
+                <td>Score</td>
+                <td>${row.score.toFixed(3)}</td>
+              </tr>
+              <tr>
+                <td>Peso</td>
+                <td>${row.peso.toFixed(3)}</td>
+              </tr>
+              <tr>
+                <td>Fecha</td>
+                <td>${row.fecha ?? "N/A"}</td>
+              </tr>
+            </tbody>
+          </table>
 
           <div class="section-title">Detalles del Core Operativo</div>
           <div class="meta-grid">

@@ -143,7 +143,7 @@ export function buildCanonicalOutputString(row: CanonicalOutputRow): string {
  * Builds markdown context from a canonical row for traceability and export.
  */
 export function buildSignalContextMD(
-	row: CanonicalOutputRow & { ticket?: string; timeframe?: string; fecha?: string; tendencia?: string; invertir?: boolean; estado?: string; fuente?: string; algorithm_version?: string; computed_at?: string; source_input_hash?: string; ia_revisada?: boolean; evidencia_refs?: string[] },
+	row: CanonicalOutputRow & { ticket?: string; precio?: number; timeframe?: string; fecha?: string; tendencia?: string; invertir?: boolean; estado?: string; fuente?: string; algorithm_version?: string; computed_at?: string; source_input_hash?: string; ia_revisada?: boolean; evidencia_refs?: string[] },
 	activeStrategy?: string
 ): string {
 	const lines: string[] = [
@@ -153,10 +153,12 @@ export function buildSignalContextMD(
 		`|-------|-------|`,
 		`| Core | ${row.core}${row.subCore ? ` / ${row.subCore}` : ""} |`,
 		`| Tipo Señal | **${row.tipoSenal}** |`,
-		`| Tendencia | ${row.tendencia ?? "N/A"} |`,
-		`| Score | ${row.score.toFixed(3)} |`,
-		`| Peso | ${row.peso.toFixed(3)} |`,
-		`| Invertir | ${row.invertir !== undefined ? (row.invertir ? "SI" : "NO") : "N/A"} |`,
+	`| Tendencia | ${row.tendencia ?? "N/A"} |`,
+	`| Precio | ${typeof row.precio === "number" ? `$${row.precio.toFixed(2)}` : "N/A"} |`,
+	`| Score | ${row.score.toFixed(3)} |`,
+	`| Peso | ${row.peso.toFixed(3)} |`,
+	`| Invertir | ${row.invertir !== undefined ? (row.invertir ? "SI" : "NO") : "N/A"} |`,
+
 		`| Estado | ${row.estado ?? "N/A"} |`,
 		`| Timeframe | ${row.timeframe ?? "N/A"} |`,
 		`| Fecha | ${row.fecha ?? "N/A"} |`,

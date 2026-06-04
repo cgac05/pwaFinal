@@ -61,6 +61,50 @@ function parseAiDecision(rawText: string): { decision: "CALL" | "PUT" | "HOLD"; 
   return { decision, justificacion, confidence };
 }
 
+function truncateText(value: string | number | undefined | null, max = 280): string {
+  const text = value == null ? "" : String(value).replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1).trim()}…`;
+}
+
+function isNewsRow(row: ConfluenceSignalRow): boolean {
+  return row.core === "A_NOTICIAS";
+}
+
+function getNewsRowRelevance(row: ConfluenceSignalRow): number {
+  const score = Math.abs(row.score ?? 0);
+  const peso = Number(row.observacion.metricas?.PESO_CALCULADO ?? 0);
+  const confidence = Number(row.observacion.metricas?.CONFIANZA ?? 0);
+  return score * 3 + peso * 2 + confidence;
+}
+
+function buildAICoreNewsSummary(row: ConfluenceSignalRow, index: number): string {
+  const metricas = row.observacion.metricas ?? {};
+  const headline = metricas.TITULAR ?? row.observacion.objetivo ?? row.fuente ?? "Noticia relevante";
+  const summary = metricas.RESUMEN_NOTICIA ?? row.observacion.explicacion ?? row.observacion.senal ?? "Resumen no disponible.";
+  const sentiment = metricas.SENTIMIENTO ?? row.score ?? 0;
+  const confidence = metricas.CONFIANZA ?? "N/A";
+  const credibility = metricas.CREDIBILIDAD ?? "N/A";
+  const peso = metricas.PESO_CALCULADO ?? "N/A";
+
+  return `Fila ${index + 1}: CORE=A_NOTICIAS | TITULAR=${truncateText(headline, 180)} | SEÑAL=${row.tipoSenal} | TENDENCIA=${row.tendencia} | SCORE=${row.score.toFixed(3)} | SENTIMIENTO=${truncateText(sentiment, 8)} | CONFIANZA=${truncateText(confidence, 8)} | CREDIBILIDAD=${truncateText(credibility, 8)} | PESO=${truncateText(peso, 8)} | RESUMEN=${truncateText(summary, 360)}`;
+}
+
+function filterRowsForAICore(rows: ConfluenceSignalRow[]): ConfluenceSignalRow[] {
+  const newsRows = rows.filter(isNewsRow);
+  const otherRows = rows.filter((row) => !isNewsRow(row));
+
+  if (newsRows.length === 0) {
+    return rows;
+  }
+
+  const topNewsRows = [...newsRows]
+    .sort((a, b) => getNewsRowRelevance(b) - getNewsRowRelevance(a))
+    .slice(0, 3);
+
+  return [...otherRows, ...topNewsRows];
+}
+
 /**
  * Crea una respuesta analítica robusta de Fallback (estado ACTIVA) con narrativa de auditoría de confluencia técnica
  * para garantizar que la UI reciba datos con veredicto activo y formato premium.
@@ -243,8 +287,13 @@ export async function runAiCore(params: {
     ? mockDb.prompts[0].basePrompt
     : "Eres un analista financiero. Analiza los siguientes datos.";
 
-  // 4. Serializar la tabla pre-calculada completa. No omitir ninguna fila recibida.
-  const rowsContext = simulatedPrecalculatedRows.map((r, i) => {
+  // 4. Filtrar y serializar la tabla pre-calculada para Gemini, condensando solamente las noticias más relevantes.
+  const promptRows = filterRowsForAICore(simulatedPrecalculatedRows);
+  const rowsContext = promptRows.map((r, i) => {
+    if (isNewsRow(r)) {
+      return buildAICoreNewsSummary(r, i);
+    }
+
     const subCoreStr = r.subCore ? ` | SUBCORE=${r.subCore}` : "";
     const objetivoStr = r.observacion.objetivo ? ` | OBJETIVO=${r.observacion.objetivo}` : "";
     const fuenteStr = r.fuente ? ` | FUENTE=${r.fuente}` : "";
@@ -258,7 +307,7 @@ export async function runAiCore(params: {
       ? metricEntries.map(([k, v]) => `${k}=${typeof v === "number" ? v.toFixed(4) : v}`).join(", ")
       : "N/A";
 
-    return `Fila ${i + 1}: CORE=${r.core}${subCoreStr}${objetivoStr}${fuenteStr}${fechaStr}${estadoStr}${pesoStr}${precioStr} | SEÑAL=${r.tipoSenal} | TENDENCIA=${r.tendencia} | SCORE=${r.score.toFixed(3)} | EXPLICACION=${r.observacion.explicacion} | METRICAS=[${metricsStr}]`;
+    return `Fila ${i + 1}: CORE=${r.core}${subCoreStr}${objetivoStr}${fuenteStr}${fechaStr}${estadoStr}${pesoStr}${precioStr} | SEÑAL=${r.tipoSenal} | TENDENCIA=${r.tendencia} | SCORE=${r.score.toFixed(3)} | EXPLICACION=${truncateText(r.observacion.explicacion, 360)} | METRICAS=[${metricsStr}]`;
   }).join("\n");
 
   const fullPrompt = `${basePromptText}

@@ -875,8 +875,10 @@ export function SimulationControlPanel({
   const run = async () => {
     setLoading(true);
     setError(null);
-    const activeCoreIds = ALL_CORES.filter((c) => coresOn[c]);
-    onExecute?.(activeCoreIds);
+    const selectedCoreIds = ALL_CORES.filter((c) => coresOn[c]);
+    const iaSelected = coresOn["A_IA"];
+    const executableCoreIds = iaSelected ? selectedCoreIds : selectedCoreIds.filter((c) => c !== "A_IA");
+    onExecute?.(executableCoreIds);
     // FIC: Mark that a manual run was initiated → enables auto-refresh on indicator toggles. (EN)
     // FIC: Marca que se inició una corrida manual → habilita el auto-refresh al togglear indicadores. (ES)
     hasRunOnceRef.current = true;
@@ -887,7 +889,7 @@ export function SimulationControlPanel({
         rangoEstrategia: { from: estrategiaFrom, to: estrategiaTo },
         temporalidad,
         runtimeMode: "OFFLINE",
-        coresHabilitados: activeCoreIds,
+        coresHabilitados: executableCoreIds,
         indicadoresHabilitados: ALL_SUBCORES.filter((s) => indicadoresOn[s]),
         estrategia,
         toleranciaRiesgo: tolerancia,
@@ -964,7 +966,10 @@ export function SimulationControlPanel({
 
         const termData = await termRes.json();
         onTermResult?.(termData);
-        onResult(simResult);
+        const filteredResult = iaSelected
+          ? simResult
+          : { ...simResult, table: simResult.table.filter((row) => row.core !== "A_IA") };
+        onResult(filteredResult);
         incrementSimulationRunCount();
         return;
       }
@@ -1007,13 +1012,20 @@ export function SimulationControlPanel({
             executeStrategy(complexPayload),
           ]);
           onComplexResult?.(complexRes, estrategia, temporalidad);
-          onResult(simResult);
+          const filteredResult = iaSelected
+            ? simResult
+            : { ...simResult, table: simResult.table.filter((row) => row.core !== "A_IA") };
+          onResult(filteredResult);
           incrementSimulationRunCount();
           return;
         }
       }
 
-      onResult(await runSimulation(simPayload));
+      const simResult = await runSimulation(simPayload);
+      const filteredResult = iaSelected
+        ? simResult
+        : { ...simResult, table: simResult.table.filter((row) => row.core !== "A_IA") };
+      onResult(filteredResult);
       incrementSimulationRunCount();
     } catch (err) {
       setError(err instanceof Error ? err.message : "simulation_failed");
@@ -1036,20 +1048,27 @@ export function SimulationControlPanel({
     if (activeCoreIds.length === 0) return;
     const id = setTimeout(async () => {
       try {
+        const selectedCoreIds = ALL_CORES.filter((c) => coresOn[c]);
+        const iaSelected = coresOn["A_IA"];
+        const executableCoreIds = iaSelected ? selectedCoreIds : selectedCoreIds.filter((c) => c !== "A_IA");
         const simPayload: SimulationRequestPayload = {
           ticket,
           rangoHistorico: preset,
           rangoEstrategia: { from: estrategiaFrom, to: estrategiaTo },
           temporalidad,
           runtimeMode: "OFFLINE",
-          coresHabilitados: activeCoreIds,
+          coresHabilitados: executableCoreIds,
           indicadoresHabilitados: ALL_SUBCORES.filter((s) => indicadoresOn[s]),
           estrategia,
           toleranciaRiesgo: tolerancia,
           soloCoincidencias: true,
           ...(fechaHistorica ? { fechaHistorica } : {}),
         };
-        onResult(await runSimulation(simPayload));
+        const simResult = await runSimulation(simPayload);
+        const filteredResult = iaSelected
+          ? simResult
+          : { ...simResult, table: simResult.table.filter((row) => row.core !== "A_IA") };
+        onResult(filteredResult);
       } catch {
         // FIC: silent — the manual "Ejecutar Simulación" button surfaces any error. (EN)
       }
