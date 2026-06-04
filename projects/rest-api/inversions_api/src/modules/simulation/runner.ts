@@ -6,6 +6,7 @@ import { buildIndicatorsTable } from "../indicators/confluenceTable";
 import { buildCoreStubs } from "../indicators/coreStubs";
 import { getCandles, intervalMs, isSupportedTimeframe } from "../indicators/ohlcSource";
 import { buildNewsConfluenceRows } from "../news/newsConfluenceRows";
+import { buildNoticias2ConfluenceRows } from "../news/noticias2ConfluenceRows";
 import {
   ALGORITHM_VERSION,
   ALL_CORE_IDS,
@@ -338,7 +339,20 @@ export async function runSimulation(
       })
     : [];
 
-  // FIC: Execute AI Core if enabled
+  // FIC: 006-noticias-2 — Core A_NOTICIAS_2: pipeline independiente con RSS directo + fallback contextual. (EN)
+  // FIC: Genera ConfluenceSignalRow[] canónicos siguiendo el mismo contrato Diana que A_NOTICIAS. (ES)
+  const noticias2Rows = enabledCores.has("A_NOTICIAS_2")
+    ? await buildNoticias2ConfluenceRows({
+        ticket:          request.ticket,
+        timeframe:       request.temporalidad,
+        precio:          candles[candles.length - 1]?.close ?? candles[candles.length - 1]?.open ?? 0,
+        sourceInputHash: verdict.source_input_hash,
+        previousRows:    deps.previousRows,
+        now:             computedAt,
+      }).catch(() => [] as ConfluenceSignalRow[])
+    : [];
+
+  // FIC: Execute AI Core if enabled — Noticias 2 feeds into AI precalculated context. (EN)
   let aiRow: ConfluenceSignalRow | null = null;
   if (enabledCores.has("A_IA")) {
     aiRow = await runAiCore({
@@ -347,11 +361,11 @@ export async function runSimulation(
       sourceInputHash: verdict.source_input_hash,
       computedAt: computedAt,
       previousRows: deps.previousRows,
-      precalculatedRows: [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows],
+      precalculatedRows: [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...noticias2Rows],
     });
   }
 
-  // FIC: Stub remaining cores — skip A_INSTITUCIONAL/A_TECNICO/A_NOTICIAS/A_IA if real rows were built. (EN)
+  // FIC: Stub remaining cores — skip built cores. (EN)
   const stubCores = (ALL_CORE_IDS as readonly CoreId[])
     .filter((c) => {
       if (c === "A_INDICADORES") return false;
@@ -359,6 +373,7 @@ export async function runSimulation(
       if (c === "A_TECNICO" && tecnicoRows.length > 0) return false;
       if (c === "A_IA" && aiRow !== null) return false;
       if (c === "A_NOTICIAS" && noticiasRows.length > 0) return false;
+      if (c === "A_NOTICIAS_2" && noticias2Rows.length > 0) return false;
       return enabledCores.has(c);
     });
 
@@ -371,9 +386,9 @@ export async function runSimulation(
       previousRows: deps.previousRows,
       now: computedAt
     });
-    table = [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...stubs];
+    table = [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...noticias2Rows, ...stubs];
   } else {
-    table = [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows];
+    table = [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...noticias2Rows];
   }
 
   // FIC: US8 bugfix — when running on historical (as-of) data, the rows MUST display the REAL date

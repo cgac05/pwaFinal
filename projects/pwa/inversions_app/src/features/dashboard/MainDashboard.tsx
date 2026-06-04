@@ -506,7 +506,6 @@ export function MainDashboard() {
             activeStrategy={activeSimulationStrategy}
             fundamentalAnalysis={fundamentalAnalysis}
             onStrategyRowClick={handleStrategyRowClick}
-            noticias2Verdict={noticias2Result?.verdict ?? null}
           />
         </div>
       )}
