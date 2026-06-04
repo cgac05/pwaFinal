@@ -899,7 +899,7 @@ export function SimulationControlPanel({
         ...(fechaHistorica ? { fechaHistorica } : {}),
       };
 
-      if (activeCoreIds.length === 0) {
+      if (selectedCoreIds.length === 0) {
         if (noticias2On) {
           onResult(buildNoticias2OnlyResponse(simPayload));
           incrementSimulationRunCount();
