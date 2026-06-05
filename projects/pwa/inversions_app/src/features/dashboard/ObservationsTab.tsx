@@ -556,46 +556,6 @@ export function ObservationsTab({ row, activeStrategy }: Props) {
 
           ${signalsChartHtml}
 
-          <div class="section-title">Detalles de la Señal</div>
-          <table class="details-table">
-            <thead>
-              <tr>
-                <th>Campo</th>
-                <th>Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Core</td>
-                <td>${row.core}${row.subCore ? ` / ${row.subCore}` : ""}</td>
-              </tr>
-              <tr>
-                <td>Tipo Señal</td>
-                <td>${row.tipoSenal}</td>
-              </tr>
-              <tr>
-                <td>Tendencia</td>
-                <td>${row.tendencia ?? "N/A"}</td>
-              </tr>
-              <tr>
-                <td>Precio</td>
-                <td>${typeof row.precio === "number" ? `$${row.precio.toFixed(2)}` : "N/A"}</td>
-              </tr>
-              <tr>
-                <td>Score</td>
-                <td>${row.score.toFixed(3)}</td>
-              </tr>
-              <tr>
-                <td>Peso</td>
-                <td>${row.peso.toFixed(3)}</td>
-              </tr>
-              <tr>
-                <td>Fecha</td>
-                <td>${row.fecha ?? "N/A"}</td>
-              </tr>
-            </tbody>
-          </table>
-
           <div class="section-title">Detalles del Core Operativo</div>
           <div class="meta-grid">
             <div class="meta-item">
