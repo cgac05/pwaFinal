@@ -141,7 +141,7 @@ export function AiDetailModal({ isOpen, onClose, ticker, signalRow, activeStrate
               <MarkdownContent content={signalRow.observacion?.explicacion || ""} />
             </div>
             {/* Reintento aislado para IA degradada */}
-            {signalRow.observacion?.explicacion === "No pudimos conectarnos con el modelo, inténtalo de nuevo." && (
+            {(signalRow.observacion?.explicacion?.includes("No pudimos conectarnos con el modelo") || signalRow.observacion?.explicacion?.includes("[Modo de Respaldo]")) && (
               <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
                 <button
                   className="btn-primary"
