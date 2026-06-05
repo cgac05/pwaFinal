@@ -482,6 +482,7 @@ export function ConfluenceSignalsTable({
             const others = prev.filter((r) => !(r.core === "A_IA" && r.ticket === newAiRow.ticket));
             return [...others, newAiRow];
           });
+          setStubRow(newAiRow);
         }}
         activeStrategy={activeStrategy}
       />
