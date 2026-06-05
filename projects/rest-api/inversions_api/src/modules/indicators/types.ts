@@ -82,6 +82,7 @@ export type CoreId =
   | "A_INSTITUCIONAL"
   | "A_NOTICIAS"
   | "A_ESTRATEGIA"
+  | "A_NOTICIAS_2"
   | "A_IA";
 
 export const ALL_CORE_IDS: readonly CoreId[] = [
@@ -91,6 +92,7 @@ export const ALL_CORE_IDS: readonly CoreId[] = [
   "A_INSTITUCIONAL",
   "A_NOTICIAS",
   "A_ESTRATEGIA",
+  "A_NOTICIAS_2",
   "A_IA"
 ] as const;
 

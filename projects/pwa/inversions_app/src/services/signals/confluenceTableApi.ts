@@ -6,6 +6,7 @@ export type CoreId =
   | "A_TECNICO"
   | "A_INSTITUCIONAL"
   | "A_NOTICIAS"
+  | "A_NOTICIAS_2"
   | "A_IA";
 
 export type SubCoreIndicador = "RSI" | "MACD" | "EMA" | "ADX" | "BB";
@@ -173,6 +174,7 @@ export const ALL_CORES: CoreId[] = [
   "A_TECNICO",
   "A_INSTITUCIONAL",
   "A_NOTICIAS",
+  "A_NOTICIAS_2",
   "A_IA"
 ];
 

@@ -78,6 +78,7 @@ function observationFor(core: CoreId): SignalObservation {
     A_INSTITUCIONAL: "Detectar acumulacion institucional (13F, dark pools, UOA).",
     A_NOTICIAS: "Medir sentimiento de noticias en tiempo real.",
     A_ESTRATEGIA: "Evaluar viabilidad de estrategias complejas segun condiciones de mercado.",
+    A_NOTICIAS_2: "006-noticias-2: análisis de sentimiento con fuentes financieras independientes (Yahoo RSS + fallback contextual).",
     A_IA: "Sintetizar la senal global con LLM y producir disclaimer no operativo."
   };
   return {

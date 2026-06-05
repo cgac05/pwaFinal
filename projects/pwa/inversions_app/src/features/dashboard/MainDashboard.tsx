@@ -222,8 +222,11 @@ export function MainDashboard() {
   const handleSimulationExecute = useCallback((activeCoreIds: CoreId[]) => {
     const institutionalActive = activeCoreIds.includes("A_INSTITUCIONAL");
     setInstitutionalCoreWasActive(institutionalActive);
-    // Registra si A_NOTICIAS y Noticias2 estaban activos al ejecutar la simulación
     setNoticiasCoreWasActive(activeCoreIds.includes("A_NOTICIAS"));
+    // Re-sincroniza noticias2Active desde el estado real del chip al momento de simular.
+    // Necesario porque el ticker-change resetea noticias2Active a false, pero el chip
+    // en SimulationControlPanel puede seguir ON. activeCoreIds es la fuente de verdad.
+    setNoticias2Active(activeCoreIds.includes("A_NOTICIAS_2"));
 
     if (activeCoreIds.includes("A_FUNDAMENTAL")) {
       setFundamentalAutoRunKey((key) => key + 1);
@@ -600,7 +603,6 @@ export function MainDashboard() {
             activeStrategy={activeSimulationStrategy}
             fundamentalAnalysis={fundamentalAnalysis}
             onStrategyRowClick={handleStrategyRowClick}
-            noticias2Verdict={noticias2Result?.verdict ?? null}
           />
         </div>
       )}
@@ -783,12 +785,75 @@ export function MainDashboard() {
           dateRange={noticias2DateRange}
           onResult={(r) => {
             setNoticias2Result(r);
+
+            // Prefill para el chat IA
             const LABELS: Record<string, string> = { BUY: 'COMPRAR', SELL: 'VENDER', HOLD: 'ESPERAR' };
             const topPoint = r.keyPoints?.[0] ?? r.reasoning?.slice(0, 120) ?? 'análisis de noticias recientes';
             const prefill = `Las noticias recientes sugieren [${LABELS[r.verdict] ?? r.verdict}] ${r.company} ` +
               `(score ${(r.score ?? 0).toFixed(2)}, confianza ${((r.confidence ?? 0) * 100).toFixed(0)}%) ` +
               `debido a: "${topPoint}". ¿Qué indicadores técnicos actuales respaldan o contradicen esta decisión?`;
             setNoticias2ChatContext(prefill);
+
+            // ── Inyecta filas A_NOTICIAS_2 en la Tabla de Confluencias ──────
+            // SOLO ocurre aquí — cuando el usuario presiona "Analizar", no al simular.
+            const now = new Date();
+            const today = now.toISOString().slice(0, 10);
+            const vigencia = new Date(now.getTime() + 5 * 3600_000).toISOString();
+            const sc = r.score ?? 0;
+            const conf = r.confidence ?? 0.55;
+            const tipoSenal: "CALL" | "PUT" | "HOLD" = sc > 0.25 ? "CALL" : sc < -0.25 ? "PUT" : "HOLD";
+            const tendencia: "ALCISTA" | "BAJISTA" | "LATERAL" = sc > 0.12 ? "ALCISTA" : sc < -0.12 ? "BAJISTA" : "LATERAL";
+            const peso = Number(Math.max(0.1, Math.min(1, conf * Math.abs(sc) + 0.1)).toFixed(3));
+            const hash = `n2:${r.company}:${now.getTime()}`;
+
+            const summaryRow: ConfluenceSignalRow = {
+              ticket: r.company, core: "A_NOTICIAS_2", subCore: undefined,
+              precio: 0, tipoSenal, fecha: today,
+              timeframe: (timeframe as any) ?? "1d",
+              tendencia, score: Number(sc.toFixed(3)), peso,
+              invertir: tipoSenal === "CALL" && sc > 0.3,
+              estado: "ACTIVA", vigencia, fuente: "006-noticias2",
+              evidencia_refs: (r.articles ?? []).map(a => a.url).filter(Boolean).slice(0, 3),
+              ia_revisada: false, delta_vs_anterior: "NUEVA",
+              observacion: {
+                objetivo: `Análisis de sentimiento 006-noticias-2 para ${r.company}.`,
+                senal: `${tipoSenal} — ${r.keyPoints?.[0] ?? r.reasoning?.slice(0, 80) ?? ''}`,
+                explicacion: r.reasoning ?? '',
+                metricas: { SENTIMIENTO: sc, CONFIANZA: conf, VOLUMEN: r.articles?.length ?? 0, PROVEEDOR: "006-noticias2" },
+              },
+              algorithm_version: "1.0.0", computed_at: now.toISOString(), source_input_hash: hash,
+            };
+
+            const articleRows: ConfluenceSignalRow[] = (r.articles ?? []).slice(0, 3).map((art, idx) => {
+              const as = art.score ?? 0;
+              const ats: "CALL" | "PUT" | "HOLD" = as > 0.25 ? "CALL" : as < -0.25 ? "PUT" : "HOLD";
+              return {
+                ticket: r.company, core: "A_NOTICIAS_2",
+                subCore: `${(art.source ?? '006').replace(/\s+/g,'').slice(0,8)} · ${String(idx+1).padStart(2,'0')}`,
+                precio: 0, tipoSenal: ats, fecha: today,
+                timeframe: (timeframe as any) ?? "1d",
+                tendencia: as > 0.12 ? "ALCISTA" : as < -0.12 ? "BAJISTA" : "LATERAL",
+                score: Number(as.toFixed(3)), peso: Number(Math.max(0.05, Math.abs(as) * conf).toFixed(3)),
+                invertir: ats === "CALL" && as > 0.3,
+                estado: "ACTIVA", vigencia, fuente: art.source ?? "006-noticias2",
+                evidencia_refs: art.url ? [art.url] : [],
+                ia_revisada: false, delta_vs_anterior: "NUEVA",
+                observacion: {
+                  objetivo: art.headline ?? '',
+                  senal: `${ats} — "${art.headline ?? ''}"`,
+                  explicacion: art.snippet ?? '',
+                  metricas: { SENTIMIENTO: as, CONFIANZA: conf, PROVEEDOR: art.source ?? '006-noticias2' },
+                },
+                algorithm_version: "1.0.0", computed_at: now.toISOString(), source_input_hash: hash,
+              };
+            });
+
+            // Reemplaza filas viejas de A_NOTICIAS_2 e inyecta las nuevas
+            setSimulationRows(prev => {
+              if (!prev) return prev;
+              const filtered = prev.filter(row => row.core !== "A_NOTICIAS_2");
+              return [...filtered, summaryRow, ...articleRows];
+            });
           }}
           onSendToChat={() => { setCopilotOpen(true); }}
         />

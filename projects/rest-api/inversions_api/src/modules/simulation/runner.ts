@@ -383,7 +383,13 @@ export async function runSimulation(
       })
     : [];
 
-  // FIC: Execute AI Core if enabled
+  // FIC: 006-noticias-2 — A_NOTICIAS_2 NO se genera en el runner. (EN)
+  // FIC: Sus filas se inyectan desde el frontend ÚNICAMENTE cuando el usuario
+  // FIC: presiona "Analizar" en la tarjeta de Noticias 2, no al ejecutar la simulación.
+  // FIC: Esto desacopla el fetch RSS del pipeline de simulación. (ES)
+  const noticias2Rows: ConfluenceSignalRow[] = [];
+
+  // FIC: Execute AI Core if enabled — Noticias 2 feeds into AI precalculated context. (EN)
   let aiRow: ConfluenceSignalRow | null = null;
   if (enabledCores.has("A_IA")) {
     aiRow = await runAiCore({
@@ -410,6 +416,7 @@ export async function runSimulation(
       if (c === "A_IA" && aiRow !== null) return false;
       if (c === "A_NOTICIAS" && noticiasRows.length > 0) return false;
       if (c === "A_ESTRATEGIA" && estrategiaRows.length > 0) return false;
+      if (c === "A_NOTICIAS_2") return false; // Sus filas vienen del frontend al presionar "Analizar"
       return enabledCores.has(c);
     });
 
@@ -422,9 +429,9 @@ export async function runSimulation(
       previousRows: deps.previousRows,
       now: computedAt
     });
-    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...strategyRows, ...estrategiaRows, ...stubs];
+    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...strategyRows, ...estrategiaRows, ...noticias2Rows, ...stubs];
   } else {
-    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...strategyRows, ...estrategiaRows];
+    table = [...table, ...fundamentalRows, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...strategyRows, ...estrategiaRows, ...noticias2Rows];
   }
 
   // FIC: US8 bugfix — when running on historical (as-of) data, the rows MUST display the REAL date

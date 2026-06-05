@@ -1,7 +1,7 @@
-// FIC: From-Chain API route - delegates to shared handler for real Alpaca data.
+// FIC: From-Chain API route - delegates to shared handler for real multi-source data.
 // Accepts strategy_type to select which engine to use.
 //
-// FIC: Ruta API From-Chain - delega al handler compartido para datos reales de Alpaca.
+// FIC: Ruta API From-Chain - delega al handler compartido para datos reales multi-fuente.
 // Acepta strategy_type para seleccionar qué motor usar.
 
 import { Router } from "express";

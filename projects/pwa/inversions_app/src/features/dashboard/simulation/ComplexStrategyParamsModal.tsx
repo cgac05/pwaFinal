@@ -49,19 +49,35 @@ function getLegPattern(type: string): Array<{ tipo: "put" | "call"; posicion: "l
   }
 }
 
-function getDefaultStrikes(type: string, baseStrike: number): StrikeSelection[] {
+function getDefaultStrikes(type: string, baseStrike: number, tipoAla: string = "short"): StrikeSelection[] {
   const patterns = getLegPattern(type);
   if (baseStrike <= 0) {
     return patterns.map((p) => ({ strike: 0, ...p }));
   }
 
-  const offsets: Record<string, number[]> = {
-    IRON_CONDOR:      [-20, 0, 40, 60],
-    IRON_BUTTERFLY:   [-40, 0, 0, 40],
-    BUTTERFLY_SPREAD: [-20, 20, 60],
-    CONDOR:           [-60, -20, 20, 60],
+  const offsets: Record<string, Record<string, number[]>> = {
+    IRON_CONDOR: {
+      short:  [-20, 0, 40, 60],
+      wide:   [-40, 0, 60, 100],
+      broken: [-40, 0, 40, 60],
+    },
+    IRON_BUTTERFLY: {
+      short:  [-40, 0, 0, 40],
+      wide:   [-60, 0, 0, 60],
+      broken: [-60, 0, 0, 40],
+    },
+    BUTTERFLY_SPREAD: {
+      short:  [-20, 20, 60],
+      wide:   [-40, 30, 100],
+      broken: [-40, 20, 60],
+    },
+    CONDOR: {
+      short:  [-60, -20, 20, 60],
+      wide:   [-100, -30, 30, 100],
+      broken: [-100, -20, 20, 60],
+    },
   };
-  const legOffsets = offsets[type] ?? [];
+  const legOffsets = (offsets[type]?.[tipoAla] ?? offsets[type]?.short) ?? [];
   return patterns.map((p, i) => ({
     ...p,
     strike: baseStrike + (legOffsets[i] ?? 0),
@@ -290,7 +306,7 @@ export function ComplexStrategyParamsModal({ open, strategy, ticker, riskToleran
     }));
   }, []);
 
-  const handleAutoAdjustStrikes = useCallback(async (tickerToFetch: string, expiration: string) => {
+  const handleAutoAdjustStrikes = useCallback(async (tickerToFetch: string, expiration: string, tipoAla?: string) => {
     if (!tickerToFetch || tickerToFetch.length < 2) return;
     setLoadingStrikes(true);
     setStrikesError(null);
@@ -305,7 +321,7 @@ export function ComplexStrategyParamsModal({ open, strategy, ticker, riskToleran
         setLastAutoBaseStrike(roundedBase);
         setForm((prev) => ({
           ...prev,
-          strikes: getDefaultStrikes(strategy, roundedBase),
+          strikes: getDefaultStrikes(strategy, roundedBase, tipoAla ?? prev.tipo_ala),
         }));
       }
     } catch (err) {
@@ -468,15 +484,21 @@ export function ComplexStrategyParamsModal({ open, strategy, ticker, riskToleran
                 </div>
                 <div>
                   <label style={labelStyle}>Tipo Ala</label>
-                  <select
-                    style={inputStyle}
-                    value={form.tipo_ala}
-                    onChange={(e) => updateForm("tipo_ala", e.target.value)}
-                  >
-                    <option value="short">Short</option>
-                    <option value="wide">Wide</option>
-                    <option value="broken">Broken</option>
-                  </select>
+                    <select
+                      style={inputStyle}
+                      value={form.tipo_ala}
+                      onChange={(e) => {
+                        const newType = e.target.value;
+                        updateForm("tipo_ala", newType);
+                        if (form.expiracion) {
+                          handleAutoAdjustStrikes(ticker, form.expiracion, newType);
+                        }
+                      }}
+                    >
+                      <option value="short">Short</option>
+                      <option value="wide">Wide</option>
+                      <option value="broken">Broken</option>
+                    </select>
                 </div>
               </div>
             </div>

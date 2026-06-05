@@ -88,8 +88,6 @@ interface Props {
   rows?: ConfluenceSignalRow[];
   activeStrategy?: string;
   fundamentalAnalysis?: any;
-  /** Veredicto del módulo Noticias 2 para el ticker activo. */
-  noticias2Verdict?: "BUY" | "SELL" | "HOLD" | null;
   /** Callback cuando el usuario hace clic en una fila de estrategia. */
   onStrategyRowClick?: (row: ConfluenceSignalRow) => void;
 }
@@ -111,7 +109,6 @@ export function ConfluenceSignalsTable({
   rows: rowsProp,
   activeStrategy,
   fundamentalAnalysis,
-  noticias2Verdict,
 }: Props) {
   const [rows, setRows] = useState<ConfluenceSignalRow[]>(rowsProp ?? []);
   const [loading, setLoading] = useState(false);
@@ -160,7 +157,7 @@ export function ConfluenceSignalsTable({
   }, [symbol, rowsProp]);
 
   const enrichedSorted = useMemo(() => {
-    const order = ["A_INDICADORES", "A_FUNDAMENTAL", "A_TECNICO", "A_INSTITUCIONAL", "A_NOTICIAS", "A_IA"];
+    const order = ["A_INDICADORES", "A_FUNDAMENTAL", "A_TECNICO", "A_INSTITUCIONAL", "A_NOTICIAS", "A_NOTICIAS_2", "A_IA"];
     
     let finalRows = [...rows];
     if (fundamentalAnalysis?.confluenceRows && fundamentalAnalysis.confluenceRows.length > 0) {
@@ -198,13 +195,10 @@ export function ConfluenceSignalsTable({
         <span className="badge badge-hold" style={{ fontSize: "0.72rem" }}>
           Estrategia: {(activeStrategy ?? "SIN_ESTRATEGIA").replace(/_/g, " ")}
         </span>
-        {noticias2Verdict && (() => {
-          // Estrategias alcistas (BUY apoya, SELL contradice)
-          const BULLISH_STRATS = new Set(["LONG_CALL","BUY_CALL","BULL_CALL_SPREAD","CALENDAR_SPREAD","DIAGONAL_SPREAD","WHEEL"]);
-          // Estrategias bajistas (SELL apoya, BUY contradice)
-          const BEARISH_STRATS = new Set(["LONG_PUT","BUY_PUT","BEAR_PUT_SPREAD"]);
-          // Estrategias neutras de volatilidad (HOLD es lo ideal, BUY/SELL añaden sesgo)
-          const NEUTRAL_STRATS = new Set(["IRON_CONDOR","IRON_BUTTERFLY","CONDOR","BUTTERFLY_SPREAD","STRADDLE","STRANGLE","BUTTERFLY"]);
+        {false && (() => {
+          const BULLISH_STRATS = new Set(["LONG_CALL"]);
+          const BEARISH_STRATS = new Set(["LONG_PUT"]);
+          const NEUTRAL_STRATS = new Set(["IRON_CONDOR"]);
 
           const strat = (activeStrategy ?? "").toUpperCase();
           const v     = noticias2Verdict;
