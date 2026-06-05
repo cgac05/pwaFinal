@@ -229,6 +229,7 @@ export function ReportePDFTemplate({
                 <tr className="bg-slate-100 text-slate-700 border-b border-slate-300">
                   <th className="p-2 font-bold text-slate-700 uppercase tracking-wider">CORE</th>
                   <th className="p-2 font-bold text-slate-700 uppercase tracking-wider">SUBCORE</th>
+                  <th className="p-2 font-bold text-slate-700 uppercase tracking-wider">FECHA</th>
                   <th className="p-2 font-bold text-slate-700 uppercase tracking-wider text-right">PRECIO</th>
                   <th className="p-2 font-bold text-slate-700 uppercase tracking-wider text-center">SEÑAL</th>
                   <th className="p-2 font-bold text-slate-700 uppercase tracking-wider">TENDENCIA</th>
@@ -241,6 +242,7 @@ export function ReportePDFTemplate({
                   <tr key={idx} className="border-b border-slate-200">
                     <td className="p-2 font-bold text-slate-900">{row.core.replace("A_", "")}</td>
                     <td className="p-2 text-slate-600">{row.subCore || "-"}</td>
+                    <td className="p-2 text-slate-600 font-mono">{row.fecha || "-"}</td>
                     <td className="p-2 text-right font-mono text-slate-700">${Number(row.precio).toFixed(2)}</td>
                     <td className="p-2 text-center">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getSignalBadgeClass(row.tipoSenal)}`}>
@@ -254,7 +256,7 @@ export function ReportePDFTemplate({
                 ))}
                 {topSignals.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="p-4 text-center text-slate-500 italic">
+                    <td colSpan={8} className="p-4 text-center text-slate-500 italic">
                       No se han registrado señales para esta simulación.
                     </td>
                   </tr>
