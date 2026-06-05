@@ -152,10 +152,10 @@ function buildDeterministicIaCoreFallback(params: {
       confidence = Number((sumScore / params.precalculatedRows.length).toFixed(3));
       if (confidence > 1) confidence = 1;
       
-      // Mensaje simplificado para UI: evita textos técnicos largos y permite reintento aislado en frontend
+      // Mensaje simplificado para UI: explica que es un cálculo matemático de respaldo
       explicacion = params.errorMessage 
-        ? `No pudimos conectarnos con el modelo, inténtalo de nuevo. Detalle: ${params.errorMessage}`
-        : "No pudimos conectarnos con el modelo, inténtalo de nuevo.";
+        ? `No pudimos conectarnos con el modelo de lenguaje. Se ha emitido un veredicto matemático de respaldo basado en el promedio de los demás indicadores para que no te quedes sin señal. Intenta reintentar la IA para obtener el análisis de texto completo. Detalle: ${params.errorMessage}`
+        : `No pudimos conectarnos con el modelo de lenguaje. Se ha emitido un veredicto matemático de respaldo basado en el promedio de los demás indicadores para que no te quedes sin señal. Intenta reintentar la IA para obtener el análisis de texto completo.`;
     } else {
       decision = "HOLD";
     }
