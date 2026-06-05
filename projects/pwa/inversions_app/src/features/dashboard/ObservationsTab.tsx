@@ -14,6 +14,8 @@ interface RelevantSignal {
   indicator: string;
   senal: string;
   score: number;
+  precio: string;
+  fecha: string;
   detail: string;
 }
 
@@ -29,6 +31,8 @@ export function parseRelevantSignals(explanation: string): RelevantSignal[] {
       const indicatorMatch = line.match(/INDICADOR:\s*([^|]+)/i);
       const senalMatch = line.match(/SE[ÑN]AL:\s*([^|]+)/i);
       const scoreMatch = line.match(/SCORE:\s*([^|]+)/i);
+      const precioMatch = line.match(/PRECIO:\s*([^|]+)/i);
+      const fechaMatch = line.match(/FECHA:\s*([^|]+)/i);
       const detailMatch = line.match(/DETALLE:\s*(.+)/i);
 
       let core = coreMatch?.[1]?.trim() || "";
@@ -38,11 +42,13 @@ export function parseRelevantSignals(explanation: string): RelevantSignal[] {
       const indicator = indicatorMatch?.[1]?.trim() || "";
       const senal = senalMatch?.[1]?.trim() || "";
       const scoreRaw = scoreMatch?.[1]?.trim() || "0";
+      const precioRaw = precioMatch?.[1]?.trim() || "-";
+      const fechaRaw = fechaMatch?.[1]?.trim() || "-";
       const detail = detailMatch?.[1]?.trim() || "";
       
       const score = parseFloat(scoreRaw);
       if (core && indicator) {
-        signals.push({ core, indicator, senal, score, detail });
+        signals.push({ core, indicator, senal, score, precio: precioRaw, fecha: fechaRaw, detail });
       }
     }
   }
@@ -272,6 +278,8 @@ export function ObservationsTab({ row, activeStrategy }: Props) {
           <tr>
             <th>Core</th>
             <th>Indicador / Pata</th>
+            <th>Fecha</th>
+            <th>Precio</th>
             <th>Señal</th>
             <th>Score</th>
             <th>Detalle de Observación</th>
@@ -287,6 +295,8 @@ export function ObservationsTab({ row, activeStrategy }: Props) {
               <tr>
                 <td><span class="badge-core">${s.core}</span></td>
                 <td><strong>${s.indicator}</strong></td>
+                <td style="white-space: nowrap;">${s.fecha}</td>
+                <td style="white-space: nowrap;">${s.precio !== "-" && !isNaN(Number(s.precio)) ? "$" + Number(s.precio).toFixed(2) : s.precio}</td>
                 <td><span class="badge-senal" style="background-color: ${badgeBg}; color: ${badgeColor};">${s.senal}</span></td>
                 <td><strong style="color: ${barColor};">${s.score >= 0 ? "+" : ""}${s.score.toFixed(2)}</strong></td>
                 <td>${s.detail}</td>

@@ -340,8 +340,8 @@ JUSTIFICACION:
 4. Si elegiste HOLD, explica brevemente por qué esperar es la mejor opción en este momento.
 5. Identifica y lista de forma explícita las salidas/señales más relevantes (máximo 10) al final de tu justificación. Debes usar exactamente el siguiente formato en líneas individuales para cada una de las señales relevantes:
 SALIDAS RELEVANTES (Máximo 10):
-* CORE: [NombreCore] | INDICADOR: [Indicador/Pata] | SEÑAL: [CALL/PUT/HOLD] | SCORE: [ScoreNum] | DETALLE: [Explicación en una frase]
-(Por ejemplo: * CORE: A_TECNICO | INDICADOR: EMA50 | SEÑAL: CALL | SCORE: 0.80 | DETALLE: Rebote dinámico alcista en EMA de 50 periodos)]
+* CORE: [NombreCore] | INDICADOR: [Indicador/Pata] | SEÑAL: [CALL/PUT/HOLD] | SCORE: [ScoreNum] | PRECIO: [PrecioNum] | FECHA: [YYYY-MM-DD] | DETALLE: [Explicación en una frase]
+(Por ejemplo: * CORE: A_TECNICO | INDICADOR: EMA50 | SEÑAL: CALL | SCORE: 0.80 | PRECIO: 150.25 | FECHA: 2023-10-25 | DETALLE: Rebote dinámico alcista en EMA de 50 periodos)]
 
 RECORDATORIO CRÍTICO: HOLD es una opción completamente válida cuando las condiciones no justifican 
 riesgo de operar en largo (CALL) o corto (PUT). No te sientas presionado a elegir SÍ o NO.
