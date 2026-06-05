@@ -78,7 +78,9 @@ export function AiDetailModal({ isOpen, onClose, ticker, signalRow, activeStrate
 
   const decisionColor = signalRow.tipoSenal === "CALL" ? "var(--color-buy)" : signalRow.tipoSenal === "PUT" ? "var(--color-sell)" : "var(--color-hold)";
   const decisionBg = signalRow.tipoSenal === "CALL" ? "rgba(0,168,126,0.15)" : signalRow.tipoSenal === "PUT" ? "rgba(248,81,73,0.15)" : "rgba(139,148,158,0.15)";
-  const scoreAbs = Math.abs(signalRow.score);
+  const scoreAbs = signalRow.tipoSenal === "HOLD" 
+    ? (signalRow.observacion?.metricas?.RAW_CONFIDENCE ? Number(signalRow.observacion?.metricas?.RAW_CONFIDENCE) : 0)
+    : Math.abs(signalRow.score);
 
   return (
     <ContentModal

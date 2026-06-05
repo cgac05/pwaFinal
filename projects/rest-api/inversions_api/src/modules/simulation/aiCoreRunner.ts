@@ -389,7 +389,8 @@ ${rowsContext}`;
         metricas: {
           MODEL_VERSION: "gemini-2.5-flash",
           PREPROMPT: basePromptText,
-          VALOR_ENTRADA: rowsContext
+          VALOR_ENTRADA: rowsContext,
+          RAW_CONFIDENCE: aiResult.confidence
         }
       },
       algorithm_version: ALGORITHM_VERSION,
